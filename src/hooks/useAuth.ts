@@ -1,7 +1,14 @@
-// useAuth hook - Placeholder
-// Will be implemented in PR #2
+// useAuth hook - Consumes AuthContext
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
+
 export const useAuth = () => {
-  // Auth hook implementation
-  return {};
+  const context = useContext(AuthContext);
+  
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  
+  return context;
 };
 
