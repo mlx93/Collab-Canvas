@@ -20,7 +20,7 @@ export const Canvas: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
 
-  // Update stage size on mount and window resize
+  // Update stage size on mount, window resize, AND container resize (e.g., properties panel open/close)
   useEffect(() => {
     const updateSize = () => {
       if (stageRef.current) {
@@ -35,8 +35,29 @@ export const Canvas: React.FC = () => {
     };
 
     updateSize();
+
+    // Listen to window resize
     window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
+
+    // Use ResizeObserver to detect when the canvas container size changes
+    // This handles properties panel opening/closing
+    const container = stageRef.current?.container();
+    let resizeObserver: ResizeObserver | null = null;
+    
+    if (container) {
+      resizeObserver = new ResizeObserver(() => {
+        updateSize();
+      });
+      resizeObserver.observe(container);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      if (resizeObserver && container) {
+        resizeObserver.unobserve(container);
+        resizeObserver.disconnect();
+      }
+    };
   }, [updateContextStageSize]);
 
   // Handle mouse wheel zoom
