@@ -203,6 +203,7 @@ export const Canvas: React.FC = () => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
       >
+        {/* Main Layer - Canvas background and shapes */}
         <Layer>
           {/* Canvas Background - 5000x5000px off-white */}
           <Rect
@@ -223,8 +224,23 @@ export const Canvas: React.FC = () => {
                 rectangle={rectangle}
                 isSelected={selectedRectangleId === rectangle.id}
                 onSelect={() => setSelectedRectangle(rectangle.id)}
+                showIndicator={false}
               />
             ))}
+        </Layer>
+
+        {/* Indicators Layer - Always on top of all shapes */}
+        <Layer listening={false}>
+          {rectangles.map((rectangle) => (
+            <Rectangle
+              key={`indicator-${rectangle.id}`}
+              rectangle={rectangle}
+              isSelected={false}
+              onSelect={() => {}}
+              showIndicator={true}
+              renderOnlyIndicator={true}
+            />
+          ))}
         </Layer>
       </Stage>
 

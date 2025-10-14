@@ -19,9 +19,17 @@ interface RectangleProps {
   rectangle: RectangleType;
   isSelected: boolean;
   onSelect: () => void;
+  showIndicator?: boolean;
+  renderOnlyIndicator?: boolean;
 }
 
-const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, onSelect }) => {
+const RectangleComponent: React.FC<RectangleProps> = ({ 
+  rectangle, 
+  isSelected, 
+  onSelect, 
+  showIndicator = true,
+  renderOnlyIndicator = false 
+}) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
@@ -165,6 +173,20 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
     stage.on('mouseup', handleMouseUp);
   };
 
+  // If only rendering indicator, just return the indicator
+  if (renderOnlyIndicator) {
+    return activeEdit && showIndicator ? (
+      <EditingIndicator
+        activeEdit={activeEdit}
+        rectangleX={currentPos.x}
+        rectangleY={currentPos.y}
+        rectangleWidth={currentPos.width}
+        scale={viewport.scale}
+      />
+    ) : null;
+  }
+
+  // Otherwise, render the full rectangle (without indicator if showIndicator is false)
   return (
     <Group>
       {/* Main Rectangle */}
@@ -215,17 +237,6 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
             hitStrokeWidth={20}
           />
         </>
-      )}
-      
-      {/* Editing Indicator - Show when another user is editing this shape */}
-      {activeEdit && (
-        <EditingIndicator
-          activeEdit={activeEdit}
-          rectangleX={currentPos.x}
-          rectangleY={currentPos.y}
-          rectangleWidth={currentPos.width}
-          scale={viewport.scale}
-        />
       )}
     </Group>
   );
