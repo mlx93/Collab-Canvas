@@ -38,7 +38,36 @@ const getAuthErrorMessage = (error: any): string => {
   }
 };
 
+/**
+ * Fetch user data from Firestore by userId
+ * Helper function for getting full user profile including firstName/lastName
+ */
+async function fetchUserData(userId: string): Promise<User | null> {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      return {
+        userId,
+        email: userData.email,
+        firstName: userData.firstName || 'User',
+        lastName: userData.lastName || '',
+        createdAt: new Date(userData.createdAt)
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    return null;
+  }
+}
+
 export const authService = {
+  /**
+   * Fetch user data from Firestore (exposed for AuthContext)
+   */
+  fetchUserData,
+
   /**
    * Sign up a new user with email, password, first name, and last name
    * Creates user in Firebase Auth and stores user document in Firestore

@@ -60,6 +60,9 @@ describe('Authentication Integration Tests', () => {
       callback(null);
       return jest.fn(); // Return unsubscribe function
     });
+    
+    // Mock fetchUserData to return null by default
+    mockedAuthService.fetchUserData = jest.fn().mockResolvedValue(null);
   });
 
   describe('Login Flow', () => {
@@ -86,6 +89,8 @@ describe('Authentication Integration Tests', () => {
       mockedAuthService.signIn = jest.fn().mockResolvedValue({
         userId: 'test-uid',
         email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
         createdAt: new Date()
       });
 
@@ -131,10 +136,14 @@ describe('Authentication Integration Tests', () => {
       
       fireEvent.click(screen.getByText('Sign up'));
       
+      const firstNameInput = screen.getByPlaceholderText('John');
+      const lastNameInput = screen.getByPlaceholderText('Doe');
       const emailInput = screen.getByPlaceholderText('you@example.com');
       const passwordInputs = screen.getAllByPlaceholderText('••••••••');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
+      fireEvent.change(firstNameInput, { target: { value: 'John' } });
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } });
       fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
       fireEvent.change(passwordInputs[0], { target: { value: 'password123' } });
       fireEvent.change(passwordInputs[1], { target: { value: 'different123' } });
@@ -149,6 +158,8 @@ describe('Authentication Integration Tests', () => {
       mockedAuthService.signUp = jest.fn().mockResolvedValue({
         userId: 'test-uid',
         email: 'test@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
         createdAt: new Date()
       });
 
@@ -156,17 +167,21 @@ describe('Authentication Integration Tests', () => {
       
       fireEvent.click(screen.getByText('Sign up'));
       
+      const firstNameInput = screen.getByPlaceholderText('John');
+      const lastNameInput = screen.getByPlaceholderText('Doe');
       const emailInput = screen.getByPlaceholderText('you@example.com');
       const passwordInputs = screen.getAllByPlaceholderText('••••••••');
       const submitButton = screen.getByRole('button', { name: /create account/i });
 
+      fireEvent.change(firstNameInput, { target: { value: 'John' } });
+      fireEvent.change(lastNameInput, { target: { value: 'Doe' } });
       fireEvent.change(emailInput, { target: { value: 'test@example.com' } });
       fireEvent.change(passwordInputs[0], { target: { value: 'password123' } });
       fireEvent.change(passwordInputs[1], { target: { value: 'password123' } });
       fireEvent.click(submitButton);
 
       await waitFor(() => {
-        expect(mockedAuthService.signUp).toHaveBeenCalledWith('test@example.com', 'password123');
+        expect(mockedAuthService.signUp).toHaveBeenCalledWith('test@example.com', 'password123', 'John', 'Doe');
       });
     });
 
@@ -184,7 +199,7 @@ describe('Authentication Integration Tests', () => {
   });
 
   describe('Protected Route', () => {
-    it('should show canvas when user is authenticated', () => {
+    it('should show canvas when user is authenticated', async () => {
       mockedAuthService.onAuthStateChange = jest.fn((callback) => {
         // Simulate authenticated user
         callback({
@@ -194,18 +209,29 @@ describe('Authentication Integration Tests', () => {
         return jest.fn();
       });
 
+      mockedAuthService.fetchUserData = jest.fn().mockResolvedValue({
+        userId: 'test-uid',
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        createdAt: new Date()
+      });
+
       mockedAuthService.signOut = jest.fn();
 
       render(<App />);
       
-      // In PR #3, authenticated users see the canvas UI with header
-      expect(screen.getByText('CollabCanvas')).toBeInTheDocument();
+      // Wait for async state update from fetchUserData
+      await waitFor(() => {
+        expect(screen.getByText('CollabCanvas')).toBeInTheDocument();
+      });
+      
       expect(screen.getByText('Sign Out')).toBeInTheDocument();
       // Canvas components are rendered
       expect(screen.getByTestId('konva-stage')).toBeInTheDocument();
     });
 
-    it('should call signOut when sign out button is clicked', () => {
+    it('should call signOut when sign out button is clicked', async () => {
       mockedAuthService.onAuthStateChange = jest.fn((callback) => {
         callback({
           uid: 'test-uid',
@@ -214,11 +240,20 @@ describe('Authentication Integration Tests', () => {
         return jest.fn();
       });
 
+      mockedAuthService.fetchUserData = jest.fn().mockResolvedValue({
+        userId: 'test-uid',
+        email: 'test@example.com',
+        firstName: 'Test',
+        lastName: 'User',
+        createdAt: new Date()
+      });
+
       mockedAuthService.signOut = jest.fn();
 
       render(<App />);
       
-      const signOutButton = screen.getByRole('button', { name: /sign out/i });
+      // Wait for user to be authenticated
+      const signOutButton = await screen.findByRole('button', { name: /sign out/i });
       fireEvent.click(signOutButton);
       
       expect(mockedAuthService.signOut).toHaveBeenCalled();

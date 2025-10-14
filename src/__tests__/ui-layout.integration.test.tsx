@@ -21,9 +21,10 @@ jest.mock('../services/auth.service', () => {
   return {
     authService: {
       signOut: jest.fn().mockResolvedValue(undefined),
-      signIn: jest.fn().mockResolvedValue({ userId: 'test-user', email: 'test@example.com', createdAt: new Date() }),
-      signUp: jest.fn().mockResolvedValue({ userId: 'test-user', email: 'test@example.com', createdAt: new Date() }),
+      signIn: jest.fn().mockResolvedValue({ userId: 'test-user', email: 'test@example.com', firstName: 'Test', lastName: 'User', createdAt: new Date() }),
+      signUp: jest.fn().mockResolvedValue({ userId: 'test-user', email: 'test@example.com', firstName: 'Test', lastName: 'User', createdAt: new Date() }),
       getCurrentUser: jest.fn().mockReturnValue({ uid: 'test-user', email: 'test@example.com' }),
+      fetchUserData: jest.fn().mockResolvedValue({ userId: 'test-user', email: 'test@example.com', firstName: 'Test', lastName: 'User', createdAt: new Date() }),
       onAuthStateChange: jest.fn((callback) => {
         // Call synchronously so state updates immediately
         callback({ uid: 'test-user', email: 'test@example.com' });

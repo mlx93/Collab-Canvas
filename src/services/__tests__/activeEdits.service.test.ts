@@ -27,6 +27,7 @@ describe('activeEdits.service', () => {
   const mockShapeId = 'shape-123';
   const mockUserId = 'user-456';
   const mockEmail = 'user@example.com';
+  const mockFirstName = 'John';
   const mockCursorColor = '#FF6B6B';
   const mockAction: EditAction = 'moving';
 
@@ -49,7 +50,7 @@ describe('activeEdits.service', () => {
       (set as jest.Mock).mockResolvedValue(undefined);
       (onDisconnect as jest.Mock).mockReturnValue(mockOnDisconnectRef);
 
-      await setActiveEdit(mockShapeId, mockUserId, mockEmail, mockAction, mockCursorColor);
+      await setActiveEdit(mockShapeId, mockUserId, mockEmail, mockFirstName, mockAction, mockCursorColor);
 
       // Verify ref was created correctly
       expect(ref).toHaveBeenCalledWith({}, 'activeEdits/default-canvas/shape-123');
@@ -58,6 +59,7 @@ describe('activeEdits.service', () => {
       expect(set).toHaveBeenCalledWith(mockRef, {
         userId: mockUserId,
         email: mockEmail,
+        firstName: mockFirstName,
         action: mockAction,
         cursorColor: mockCursorColor,
         startedAt: expect.any(Number),
@@ -79,7 +81,7 @@ describe('activeEdits.service', () => {
       const actions: EditAction[] = ['moving', 'resizing', 'recoloring'];
 
       for (const action of actions) {
-        await setActiveEdit(mockShapeId, mockUserId, mockEmail, action, mockCursorColor);
+        await setActiveEdit(mockShapeId, mockUserId, mockEmail, mockFirstName, action, mockCursorColor);
         
         expect(set).toHaveBeenCalledWith(mockRef, expect.objectContaining({
           action,
@@ -93,7 +95,7 @@ describe('activeEdits.service', () => {
       (onDisconnect as jest.Mock).mockReturnValue({ remove: jest.fn() });
 
       await expect(
-        setActiveEdit(mockShapeId, mockUserId, mockEmail, mockAction, mockCursorColor)
+        setActiveEdit(mockShapeId, mockUserId, mockEmail, mockFirstName, mockAction, mockCursorColor)
       ).resolves.not.toThrow();
 
       expect(console.error).toHaveBeenCalledWith('Failed to set active edit:', expect.any(Error));

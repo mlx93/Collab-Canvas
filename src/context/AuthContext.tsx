@@ -30,49 +30,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Subscribe to Firebase auth state changes
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChange((firebaseUser: FirebaseUser | null) => {
+    const unsubscribe = authService.onAuthStateChange(async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // User is signed in - fetch user doc from Firestore to get firstName/lastName
-        import('../services/firebase').then(({ db }) => {
-          import('firebase/firestore').then(({ doc, getDoc }) => {
-            getDoc(doc(db, 'users', firebaseUser.uid))
-              .then((userDoc) => {
-                if (userDoc.exists()) {
-                  const userData = userDoc.data();
-                  const user: User = {
-                    userId: firebaseUser.uid,
-                    email: firebaseUser.email!,
-                    firstName: userData.firstName || 'User',
-                    lastName: userData.lastName || '',
-                    createdAt: new Date(userData.createdAt)
-                  };
-                  setAuthState({ user, loading: false, error: null });
-                } else {
-                  // Fallback for users without Firestore doc
-                  const user: User = {
-                    userId: firebaseUser.uid,
-                    email: firebaseUser.email!,
-                    firstName: 'User',
-                    lastName: '',
-                    createdAt: new Date()
-                  };
-                  setAuthState({ user, loading: false, error: null });
-                }
-              })
-              .catch((error) => {
-                console.error('Error fetching user data:', error);
-                // Fallback user
-                const user: User = {
-                  userId: firebaseUser.uid,
-                  email: firebaseUser.email!,
-                  firstName: 'User',
-                  lastName: '',
-                  createdAt: new Date()
-                };
-                setAuthState({ user, loading: false, error: null });
-              });
-          });
-        });
+        // User is signed in - fetch full user data from Firestore
+        const userData = await authService.fetchUserData(firebaseUser.uid);
+        if (userData) {
+          setAuthState({ user: userData, loading: false, error: null });
+        } else {
+          // Fallback for users without Firestore doc
+          const user: User = {
+            userId: firebaseUser.uid,
+            email: firebaseUser.email!,
+            firstName: 'User',
+            lastName: '',
+            createdAt: new Date()
+          };
+          setAuthState({ user, loading: false, error: null });
+        }
       } else {
         // User is signed out
         setAuthState({ user: null, loading: false, error: null });

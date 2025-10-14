@@ -42,12 +42,14 @@ describe('authService', () => {
 
   describe('signUp', () => {
     it('should validate email and password are provided', async () => {
-      await expect(authService.signUp('', 'password')).rejects.toThrow('Email and password are required');
-      await expect(authService.signUp('test@example.com', '')).rejects.toThrow('Email and password are required');
+      await expect(authService.signUp('', 'password', 'John', 'Doe')).rejects.toThrow('Email, password, first name, and last name are required');
+      await expect(authService.signUp('test@example.com', '', 'John', 'Doe')).rejects.toThrow('Email, password, first name, and last name are required');
+      await expect(authService.signUp('test@example.com', 'password', '', 'Doe')).rejects.toThrow('Email, password, first name, and last name are required');
+      await expect(authService.signUp('test@example.com', 'password', 'John', '')).rejects.toThrow('Email, password, first name, and last name are required');
     });
 
     it('should validate password is at least 6 characters', async () => {
-      await expect(authService.signUp('test@example.com', '12345')).rejects.toThrow('Password must be at least 6 characters');
+      await expect(authService.signUp('test@example.com', '12345', 'John', 'Doe')).rejects.toThrow('Password must be at least 6 characters');
     });
 
     it('should create user in Firebase Auth and Firestore', async () => {
@@ -61,7 +63,7 @@ describe('authService', () => {
       });
       (setDoc as jest.Mock).mockResolvedValue(undefined);
 
-      const result = await authService.signUp('test@example.com', 'password123');
+      const result = await authService.signUp('test@example.com', 'password123', 'John', 'Doe');
 
       expect(createUserWithEmailAndPassword).toHaveBeenCalledWith(
         expect.anything(),
@@ -71,6 +73,8 @@ describe('authService', () => {
       expect(setDoc).toHaveBeenCalled();
       expect(result.email).toBe('test@example.com');
       expect(result.userId).toBe('test-uid');
+      expect(result.firstName).toBe('John');
+      expect(result.lastName).toBe('Doe');
     });
 
     it('should handle Firebase Auth errors', async () => {
@@ -78,7 +82,7 @@ describe('authService', () => {
         new Error('Email already in use')
       );
 
-      await expect(authService.signUp('test@example.com', 'password123')).rejects.toThrow('Email already in use');
+      await expect(authService.signUp('test@example.com', 'password123', 'John', 'Doe')).rejects.toThrow('Email already in use');
     });
   });
 
