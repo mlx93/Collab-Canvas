@@ -2,6 +2,8 @@
 import React, { createContext, useState, ReactNode } from 'react';
 import { Rectangle, CanvasState, Viewport, Tool } from '../types/canvas.types';
 import { MIN_ZOOM, MAX_ZOOM } from '../utils/constants';
+import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
+import { useAuth } from '../hooks/useAuth';
 
 interface CanvasContextType {
   // State
@@ -26,6 +28,7 @@ interface CanvasContextType {
   // Z-index operations
   bringToFront: (id: string) => void;
   sendToBack: (id: string) => void;
+  setZIndex: (id: string, zIndex: number) => void;
   
   // Tool operations
   setTool: (tool: Tool) => void;
@@ -41,6 +44,7 @@ interface CanvasProviderProps {
 }
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
+  const { user } = useAuth();
   const [canvasState, setCanvasState] = useState<CanvasState>({
     rectangles: [],
     viewport: { x: 0, y: 0, scale: 1 },
@@ -107,28 +111,62 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     };
 
     setCanvasState(prev => {
-      // Increment z-index of all existing rectangles
-      const updatedRectangles = prev.rectangles.map(rect => ({
-        ...rect,
-        zIndex: rect.zIndex + 1
-      }));
+      // Use z-index service to auto-move new rectangle to front
+      const allRectangles = [...prev.rectangles, newRectangle];
+      const reorderedRectangles = autoUpdateZIndex(allRectangles, newRectangle.id);
 
       return {
         ...prev,
-        rectangles: [...updatedRectangles, newRectangle]
+        rectangles: reorderedRectangles,
+        selectedRectangleId: newRectangle.id // Auto-select newly created rectangle
       };
     });
   };
 
   const updateRectangle = (id: string, updates: Partial<Rectangle>) => {
-    setCanvasState(prev => ({
-      ...prev,
-      rectangles: prev.rectangles.map(rect =>
+    setCanvasState(prev => {
+      // If manual z-index update, use manualSetZIndex (don't apply zIndex in map yet)
+      if (updates.zIndex !== undefined) {
+        // Apply non-zIndex updates first
+        const { zIndex, ...otherUpdates } = updates;
+        const rectanglesWithOtherUpdates = prev.rectangles.map(rect =>
+          rect.id === id
+            ? { ...rect, ...otherUpdates, lastModified: new Date() }
+            : rect
+        );
+        
+        // Then apply z-index via manualSetZIndex
+        return {
+          ...prev,
+          rectangles: manualSetZIndex(rectanglesWithOtherUpdates, id, zIndex)
+        };
+      }
+
+      // Update the rectangle for non-zIndex changes
+      const updatedRectangles = prev.rectangles.map(rect =>
         rect.id === id
           ? { ...rect, ...updates, lastModified: new Date() }
           : rect
-      )
-    }));
+      );
+
+      // Auto-move to front when editing position, size, or color
+      const isEditAction = updates.x !== undefined || updates.y !== undefined || 
+                           updates.width !== undefined || updates.height !== undefined || 
+                           updates.color !== undefined;
+      
+      if (isEditAction) {
+        return {
+          ...prev,
+          rectangles: autoUpdateZIndex(updatedRectangles, id)
+        };
+      }
+
+      // No z-index change needed
+      return {
+        ...prev,
+        rectangles: updatedRectangles
+      };
+    });
   };
 
   const deleteRectangle = (id: string) => {
@@ -172,18 +210,42 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const maxZIndex = Math.max(...prev.rectangles.map(r => r.zIndex), 0);
       if (targetRect.zIndex === maxZIndex) return prev; // Already at back
 
-      // Increment z-index of all rectangles with higher zIndex
+      // Move target to back (maxZIndex) and shift others down
       const updatedRectangles = prev.rectangles.map(rect => {
         if (rect.id === id) {
-          return { ...rect, zIndex: maxZIndex + 1 };
+          return { ...rect, zIndex: maxZIndex };
         }
-        if (rect.zIndex > targetRect.zIndex) {
+        // Shapes between target's old position and maxZIndex shift down by 1
+        if (rect.zIndex > targetRect.zIndex && rect.zIndex <= maxZIndex) {
           return { ...rect, zIndex: rect.zIndex - 1 };
         }
         return rect;
       });
 
       return { ...prev, rectangles: updatedRectangles };
+    });
+  };
+
+  const setZIndex = (id: string, zIndex: number) => {
+    setCanvasState(prev => {
+      const updatedRectangles = manualSetZIndex(prev.rectangles, id, zIndex);
+      
+      // Add metadata if user is available
+      if (user) {
+        return {
+          ...prev,
+          rectangles: updatedRectangles.map(rect =>
+            rect.id === id
+              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.userId }
+              : rect
+          )
+        };
+      }
+      
+      return {
+        ...prev,
+        rectangles: updatedRectangles
+      };
     });
   };
 
@@ -220,6 +282,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Z-index operations
     bringToFront,
     sendToBack,
+    setZIndex,
     
     // Tool operations
     setTool,

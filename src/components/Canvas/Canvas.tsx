@@ -4,6 +4,7 @@ import { Stage, Layer, Rect } from 'react-konva';
 import Konva from 'konva';
 import { useCanvas } from '../../hooks/useCanvas';
 import { FPSCounter } from './FPSCounter';
+import { Rectangle } from './Rectangle';
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -13,7 +14,7 @@ import {
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
-  const { viewport, setViewport, panViewport, zoomViewport } = useCanvas();
+  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedRectangleId, setSelectedRectangle } = useCanvas();
   const stageRef = useRef<Konva.Stage>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -91,11 +92,17 @@ export const Canvas: React.FC = () => {
 
   // Handle pan (drag empty space) - manual implementation
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    // Start dragging - we'll allow panning from anywhere for now
-    setIsDragging(true);
-    const pos = e.target.getStage()?.getPointerPosition();
-    if (pos) {
-      lastPosRef.current = { x: pos.x, y: pos.y };
+    // Check if clicked on background (deselect all)
+    const clickedOnEmpty = e.target === e.target.getStage() || e.target.getClassName() === 'Rect' && e.target.listening() === false;
+    if (clickedOnEmpty) {
+      setSelectedRectangle(null);
+      
+      // Start panning
+      setIsDragging(true);
+      const pos = e.target.getStage()?.getPointerPosition();
+      if (pos) {
+        lastPosRef.current = { x: pos.x, y: pos.y };
+      }
     }
   };
 
@@ -205,7 +212,17 @@ export const Canvas: React.FC = () => {
             listening={false}
           />
 
-          {/* Rectangles will be rendered here in PR #4 */}
+          {/* Rectangles - sorted by z-index (higher z-index = further back) */}
+          {rectangles
+            .sort((a, b) => b.zIndex - a.zIndex) // Higher z-index renders first (back layer)
+            .map((rectangle) => (
+              <Rectangle
+                key={rectangle.id}
+                rectangle={rectangle}
+                isSelected={selectedRectangleId === rectangle.id}
+                onSelect={() => setSelectedRectangle(rectangle.id)}
+              />
+            ))}
         </Layer>
       </Stage>
 
