@@ -24,6 +24,18 @@ jest.mock('react-hot-toast', () => ({
   Toaster: () => null,
 }));
 
+// Mock Konva
+jest.mock('react-konva', () => ({
+  Stage: ({ children }: any) => <div data-testid="konva-stage">{children}</div>,
+  Layer: ({ children }: any) => <div data-testid="konva-layer">{children}</div>,
+  Rect: () => <div data-testid="konva-rect" />
+}));
+
+// Mock useFPS hook
+jest.mock('./hooks/useFPS', () => ({
+  useFPS: () => 60
+}));
+
 test('renders CollabCanvas app', async () => {
   // Setup auth mock to simulate no user
   mockedAuthService.onAuthStateChange = jest.fn((callback) => {
