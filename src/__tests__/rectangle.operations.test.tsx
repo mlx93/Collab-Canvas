@@ -139,8 +139,10 @@ describe('Rectangle Operations', () => {
       const firstRect = canvasContext.rectangles.find((r: any) => r.id === firstId);
       const secondRect = canvasContext.rectangles.find((r: any) => r.id !== firstId);
 
-      expect(firstRect.zIndex).toBe(2);
-      expect(secondRect.zIndex).toBe(1);
+      // New convention: higher z-index = front
+      // First rectangle: 1, Second rectangle: 2 (front)
+      expect(firstRect.zIndex).toBe(1);
+      expect(secondRect.zIndex).toBe(2);
     });
 
     it('should auto-select newly created rectangle', () => {

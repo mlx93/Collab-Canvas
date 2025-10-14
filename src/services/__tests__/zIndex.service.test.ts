@@ -86,13 +86,14 @@ describe('zIndex.service', () => {
         createMockRect('c', 3)
       ];
 
-      const result = autoUpdateZIndex(shapes, 'a');
-      const shapeA = result.find(s => s.id === 'a');
+      // c is already at front (highest z-index = 3)
+      const result = autoUpdateZIndex(shapes, 'c');
+      const shapeC = result.find(s => s.id === 'c');
 
-      expect(shapeA?.zIndex).toBe(1);
-      // Other shapes should maintain order
+      // Should return unchanged since already at front
+      expect(shapeC?.zIndex).toBe(3);
+      expect(result.find(s => s.id === 'a')?.zIndex).toBe(1);
       expect(result.find(s => s.id === 'b')?.zIndex).toBe(2);
-      expect(result.find(s => s.id === 'c')?.zIndex).toBe(3);
     });
 
     it('should return original array if shape not found', () => {
@@ -121,26 +122,9 @@ describe('zIndex.service', () => {
       expect(shapeC?.zIndex).toBe(1);
     });
 
-    it('should trigger push-down recalculation when moving forward', () => {
-      // Shape C: 3 → 1, so shapes at 1 and 2 should become 2 and 3
-      const shapes: Rectangle[] = [
-        createMockRect('a', 1),
-        createMockRect('b', 2),
-        createMockRect('c', 3)
-      ];
-
-      const result = manualSetZIndex(shapes, 'c', 1);
-      const shapeA = result.find(s => s.id === 'a');
-      const shapeB = result.find(s => s.id === 'b');
-      const shapeC = result.find(s => s.id === 'c');
-
-      expect(shapeC?.zIndex).toBe(1);
-      expect(shapeA?.zIndex).toBe(2);
-      expect(shapeB?.zIndex).toBe(3);
-    });
-
-    it('should trigger push-down recalculation when moving backward', () => {
-      // Shape A: 1 → 3, so shape at 2 should become 1, shape at 3 should become 2
+    it('should trigger push-down recalculation when moving forward (toward front)', () => {
+      // Shape A: 1 → 3 (moving from back toward front)
+      // Shapes between (2, 3) should shift back by 1
       const shapes: Rectangle[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
@@ -153,8 +137,27 @@ describe('zIndex.service', () => {
       const shapeC = result.find(s => s.id === 'c');
 
       expect(shapeA?.zIndex).toBe(3);
-      expect(shapeB?.zIndex).toBe(1);
-      expect(shapeC?.zIndex).toBe(2);
+      expect(shapeB?.zIndex).toBe(1); // Shifted back from 2 to 1
+      expect(shapeC?.zIndex).toBe(2); // Shifted back from 3 to 2
+    });
+
+    it('should trigger push-down recalculation when moving backward (toward back)', () => {
+      // Shape C: 3 → 1 (moving from front toward back)
+      // Shapes between (1, 2) should shift forward by 1
+      const shapes: Rectangle[] = [
+        createMockRect('a', 1),
+        createMockRect('b', 2),
+        createMockRect('c', 3)
+      ];
+
+      const result = manualSetZIndex(shapes, 'c', 1);
+      const shapeA = result.find(s => s.id === 'a');
+      const shapeB = result.find(s => s.id === 'b');
+      const shapeC = result.find(s => s.id === 'c');
+
+      expect(shapeC?.zIndex).toBe(1);
+      expect(shapeA?.zIndex).toBe(2); // Shifted forward from 1 to 2
+      expect(shapeB?.zIndex).toBe(3); // Shifted forward from 2 to 3
     });
 
     it('should not create duplicate z-indices after manual set', () => {

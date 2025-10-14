@@ -35,6 +35,11 @@ export const autoUpdateZIndex = (shapes: Rectangle[], shapeId: string): Rectangl
 
 /**
  * Manual z-index override: Set specific z-index with push-down recalculation
+ * Uses atomic 3-phase approach to avoid temporary conflicts/flickers:
+ * Phase 1: Move target shape to temporary high value (out of the way)
+ * Phase 2: Shift other shapes to make room at target z-index
+ * Phase 3: Move target shape to final desired z-index
+ * 
  * @param shapes - All rectangles in the canvas
  * @param shapeId - ID of the shape to update
  * @param newZIndex - New z-index to set (positive integer)
@@ -42,7 +47,9 @@ export const autoUpdateZIndex = (shapes: Rectangle[], shapeId: string): Rectangl
  * 
  * Example: Setting shape C from z-index 3 to 5 (moving forward):
  * Before: [A:1(back), B:2, C:3, D:4, E:5(front)]
- * After:  [A:1(back), B:2, D:3, E:4, C:5(front)]
+ * Phase 1: C → 1000 (temp): [A:1, B:2, D:4, E:5, C:1000]
+ * Phase 2: Shift D,E back: [A:1, B:2, D:3, E:4, C:1000]
+ * Phase 3: C → 5: [A:1, B:2, D:3, E:4, C:5]
  */
 export const manualSetZIndex = (shapes: Rectangle[], shapeId: string, newZIndex: number): Rectangle[] => {
   if (newZIndex < 1) return shapes; // Z-index must be positive
@@ -56,29 +63,45 @@ export const manualSetZIndex = (shapes: Rectangle[], shapeId: string, newZIndex:
   // If no change, return as-is
   if (oldZIndex === newZIndex) return shapes;
 
-  // Push-down logic: Shift other shapes to make room
-  return shapes.map(shape => {
-    if (shape.id === shapeId) {
-      // Set the target shape to new z-index
-      return { ...shape, zIndex: newZIndex };
-    } else {
-      // Push-down recalculation for other shapes
-      if (newZIndex > oldZIndex) {
-        // Moving shape forward (higher z-index = toward front)
-        // Shapes between oldZIndex and newZIndex need to shift back
-        if (shape.zIndex > oldZIndex && shape.zIndex <= newZIndex) {
-          return { ...shape, zIndex: shape.zIndex - 1 };
-        }
-      } else {
-        // Moving shape backward (lower z-index = toward back)
-        // Shapes between newZIndex and oldZIndex need to shift forward
-        if (shape.zIndex >= newZIndex && shape.zIndex < oldZIndex) {
-          return { ...shape, zIndex: shape.zIndex + 1 };
-        }
+  // Find max z-index for temporary high value
+  const maxZIndex = Math.max(...shapes.map(s => s.zIndex));
+  const TEMP_HIGH_VALUE = maxZIndex + 1000; // Guaranteed to be out of the way
+
+  // PHASE 1: Move target shape to temporary high value
+  let updatedShapes = shapes.map(shape =>
+    shape.id === shapeId 
+      ? { ...shape, zIndex: TEMP_HIGH_VALUE }
+      : shape
+  );
+
+  // PHASE 2: Shift other shapes to make room at newZIndex
+  updatedShapes = updatedShapes.map(shape => {
+    if (shape.id === shapeId) return shape; // Skip target (still at temp value)
+
+    if (newZIndex > oldZIndex) {
+      // Moving target forward (toward front)
+      // Shapes between oldZIndex and newZIndex shift back by 1
+      if (shape.zIndex > oldZIndex && shape.zIndex <= newZIndex) {
+        return { ...shape, zIndex: shape.zIndex - 1 };
       }
-      return shape;
+    } else {
+      // Moving target backward (toward back)
+      // Shapes between newZIndex and oldZIndex shift forward by 1
+      if (shape.zIndex >= newZIndex && shape.zIndex < oldZIndex) {
+        return { ...shape, zIndex: shape.zIndex + 1 };
+      }
     }
+    return shape;
   });
+
+  // PHASE 3: Move target shape to final desired z-index
+  updatedShapes = updatedShapes.map(shape =>
+    shape.id === shapeId 
+      ? { ...shape, zIndex: newZIndex }
+      : shape
+  );
+
+  return updatedShapes;
 };
 
 /**
