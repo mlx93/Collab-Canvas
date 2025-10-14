@@ -7,6 +7,8 @@ import {
   deleteDoc,
   onSnapshot,
   query,
+  orderBy,
+  limit,
   Timestamp,
   writeBatch,
   getDocs,
@@ -65,6 +67,7 @@ function getShapeDoc(shapeId: string) {
 
 /**
  * Create a new rectangle in Firestore
+ * NOTE: Queries Firestore for maxZIndex to ensure new rectangle appears at front
  */
 export async function createRectangle(
   rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>
@@ -72,10 +75,20 @@ export async function createRectangle(
   const shapeId = doc(getShapesCollection()).id; // Generate unique ID
   const shapeRef = getShapeDoc(shapeId);
 
+  // Query existing shapes to find maxZIndex (higher z-index = front)
+  const shapesSnapshot = await retryOperation(
+    () => getDocs(query(getShapesCollection(), orderBy('zIndex', 'desc'), limit(1))),
+    'Query max z-index'
+  );
+  
+  const maxZIndex = shapesSnapshot.empty 
+    ? 0 
+    : shapesSnapshot.docs[0].data().zIndex;
+
   const rectangleData = {
     id: shapeId,
     ...rectangle,
-    zIndex: 1, // New rectangles start at front
+    zIndex: maxZIndex + 1, // New rectangles go to front (higher = front)
     createdAt: Timestamp.now(),
     lastModified: Timestamp.now(),
   };
@@ -88,7 +101,7 @@ export async function createRectangle(
 
 /**
  * Update a rectangle in Firestore
- * Auto-updates z-index to 1 on any edit
+ * Auto-updates z-index to maxZIndex + 1 on any edit (brings to front)
  */
 export async function updateRectangle(
   shapeId: string,
@@ -96,16 +109,26 @@ export async function updateRectangle(
 ): Promise<void> {
   const shapeRef = getShapeDoc(shapeId);
 
-  const updateData = {
+  const updateData: any = {
     ...updates,
     lastModified: Timestamp.now(),
   };
 
-  // If this is a position/size/color update (not just z-index), auto-set z-index to 1
+  // If this is a position/size/color update (not just z-index), auto-set z-index to front
   if (updates.x !== undefined || updates.y !== undefined || 
       updates.width !== undefined || updates.height !== undefined || 
       updates.color !== undefined) {
-    updateData.zIndex = 1;
+    // Query for maxZIndex to bring edited shape to front (higher = front)
+    const shapesSnapshot = await retryOperation(
+      () => getDocs(query(getShapesCollection(), orderBy('zIndex', 'desc'), limit(1))),
+      'Query max z-index'
+    );
+    
+    const maxZIndex = shapesSnapshot.empty 
+      ? 0 
+      : shapesSnapshot.docs[0].data().zIndex;
+    
+    updateData.zIndex = maxZIndex + 1;
   }
 
   await retryOperation(

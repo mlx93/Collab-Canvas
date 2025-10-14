@@ -23,6 +23,8 @@ jest.mock('firebase/firestore', () => ({
   deleteDoc: jest.fn(),
   onSnapshot: jest.fn(),
   query: jest.fn(),
+  orderBy: jest.fn(),
+  limit: jest.fn(),
   getDocs: jest.fn(),
   writeBatch: jest.fn(),
   Timestamp: {
@@ -57,6 +59,9 @@ describe('canvas.service', () => {
     it('should create a rectangle in Firestore with correct data structure', async () => {
       const mockSetDoc = firestore.setDoc as jest.Mock;
       mockSetDoc.mockResolvedValue(undefined);
+      
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({ empty: true }); // No existing shapes
 
       const mockDoc = { id: 'test-id' };
       (firestore.doc as jest.Mock).mockReturnValue(mockDoc);
@@ -92,6 +97,9 @@ describe('canvas.service', () => {
     it('should use canvas ID "default-canvas"', async () => {
       const mockSetDoc = firestore.setDoc as jest.Mock;
       mockSetDoc.mockResolvedValue(undefined);
+      
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({ empty: true }); // No existing shapes
 
       const mockCollection = jest.fn();
       (firestore.collection as jest.Mock).mockImplementation(mockCollection);

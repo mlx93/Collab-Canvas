@@ -125,22 +125,24 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addRectangle = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>) => {
     // Optimistic update: add to local state immediately
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const newRectangle: Rectangle = {
-      ...rectangle,
-      id: tempId,
-      zIndex: 1, // New rectangles go to front
-      createdAt: new Date(),
-      lastModified: new Date()
-    };
-
+    
     setCanvasState(prev => {
-      // Use z-index service to auto-move new rectangle to front
-      const allRectangles = [...prev.rectangles, newRectangle];
-      const reorderedRectangles = autoUpdateZIndex(allRectangles, newRectangle.id);
+      // Calculate highest z-index + 1 for new rectangle (higher = front)
+      const maxZIndex = prev.rectangles.length > 0 
+        ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
+        : 0;
+      
+      const newRectangle: Rectangle = {
+        ...rectangle,
+        id: tempId,
+        zIndex: maxZIndex + 1, // New rectangle goes to front
+        createdAt: new Date(),
+        lastModified: new Date()
+      };
 
       return {
         ...prev,
-        rectangles: reorderedRectangles,
+        rectangles: [...prev.rectangles, newRectangle],
         selectedRectangleId: newRectangle.id // Auto-select newly created rectangle
       };
     });
@@ -239,18 +241,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const bringToFront = (id: string) => {
     setCanvasState(prev => {
       const targetRect = prev.rectangles.find(rect => rect.id === id);
-      if (!targetRect || targetRect.zIndex === 1) return prev; // Already at front
+      if (!targetRect) return prev;
 
-      // Decrement z-index of all rectangles with lower zIndex
-      const updatedRectangles = prev.rectangles.map(rect => {
-        if (rect.id === id) {
-          return { ...rect, zIndex: 1 };
-        }
-        if (rect.zIndex < targetRect.zIndex) {
-          return { ...rect, zIndex: rect.zIndex + 1 };
-        }
-        return rect;
-      });
+      const maxZIndex = Math.max(...prev.rectangles.map(r => r.zIndex), 0);
+      if (targetRect.zIndex === maxZIndex) return prev; // Already at front
+
+      // Simply set to maxZIndex + 1 (higher = front)
+      const updatedRectangles = prev.rectangles.map(rect =>
+        rect.id === id 
+          ? { ...rect, zIndex: maxZIndex + 1 }
+          : rect
+      );
 
       return { ...prev, rectangles: updatedRectangles };
     });
@@ -261,20 +262,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       const targetRect = prev.rectangles.find(rect => rect.id === id);
       if (!targetRect) return prev;
 
-      const maxZIndex = Math.max(...prev.rectangles.map(r => r.zIndex), 0);
-      if (targetRect.zIndex === maxZIndex) return prev; // Already at back
+      const minZIndex = Math.min(...prev.rectangles.map(r => r.zIndex), 1);
+      if (targetRect.zIndex === minZIndex) return prev; // Already at back
 
-      // Move target to back (maxZIndex) and shift others down
-      const updatedRectangles = prev.rectangles.map(rect => {
-        if (rect.id === id) {
-          return { ...rect, zIndex: maxZIndex };
-        }
-        // Shapes between target's old position and maxZIndex shift down by 1
-        if (rect.zIndex > targetRect.zIndex && rect.zIndex <= maxZIndex) {
-          return { ...rect, zIndex: rect.zIndex - 1 };
-        }
-        return rect;
-      });
+      // Simply set to minZIndex - 1 (lower = back)
+      const updatedRectangles = prev.rectangles.map(rect =>
+        rect.id === id 
+          ? { ...rect, zIndex: Math.max(1, minZIndex - 1) } // Ensure stays >= 1
+          : rect
+      );
 
       return { ...prev, rectangles: updatedRectangles };
     });

@@ -13,7 +13,7 @@ export interface Rectangle {
   height: number;
   color: string;
   
-  // Z-index (1 = front, higher numbers = further back)
+  // Z-index (higher = front, lower = back)
   zIndex: number;
   
   // Metadata

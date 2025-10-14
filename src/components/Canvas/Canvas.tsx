@@ -214,9 +214,9 @@ export const Canvas: React.FC = () => {
             listening={false}
           />
 
-          {/* Rectangles - sorted by z-index (higher z-index = further back) */}
+          {/* Rectangles - sorted by z-index (lower z-index = further back) */}
           {rectangles
-            .sort((a, b) => b.zIndex - a.zIndex) // Higher z-index renders first (back layer)
+            .sort((a, b) => a.zIndex - b.zIndex) // Lower z-index renders first (back layer)
             .map((rectangle) => (
               <Rectangle
                 key={rectangle.id}
