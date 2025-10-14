@@ -5,7 +5,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
 
 export const LeftToolbar: React.FC = () => {
-  const { addRectangle, viewport, rectangles } = useCanvas();
+  const { addRectangle, viewport, rectangles, selectedRectangleId, stageSize } = useCanvas();
   const { user } = useAuth();
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -14,14 +14,10 @@ export const LeftToolbar: React.FC = () => {
   const handleCreateRectangle = () => {
     if (!user) return;
 
-    // Calculate viewport center in canvas coordinates
-    // Account for toolbar (64px left) and header (64px top)
-    const TOOLBAR_WIDTH = 64;
-    const HEADER_HEIGHT = 64;
-    
-    // Get the visible canvas dimensions (excluding toolbar/header/properties panel)
-    const canvasVisibleWidth = window.innerWidth - TOOLBAR_WIDTH; // Properties panel width is handled by flex
-    const canvasVisibleHeight = window.innerHeight - HEADER_HEIGHT;
+    // Use the actual rendered canvas dimensions from context
+    // These are updated dynamically by the Canvas component on window resize
+    const canvasVisibleWidth = stageSize.width;
+    const canvasVisibleHeight = stageSize.height;
     
     // Calculate center of visible canvas area in canvas coordinates
     const baseCenterX = -viewport.x / viewport.scale + (canvasVisibleWidth / 2) / viewport.scale - 50;

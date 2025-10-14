@@ -14,6 +14,7 @@ interface CanvasContextType {
   currentTool: Tool;
   loading: boolean;
   error: string | null;
+  stageSize: { width: number; height: number };
   
   // Viewport operations
   setViewport: (viewport: Viewport) => void;
@@ -36,6 +37,7 @@ interface CanvasContextType {
   
   // Utility
   clearError: () => void;
+  setStageSize: (size: { width: number; height: number }) => void;
 }
 
 export const CanvasContext = createContext<CanvasContextType | undefined>(undefined);
@@ -52,7 +54,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     selectedRectangleId: null,
     currentTool: 'select',
     loading: true, // Start with loading true while fetching from Firestore
-    error: null
+    error: null,
+    stageSize: { width: 800, height: 600 } // Default size, will be updated by Canvas component
   });
 
   // Subscribe to Firestore real-time updates
@@ -319,6 +322,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setCanvasState(prev => ({ ...prev, error: null }));
   };
 
+  const setStageSize = (size: { width: number; height: number }) => {
+    setCanvasState(prev => {
+      // Only update if size actually changed (prevent unnecessary re-renders)
+      if (prev.stageSize.width === size.width && prev.stageSize.height === size.height) {
+        return prev;
+      }
+      return { ...prev, stageSize: size };
+    });
+  };
+
   const value: CanvasContextType = {
     // State
     rectangles: canvasState.rectangles,
@@ -327,6 +340,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     currentTool: canvasState.currentTool,
     loading: canvasState.loading,
     error: canvasState.error,
+    stageSize: canvasState.stageSize,
     
     // Viewport operations
     setViewport,
@@ -348,7 +362,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setTool,
     
     // Utility
-    clearError
+    clearError,
+    setStageSize
   };
 
   return <CanvasContext.Provider value={value}>{children}</CanvasContext.Provider>;

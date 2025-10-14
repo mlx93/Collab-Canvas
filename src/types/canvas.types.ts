@@ -48,4 +48,5 @@ export interface CanvasState {
   currentTool: Tool;
   loading: boolean;
   error: string | null;
+  stageSize: { width: number; height: number };
 }

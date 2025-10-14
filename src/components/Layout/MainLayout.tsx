@@ -36,8 +36,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </div>
 
         {/* Right Properties Panel - collapses when nothing selected */}
-        <div className={`flex-none bg-white border-l border-gray-200 shadow-sm overflow-y-auto transition-all duration-300 ${hasSelection ? 'w-72' : 'w-0 border-l-0'}`}>
-          {properties}
+        <div className={`flex-none bg-white border-l border-gray-200 shadow-sm overflow-y-auto transition-all duration-300 ${hasSelection ? 'w-72' : 'w-0 border-l-0 overflow-hidden'}`}>
+          {hasSelection && properties}
         </div>
       </div>
     </div>

@@ -13,7 +13,7 @@ interface RectangleProps {
   onSelect: () => void;
 }
 
-export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onSelect }) => {
+const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, onSelect }) => {
   const { updateRectangle } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
@@ -178,3 +178,23 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
     </Group>
   );
 };
+
+// Memoize the Rectangle component to prevent unnecessary re-renders
+// Only re-render when rectangle properties or selection state changes
+export const Rectangle = React.memo(RectangleComponent, (prevProps, nextProps) => {
+  // Check if rectangle data changed
+  const rectChanged = 
+    prevProps.rectangle.id !== nextProps.rectangle.id ||
+    prevProps.rectangle.x !== nextProps.rectangle.x ||
+    prevProps.rectangle.y !== nextProps.rectangle.y ||
+    prevProps.rectangle.width !== nextProps.rectangle.width ||
+    prevProps.rectangle.height !== nextProps.rectangle.height ||
+    prevProps.rectangle.color !== nextProps.rectangle.color ||
+    prevProps.rectangle.zIndex !== nextProps.rectangle.zIndex;
+  
+  // Check if selection state changed
+  const selectionChanged = prevProps.isSelected !== nextProps.isSelected;
+  
+  // Only re-render if something actually changed
+  return !rectChanged && !selectionChanged;
+});

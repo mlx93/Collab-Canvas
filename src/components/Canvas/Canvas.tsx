@@ -14,7 +14,7 @@ import {
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
-  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedRectangleId, setSelectedRectangle } = useCanvas();
+  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedRectangleId, setSelectedRectangle, setStageSize: updateContextStageSize } = useCanvas();
   const stageRef = useRef<Konva.Stage>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -25,17 +25,19 @@ export const Canvas: React.FC = () => {
     const updateSize = () => {
       if (stageRef.current) {
         const container = stageRef.current.container();
-        setStageSize({
+        const newSize = {
           width: container.offsetWidth,
           height: container.offsetHeight
-        });
+        };
+        setStageSize(newSize);
+        updateContextStageSize(newSize); // Update context so LeftToolbar can access it
       }
     };
 
     updateSize();
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
-  }, []);
+  }, [updateContextStageSize]);
 
   // Handle mouse wheel zoom
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
