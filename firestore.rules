@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Canvas shapes collection
+    match /canvases/{canvasId}/shapes/{shapeId} {
+      // Allow authenticated users to read all shapes
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to create shapes
+      allow create: if request.auth != null
+        && request.resource.data.createdBy == request.auth.token.email
+        && request.resource.data.zIndex is number
+        && request.resource.data.zIndex >= 1;
+      
+      // Allow users to update shapes
+      allow update: if request.auth != null
+        && request.resource.data.lastModifiedBy == request.auth.token.email
+        && request.resource.data.zIndex is number
+        && request.resource.data.zIndex >= 1;
+      
+      // Allow users to delete shapes
+      allow delete: if request.auth != null;
+    }
+  }
+}
+
