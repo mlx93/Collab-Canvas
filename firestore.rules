@@ -1,6 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // User profiles collection
+    match /users/{userId} {
+      // Allow users to read any user profile (for collaboration features)
+      allow read: if request.auth != null;
+      
+      // Allow users to create/update only their own profile
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.email is string
+        && request.resource.data.firstName is string
+        && request.resource.data.lastName is string;
+    }
+    
     // Canvas shapes collection
     match /canvases/{canvasId}/shapes/{shapeId} {
       // Allow authenticated users to read all shapes
