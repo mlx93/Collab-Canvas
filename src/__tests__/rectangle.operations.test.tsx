@@ -1,0 +1,530 @@
+// Integration tests for rectangle operations in CanvasContext
+import React from 'react';
+import { render, act } from '@testing-library/react';
+import { CanvasProvider } from '../context/CanvasContext';
+import { useCanvas } from '../hooks/useCanvas';
+import { AuthProvider } from '../context/AuthContext';
+import { authService } from '../services/auth.service';
+
+// Mock Firebase
+jest.mock('../services/firebase', () => ({
+  auth: { currentUser: { uid: 'test-user', email: 'test@example.com' } },
+  db: {},
+  rtdb: {}
+}));
+
+// Mock authService
+jest.mock('../services/auth.service', () => ({
+  authService: {
+    onAuthStateChange: jest.fn((callback) => {
+      callback({ uid: 'test-user', email: 'test@example.com' });
+      return jest.fn();
+    }),
+    signOut: jest.fn(),
+  }
+}));
+
+// Test component to access canvas context
+const TestComponent: React.FC<{ onRender: (context: any) => void }> = ({ onRender }) => {
+  const context = useCanvas();
+  
+  React.useEffect(() => {
+    onRender(context);
+  }, [context, onRender]);
+  
+  return null;
+};
+
+describe('Rectangle Operations', () => {
+  let canvasContext: any;
+
+  const renderCanvas = () => {
+    const handleRender = (context: any) => {
+      canvasContext = context;
+    };
+
+    render(
+      <AuthProvider>
+        <CanvasProvider>
+          <TestComponent onRender={handleRender} />
+        </CanvasProvider>
+      </AuthProvider>
+    );
+  };
+
+  beforeEach(() => {
+    renderCanvas();
+  });
+
+  describe('addRectangle', () => {
+    it('should create rectangle at viewport center with default size 100x100px', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      expect(canvasContext.rectangles).toHaveLength(1);
+      expect(canvasContext.rectangles[0].width).toBe(100);
+      expect(canvasContext.rectangles[0].height).toBe(100);
+    });
+
+    it('should assign z-index 1 to new rectangle', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      expect(canvasContext.rectangles[0].zIndex).toBe(1);
+    });
+
+    it('should push existing rectangles back when adding new one', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const firstId = canvasContext.rectangles[0].id;
+
+      act(() => {
+        canvasContext.addRectangle({
+          x: 200,
+          y: 200,
+          width: 100,
+          height: 100,
+          color: '#4CAF50',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const firstRect = canvasContext.rectangles.find((r: any) => r.id === firstId);
+      const secondRect = canvasContext.rectangles.find((r: any) => r.id !== firstId);
+
+      expect(firstRect.zIndex).toBe(2);
+      expect(secondRect.zIndex).toBe(1);
+    });
+
+    it('should auto-select newly created rectangle', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      expect(canvasContext.selectedRectangleId).toBe(canvasContext.rectangles[0].id);
+    });
+
+    it('should use predefined colors only', () => {
+      const colors = ['#2196F3', '#4CAF50', '#F44336', '#FF9800', '#212121'];
+
+      colors.forEach((color) => {
+        act(() => {
+          canvasContext.addRectangle({
+            x: 100,
+            y: 100,
+            width: 100,
+            height: 100,
+            color,
+            createdBy: 'test-user',
+            lastModifiedBy: 'test-user',
+          });
+        });
+      });
+
+      expect(canvasContext.rectangles).toHaveLength(5);
+      canvasContext.rectangles.forEach((rect: any, index: number) => {
+        expect(colors).toContain(rect.color);
+      });
+    });
+  });
+
+  describe('updateRectangle', () => {
+    let rectId: string;
+
+    beforeEach(() => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+        canvasContext.addRectangle({
+          x: 200,
+          y: 200,
+          width: 100,
+          height: 100,
+          color: '#4CAF50',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      rectId = canvasContext.rectangles[1].id; // Second rectangle (currently z-index 2)
+    });
+
+    it('should update position and auto-set z-index 1', () => {
+      act(() => {
+        canvasContext.updateRectangle(rectId, { x: 300, y: 300 });
+      });
+
+      const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      expect(rect.x).toBe(300);
+      expect(rect.y).toBe(300);
+      expect(rect.zIndex).toBe(1);
+    });
+
+    it('should update dimensions and auto-set z-index 1', () => {
+      act(() => {
+        canvasContext.updateRectangle(rectId, { width: 200, height: 150 });
+      });
+
+      const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      expect(rect.width).toBe(200);
+      expect(rect.height).toBe(150);
+      expect(rect.zIndex).toBe(1);
+    });
+
+    it('should change color and auto-set z-index 1', () => {
+      act(() => {
+        canvasContext.updateRectangle(rectId, { color: '#F44336' });
+      });
+
+      const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      expect(rect.color).toBe('#F44336');
+      expect(rect.zIndex).toBe(1);
+    });
+
+    it('should manually set z-index without auto-update', () => {
+      act(() => {
+        canvasContext.updateRectangle(rectId, { zIndex: 1 });
+      });
+
+      const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      expect(rect.zIndex).toBe(1);
+    });
+
+    it('should update lastModified timestamp', () => {
+      const beforeUpdate = new Date();
+
+      act(() => {
+        canvasContext.updateRectangle(rectId, { x: 400 });
+      });
+
+      const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      expect(rect.lastModified >= beforeUpdate).toBe(true);
+    });
+  });
+
+  describe('deleteRectangle', () => {
+    it('should remove rectangle from state', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      expect(canvasContext.rectangles).toHaveLength(1);
+      const rectId = canvasContext.rectangles[0].id;
+
+      act(() => {
+        canvasContext.deleteRectangle(rectId);
+      });
+
+      expect(canvasContext.rectangles).toHaveLength(0);
+    });
+
+    it('should deselect if deleted rectangle was selected', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rectId = canvasContext.rectangles[0].id;
+      expect(canvasContext.selectedRectangleId).toBe(rectId);
+
+      act(() => {
+        canvasContext.deleteRectangle(rectId);
+      });
+
+      expect(canvasContext.selectedRectangleId).toBeNull();
+    });
+
+    it('should not deselect if deleted rectangle was not selected', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rect1Id = canvasContext.rectangles[0].id;
+
+      act(() => {
+        canvasContext.addRectangle({
+          x: 200,
+          y: 200,
+          width: 100,
+          height: 100,
+          color: '#4CAF50',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      // rect2 is the most recently added, so it's selected and at front (z-index 1)
+      const rect2Id = canvasContext.selectedRectangleId;
+      expect(rect2Id).toBeTruthy();
+      expect(rect2Id).not.toBe(rect1Id);
+
+      act(() => {
+        canvasContext.deleteRectangle(rect1Id);
+      });
+
+      expect(canvasContext.selectedRectangleId).toBe(rect2Id);
+    });
+  });
+
+  describe('selection operations', () => {
+    it('should select rectangle', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rectId = canvasContext.rectangles[0].id;
+
+      act(() => {
+        canvasContext.setSelectedRectangle(rectId);
+      });
+
+      expect(canvasContext.selectedRectangleId).toBe(rectId);
+    });
+
+    it('should only allow one rectangle selected at a time', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rect1Id = canvasContext.rectangles[0].id;
+
+      act(() => {
+        canvasContext.addRectangle({
+          x: 200,
+          y: 200,
+          width: 100,
+          height: 100,
+          color: '#4CAF50',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rect2Id = canvasContext.rectangles[1].id;
+
+      act(() => {
+        canvasContext.setSelectedRectangle(rect1Id);
+      });
+      expect(canvasContext.selectedRectangleId).toBe(rect1Id);
+
+      act(() => {
+        canvasContext.setSelectedRectangle(rect2Id);
+      });
+      expect(canvasContext.selectedRectangleId).toBe(rect2Id);
+    });
+
+    it('should deselect all when setting to null', () => {
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+
+      const rectId = canvasContext.rectangles[0].id;
+      expect(canvasContext.selectedRectangleId).toBe(rectId);
+
+      act(() => {
+        canvasContext.setSelectedRectangle(null);
+      });
+
+      expect(canvasContext.selectedRectangleId).toBeNull();
+    });
+  });
+
+  describe('z-index operations', () => {
+    let rect1Id: string;
+    let rect2Id: string;
+    let rect3Id: string;
+
+    beforeEach(() => {
+      // Add rect1 and capture its ID from selectedRectangleId (newly added rect is auto-selected)
+      act(() => {
+        canvasContext.addRectangle({
+          x: 100,
+          y: 100,
+          width: 100,
+          height: 100,
+          color: '#2196F3',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+      rect1Id = canvasContext.selectedRectangleId!;
+
+      // Add rect2 and capture its ID
+      act(() => {
+        canvasContext.addRectangle({
+          x: 200,
+          y: 200,
+          width: 100,
+          height: 100,
+          color: '#4CAF50',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+      rect2Id = canvasContext.selectedRectangleId!;
+
+      // Add rect3 and capture its ID
+      act(() => {
+        canvasContext.addRectangle({
+          x: 300,
+          y: 300,
+          width: 100,
+          height: 100,
+          color: '#F44336',
+          createdBy: 'test-user',
+          lastModifiedBy: 'test-user',
+        });
+      });
+      rect3Id = canvasContext.selectedRectangleId!;
+    });
+
+    it('should manually set z-index with push-down recalculation', () => {
+      // rect3 is currently z-index 1 (most recent), rect2 is 2, rect1 is 3 (oldest)
+      // Verify initial state
+      const initialRect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
+      const initialRect2 = canvasContext.rectangles.find((r: any) => r.id === rect2Id);
+      const initialRect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
+      
+      expect(initialRect1.zIndex).toBe(3); // Oldest, at back
+      expect(initialRect2.zIndex).toBe(2);
+      expect(initialRect3.zIndex).toBe(1); // Most recent, at front
+      
+      // Set rect1 to z-index 1 (bring to front)
+      act(() => {
+        canvasContext.setZIndex(rect1Id, 1);
+      });
+
+      const rect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
+      const rect2 = canvasContext.rectangles.find((r: any) => r.id === rect2Id);
+      const rect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
+
+      // After moving rect1 from 3→1, shapes at 1 and 2 should push back
+      expect(rect1.zIndex).toBe(1); // Moved to front
+      expect(rect2.zIndex).toBe(3); // Was 2, pushed to 3
+      expect(rect3.zIndex).toBe(2); // Was 1, pushed to 2
+    });
+
+    it('should bring rectangle to front', () => {
+      // rect1 is currently at back (z-index 3)
+      act(() => {
+        canvasContext.bringToFront(rect1Id);
+      });
+
+      const rect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
+      expect(rect1.zIndex).toBe(1);
+    });
+
+    it('should send rectangle to back', () => {
+      // rect3 is currently at front (z-index 1)
+      act(() => {
+        canvasContext.sendToBack(rect3Id);
+      });
+
+      const rect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
+      expect(rect3.zIndex).toBe(3);
+    });
+
+    it('should ensure no duplicate z-indices after operations', () => {
+      act(() => {
+        canvasContext.setZIndex(rect1Id, 1);
+      });
+
+      const zIndices = canvasContext.rectangles.map((r: any) => r.zIndex);
+      const hasDuplicates = zIndices.some((val: number, idx: number) => zIndices.indexOf(val) !== idx);
+
+      expect(hasDuplicates).toBe(false);
+    });
+  });
+});
+

@@ -6,13 +6,15 @@ interface MainLayoutProps {
   toolbar: ReactNode;
   canvas: ReactNode;
   properties: ReactNode;
+  hasSelection?: boolean; // Whether a shape is currently selected
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
   header,
   toolbar,
   canvas,
-  properties
+  properties,
+  hasSelection = false
 }) => {
   return (
     <div className="flex flex-col h-screen bg-gray-100">
@@ -33,8 +35,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           {canvas}
         </div>
 
-        {/* Right Properties Panel */}
-        <div className="flex-none w-72 bg-white border-l border-gray-200 shadow-sm overflow-y-auto">
+        {/* Right Properties Panel - collapses when nothing selected */}
+        <div className={`flex-none bg-white border-l border-gray-200 shadow-sm overflow-y-auto transition-all duration-300 ${hasSelection ? 'w-72' : 'w-0 border-l-0'}`}>
           {properties}
         </div>
       </div>
