@@ -206,7 +206,7 @@ export const Canvas: React.FC = () => {
   }, [viewport, setViewport]);
 
   return (
-    <div className="absolute inset-0">
+    <div className="absolute inset-0" style={{ display: 'flex', flexDirection: 'column' }}>
       {/* FPS Counter (dev mode) */}
       <FPSCounter show={process.env.NODE_ENV === 'development'} />
 
@@ -223,6 +223,7 @@ export const Canvas: React.FC = () => {
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        style={{ flex: 1 }}
       >
         {/* Main Layer - Canvas background and shapes */}
         <Layer>
