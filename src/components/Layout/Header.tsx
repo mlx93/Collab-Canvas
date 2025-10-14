@@ -1,7 +1,9 @@
 // Header component with app title, FPS counter, and logout
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { usePresence } from '../../hooks/usePresence';
 import { ProfileEditModal } from '../Profile/ProfileEditModal';
+import { ActiveUsers } from '../Collaboration/ActiveUsers';
 
 interface HeaderProps {
   fps?: number;
@@ -10,6 +12,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ fps = 0, showFPS = true }) => {
   const { user, signOut } = useAuth();
+  const { onlineUsers } = usePresence();
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Display name: firstName lastName, or email if no name set
@@ -45,8 +48,11 @@ export const Header: React.FC<HeaderProps> = ({ fps = 0, showFPS = true }) => {
           </div>
         </div>
 
-        {/* Right: FPS Counter + Logout */}
+        {/* Right: Active Users + FPS Counter + Logout */}
         <div className="flex items-center space-x-4">
+          {/* Active Users */}
+          <ActiveUsers users={onlineUsers} currentUserId={user?.userId} />
+
           {/* FPS Counter (dev mode only) */}
           {showFPS && (
             <div className="flex items-center space-x-2">
