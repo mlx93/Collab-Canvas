@@ -5,7 +5,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
 
 export const LeftToolbar: React.FC = () => {
-  const { addRectangle, viewport, rectangles, selectedRectangleId, stageSize } = useCanvas();
+  const { addRectangle, viewport, rectangles, stageSize } = useCanvas();
   const { user } = useAuth();
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);

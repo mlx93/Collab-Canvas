@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { PREDEFINED_COLORS } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
+import { setActiveEdit, clearActiveEdit, getUserCursorColor } from '../../services/activeEdits.service';
 
 export const PropertiesPanel: React.FC = () => {
   const { rectangles, selectedRectangleId, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex } = useCanvas();
@@ -29,11 +30,25 @@ export const PropertiesPanel: React.FC = () => {
   // Handle color change
   const handleColorChange = (newColor: string) => {
     if (!selectedRectangle) return;
+    
+    // Set active edit for recoloring
+    if (user) {
+      const cursorColor = getUserCursorColor(user.email);
+      setActiveEdit(selectedRectangle.id, user.userId, user.email, user.firstName, 'recoloring', cursorColor);
+    }
+    
     updateRectangle(selectedRectangle.id, {
       color: newColor,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
     setIsColorDropdownOpen(false);
+    
+    // Clear active edit after a short delay (color change is instant)
+    setTimeout(() => {
+      if (selectedRectangle) {
+        clearActiveEdit(selectedRectangle.id);
+      }
+    }, 500);
   };
 
   // Handle z-index change

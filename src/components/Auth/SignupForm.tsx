@@ -8,12 +8,22 @@ interface SignupFormProps {
 
 export const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   const { signUp, loading, error } = useAuth();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [validationError, setValidationError] = useState('');
 
   const validateForm = (): boolean => {
+    if (!firstName.trim()) {
+      setValidationError('First name is required');
+      return false;
+    }
+    if (!lastName.trim()) {
+      setValidationError('Last name is required');
+      return false;
+    }
     if (!email) {
       setValidationError('Email is required');
       return false;
@@ -46,7 +56,7 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
     }
 
     try {
-      await signUp(email, password);
+      await signUp(email, password, firstName, lastName);
     } catch (err) {
       // Error handled by AuthContext
     }
@@ -63,6 +73,38 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
           {validationError || error}
         </div>
       )}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="first-name" className="block text-sm font-medium text-gray-700 mb-2">
+            First Name
+          </label>
+          <input
+            id="first-name"
+            type="text"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            placeholder="John"
+            disabled={loading}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="last-name" className="block text-sm font-medium text-gray-700 mb-2">
+            Last Name
+          </label>
+          <input
+            id="last-name"
+            type="text"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+            placeholder="Doe"
+            disabled={loading}
+          />
+        </div>
+      </div>
 
       <div>
         <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-2">

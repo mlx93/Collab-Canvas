@@ -40,18 +40,24 @@ const getAuthErrorMessage = (error: any): string => {
 
 export const authService = {
   /**
-   * Sign up a new user with email and password
+   * Sign up a new user with email, password, first name, and last name
    * Creates user in Firebase Auth and stores user document in Firestore
-   * Email serves as username
+   * Email serves as unique identifier
    */
-  signUp: async (email: string, password: string): Promise<User> => {
+  signUp: async (email: string, password: string, firstName: string, lastName: string): Promise<User> => {
     try {
       // Validate inputs
-      if (!email || !password) {
-        throw new Error('Email and password are required');
+      if (!email || !password || !firstName || !lastName) {
+        throw new Error('Email, password, first name, and last name are required');
       }
       if (password.length < 6) {
         throw new Error('Password must be at least 6 characters');
+      }
+      if (firstName.trim().length === 0) {
+        throw new Error('First name cannot be empty');
+      }
+      if (lastName.trim().length === 0) {
+        throw new Error('Last name cannot be empty');
       }
 
       // Create Firebase Auth user
@@ -62,6 +68,8 @@ export const authService = {
       const user: User = {
         userId: firebaseUser.uid,
         email: firebaseUser.email!,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         createdAt: new Date()
       };
 
@@ -99,6 +107,8 @@ export const authService = {
         return {
           userId: firebaseUser.uid,
           email: firebaseUser.email!,
+          firstName: userData.firstName || 'User', // Default for old accounts
+          lastName: userData.lastName || '',
           createdAt: new Date(userData.createdAt)
         };
       }
@@ -107,6 +117,8 @@ export const authService = {
       const user: User = {
         userId: firebaseUser.uid,
         email: firebaseUser.email!,
+        firstName: 'User', // Default for accounts created before firstName was added
+        lastName: '',
         createdAt: new Date()
       };
 

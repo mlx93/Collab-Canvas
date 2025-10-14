@@ -1,11 +1,19 @@
 // Rectangle component for Konva canvas
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Rect, Circle, Group } from 'react-konva';
 import Konva from 'konva';
 import { Rectangle as RectangleType } from '../../types/canvas.types';
 import { MIN_RECT_SIZE, MAX_RECT_SIZE } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
+import { 
+  setActiveEdit, 
+  clearActiveEdit, 
+  subscribeToActiveEdit, 
+  getUserCursorColor,
+  ActiveEdit 
+} from '../../services/activeEdits.service';
+import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
 interface RectangleProps {
   rectangle: RectangleType;
@@ -14,13 +22,28 @@ interface RectangleProps {
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, onSelect }) => {
-  const { updateRectangle } = useCanvas();
+  const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [, forceUpdate] = useState({});
+  const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const shapeRef = useRef<Konva.Rect>(null);
   const handleRef = useRef<Konva.Circle>(null);
+  
+  // Subscribe to active edits for this shape
+  useEffect(() => {
+    const unsubscribe = subscribeToActiveEdit(rectangle.id, (edit) => {
+      // Only show indicator if it's NOT the current user
+      if (edit && edit.userId !== user?.userId) {
+        setActiveEditState(edit);
+      } else {
+        setActiveEditState(null);
+      }
+    });
+    
+    return unsubscribe;
+  }, [rectangle.id, user?.userId]);
   
   // Calculate current position from either the ref (during drag/resize) or props
   const getCurrentPos = () => {
@@ -36,6 +59,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
   // Handle drag start
   const handleDragStart = () => {
     setIsDragging(true);
+    
+    // Set active edit state in RTDB
+    if (user) {
+      const cursorColor = getUserCursorColor(user.email);
+      setActiveEdit(rectangle.id, user.userId, user.email, user.firstName, 'moving', cursorColor);
+    }
   };
 
   // Handle drag move - position is automatically tracked via getCurrentPos()
@@ -53,12 +82,21 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
       y: node.y(),
       lastModifiedBy: user?.email || rectangle.createdBy,
     });
+    
+    // Clear active edit state
+    clearActiveEdit(rectangle.id);
   };
 
   // Handle resize via bottom-right handle
   const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true; // Prevent drag propagation
     setIsResizing(true);
+    
+    // Set active edit state in RTDB
+    if (user) {
+      const cursorColor = getUserCursorColor(user.email);
+      setActiveEdit(rectangle.id, user.userId, user.email, user.firstName, 'resizing', cursorColor);
+    }
     
     // Attach mouse move and mouse up listeners to the stage
     const stage = e.target.getStage();
@@ -118,6 +156,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
           lastModifiedBy: user?.email || rectangle.createdBy,
         });
       }
+      
+      // Clear active edit state
+      clearActiveEdit(rectangle.id);
     };
 
     stage.on('mousemove', handleMouseMove);
@@ -174,6 +215,17 @@ const RectangleComponent: React.FC<RectangleProps> = ({ rectangle, isSelected, o
             hitStrokeWidth={20}
           />
         </>
+      )}
+      
+      {/* Editing Indicator - Show when another user is editing this shape */}
+      {activeEdit && (
+        <EditingIndicator
+          activeEdit={activeEdit}
+          rectangleX={currentPos.x}
+          rectangleY={currentPos.y}
+          rectangleWidth={currentPos.width}
+          scale={viewport.scale}
+        />
       )}
     </Group>
   );

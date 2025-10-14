@@ -10,6 +10,11 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ fps = 0, showFPS = true }) => {
   const { user, signOut } = useAuth();
 
+  // Display name: firstName lastName, or email if no name set
+  const displayName = user?.firstName && user.firstName !== 'User' 
+    ? `${user.firstName} ${user.lastName}`.trim()
+    : user?.email;
+
   return (
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="flex items-center justify-between h-14 px-6">
@@ -17,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ fps = 0, showFPS = true }) => {
         <div className="flex items-center space-x-4">
           <h1 className="text-xl font-bold text-gray-900">CollabCanvas</h1>
           <span className="text-sm text-gray-500">|</span>
-          <span className="text-sm text-gray-600">{user?.email}</span>
+          <span className="text-sm text-gray-600">{displayName}</span>
         </div>
 
         {/* Right: FPS Counter + Logout */}

@@ -9,7 +9,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  signUp: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
@@ -32,13 +32,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const unsubscribe = authService.onAuthStateChange((firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // User is signed in, create User object
-        const user: User = {
-          userId: firebaseUser.uid,
-          email: firebaseUser.email!,
-          createdAt: new Date() // Will be overwritten if fetched from Firestore
-        };
-        setAuthState({ user, loading: false, error: null });
+        // User is signed in - fetch user doc from Firestore to get firstName/lastName
+        import('../services/firebase').then(({ db }) => {
+          import('firebase/firestore').then(({ doc, getDoc }) => {
+            getDoc(doc(db, 'users', firebaseUser.uid))
+              .then((userDoc) => {
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  const user: User = {
+                    userId: firebaseUser.uid,
+                    email: firebaseUser.email!,
+                    firstName: userData.firstName || 'User',
+                    lastName: userData.lastName || '',
+                    createdAt: new Date(userData.createdAt)
+                  };
+                  setAuthState({ user, loading: false, error: null });
+                } else {
+                  // Fallback for users without Firestore doc
+                  const user: User = {
+                    userId: firebaseUser.uid,
+                    email: firebaseUser.email!,
+                    firstName: 'User',
+                    lastName: '',
+                    createdAt: new Date()
+                  };
+                  setAuthState({ user, loading: false, error: null });
+                }
+              })
+              .catch((error) => {
+                console.error('Error fetching user data:', error);
+                // Fallback user
+                const user: User = {
+                  userId: firebaseUser.uid,
+                  email: firebaseUser.email!,
+                  firstName: 'User',
+                  lastName: '',
+                  createdAt: new Date()
+                };
+                setAuthState({ user, loading: false, error: null });
+              });
+          });
+        });
       } else {
         // User is signed out
         setAuthState({ user: null, loading: false, error: null });
@@ -52,10 +86,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
-  const signUp = async (email: string, password: string): Promise<void> => {
+  const signUp = async (email: string, password: string, firstName: string, lastName: string): Promise<void> => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }));
-      const user = await authService.signUp(email, password);
+      const user = await authService.signUp(email, password, firstName, lastName);
       setAuthState({ user, loading: false, error: null });
       toast.success('Account created successfully!');
     } catch (error: any) {
