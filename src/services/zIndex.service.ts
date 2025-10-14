@@ -5,12 +5,14 @@ import { Rectangle } from '../types/canvas.types';
  * Recalculate all z-indices to ensure no duplicates and maintain order
  * @param shapes - All rectangles in the canvas
  * @returns Updated rectangles array with normalized z-indices (1, 2, 3, ...)
+ * Note: Sorts by z-index descending, so highest z-index becomes 1 (front)
  */
 export const recalculateAllZIndices = (shapes: Rectangle[]): Rectangle[] => {
-  // Sort shapes by current z-index (ascending: 1, 2, 3...)
-  const sorted = [...shapes].sort((a, b) => a.zIndex - b.zIndex);
+  // Sort shapes by current z-index (descending: highest first)
+  const sorted = [...shapes].sort((a, b) => b.zIndex - a.zIndex);
 
   // Reassign z-indices sequentially starting from 1
+  // Shape with highest z-index gets 1 (front), next gets 2, etc.
   return sorted.map((shape, index) => ({
     ...shape,
     zIndex: index + 1
@@ -32,22 +34,26 @@ export const autoUpdateZIndex = (shapes: Rectangle[], shapeId: string): Rectangl
   // Find the minimum z-index (front position)
   const minZIndex = shapes.length > 0 ? Math.min(...shapes.map(s => s.zIndex)) : 1;
   
-  // If already at front, no change needed (but still normalize to be safe)
+  // If already at front, no change needed
   if (currentShape.zIndex === minZIndex && shapes.filter(s => s.zIndex === minZIndex).length === 1) {
     return shapes;
   }
   
-  // Move target shape to z-index 1 and push ALL other shapes back
+  // Find the highest z-index (back position)
+  const maxZIndex = shapes.length > 0 ? Math.max(...shapes.map(s => s.zIndex)) : 0;
+  
+  // Assign target shape the highest z-index + 1 (temporarily)
+  // This ensures no other shapes change position during this step
   const updatedShapes = shapes.map(shape => {
     if (shape.id === shapeId) {
-      return { ...shape, zIndex: 1 };
-    } else {
-      // Push all other shapes back by 1
-      return { ...shape, zIndex: shape.zIndex + 1 };
+      return { ...shape, zIndex: maxZIndex + 1 };
     }
+    return shape; // Keep all other shapes unchanged
   });
 
-  // Normalize to ensure sequential z-indices (1, 2, 3, ...)
+  // Now recalculate all z-indices in one atomic operation
+  // The shape with highest z-index will become z-index 1 (front)
+  // All others maintain their relative order
   return recalculateAllZIndices(updatedShapes);
 };
 
