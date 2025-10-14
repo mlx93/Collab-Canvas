@@ -1,30 +1,40 @@
-// Throttle utility for high-frequency updates
-
 /**
- * Throttle function execution to a specified interval
- * Used for cursor updates at 60 FPS (16ms intervals)
+ * Throttle utility for limiting function execution rate
+ * Used for high-frequency events like cursor tracking and live position streaming
+ * 
+ * @param func - Function to throttle
+ * @param delay - Minimum delay between executions in milliseconds (default: 16ms for 60 FPS)
+ * @returns Throttled function
  */
-export const throttle = <T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: any[]) => void>(
   func: T,
-  delay: number
-): ((...args: Parameters<T>) => void) => {
+  delay: number = 16 // 60 FPS (1000ms / 60 ≈ 16ms)
+): (...args: Parameters<T>) => void {
   let lastCall = 0;
   let timeoutId: NodeJS.Timeout | null = null;
 
-  return (...args: Parameters<T>) => {
+  return function throttled(...args: Parameters<T>): void {
     const now = Date.now();
+    const timeSinceLastCall = now - lastCall;
 
-    if (now - lastCall >= delay) {
+    // Clear any pending timeout
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+
+    if (timeSinceLastCall >= delay) {
+      // Enough time has passed, execute immediately
       lastCall = now;
       func(...args);
     } else {
-      // Schedule the next call
-      if (timeoutId) clearTimeout(timeoutId);
+      // Schedule execution for later (trailing edge)
+      const remainingTime = delay - timeSinceLastCall;
       timeoutId = setTimeout(() => {
         lastCall = Date.now();
         func(...args);
-      }, delay - (now - lastCall));
+        timeoutId = null;
+      }, remainingTime);
     }
   };
-};
-
+}

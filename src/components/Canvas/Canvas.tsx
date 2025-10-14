@@ -3,8 +3,10 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import Konva from 'konva';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useCursors } from '../../hooks/useCursors';
 import { FPSCounter } from './FPSCounter';
 import { Rectangle } from './Rectangle';
+import { CursorOverlay } from '../Collaboration/CursorOverlay';
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -15,6 +17,7 @@ import {
 
 export const Canvas: React.FC = () => {
   const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedRectangleId, setSelectedRectangle, setStageSize: updateContextStageSize } = useCanvas();
+  const { cursors, updateOwnCursor } = useCursors();
   const stageRef = useRef<Konva.Stage>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -130,23 +133,30 @@ export const Canvas: React.FC = () => {
   };
 
   const handleMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!isDragging || !lastPosRef.current) return;
-    
     const stage = stageRef.current;
     if (!stage) return;
 
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    // Calculate the delta movement in screen space
-    const dx = pos.x - lastPosRef.current.x;
-    const dy = pos.y - lastPosRef.current.y;
+    // Update cursor position for multiplayer (convert screen coords to canvas coords)
+    const canvasX = (pos.x - viewport.x) / viewport.scale;
+    const canvasY = (pos.y - viewport.y) / viewport.scale;
+    // console.log('[Canvas] Updating cursor position:', canvasX, canvasY);
+    updateOwnCursor(canvasX, canvasY);
 
-    // Use panViewport to update based on delta (handles state correctly)
-    panViewport(dx, dy);
+    // Handle panning if dragging
+    if (isDragging && lastPosRef.current) {
+      // Calculate the delta movement in screen space
+      const dx = pos.x - lastPosRef.current.x;
+      const dy = pos.y - lastPosRef.current.y;
 
-    // Update last position for next delta calculation
-    lastPosRef.current = { x: pos.x, y: pos.y };
+      // Use panViewport to update based on delta (handles state correctly)
+      panViewport(dx, dy);
+
+      // Update last position for next delta calculation
+      lastPosRef.current = { x: pos.x, y: pos.y };
+    }
   };
 
   const handleMouseUp = () => {
@@ -247,6 +257,7 @@ export const Canvas: React.FC = () => {
                 isSelected={selectedRectangleId === rectangle.id}
                 onSelect={() => setSelectedRectangle(rectangle.id)}
                 showIndicator={false}
+                updateOwnCursor={updateOwnCursor}
               />
             ))}
         </Layer>
@@ -265,6 +276,14 @@ export const Canvas: React.FC = () => {
           ))}
         </Layer>
       </Stage>
+
+      {/* Cursor Overlay - Multiplayer cursors */}
+      <CursorOverlay
+        cursors={cursors}
+        viewportX={viewport.x}
+        viewportY={viewport.y}
+        scale={viewport.scale}
+      />
 
       {/* Zoom indicator */}
       <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1.5 rounded-md text-sm font-mono">

@@ -2,32 +2,40 @@
   "rules": {
     "cursors": {
       "$canvasId": {
+        ".read": "auth != null",
         "$userId": {
-          ".read": "auth != null",
           ".write": "auth != null && auth.uid == $userId"
         }
       }
     },
     "presence": {
       "$canvasId": {
+        ".read": "auth != null",
         "$userId": {
-          ".read": "auth != null",
           ".write": "auth != null && auth.uid == $userId"
         }
       }
     },
     "selections": {
       "$canvasId": {
+        ".read": "auth != null",
         "$userId": {
-          ".read": "auth != null",
           ".write": "auth != null && auth.uid == $userId"
         }
       }
     },
     "activeEdits": {
       "$canvasId": {
+        ".read": "auth != null",
         "$shapeId": {
-          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    },
+    "livePositions": {
+      "$canvasId": {
+        ".read": "auth != null",
+        "$shapeId": {
           ".write": "auth != null"
         }
       }

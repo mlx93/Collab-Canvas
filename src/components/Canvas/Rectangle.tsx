@@ -13,6 +13,13 @@ import {
   getUserCursorColor,
   ActiveEdit 
 } from '../../services/activeEdits.service';
+import {
+  setLivePosition,
+  clearLivePosition,
+  subscribeToLivePositions,
+  LivePosition
+} from '../../services/livePositions.service';
+import { throttle } from '../../utils/throttle';
 import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
 interface RectangleProps {
@@ -21,6 +28,7 @@ interface RectangleProps {
   onSelect: () => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
+  updateOwnCursor?: (x: number, y: number) => void;
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ 
@@ -28,7 +36,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   isSelected, 
   onSelect, 
   showIndicator = true,
-  renderOnlyIndicator = false 
+  renderOnlyIndicator = false,
+  updateOwnCursor
 }) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
@@ -36,8 +45,17 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const [isResizing, setIsResizing] = useState(false);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
+  const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
+  const livePositionTimestampRef = useRef<number>(0);
   const shapeRef = useRef<Konva.Rect>(null);
   const handleRef = useRef<Konva.Circle>(null);
+  
+  // Throttled function for live position updates (60 FPS)
+  const throttledLivePositionUpdate = useRef(
+    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number) => {
+      setLivePosition(shapeId, userId, x, y, width, height);
+    }, 16)
+  );
   
   // Subscribe to active edits for this shape
   useEffect(() => {
@@ -53,12 +71,83 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     return unsubscribe;
   }, [rectangle.id, user?.userId]);
   
-  // Calculate current position from either the ref (during drag/resize) or props
+  // Subscribe to live positions for ALL shapes (to detect if THIS shape is being edited by others)
+  useEffect(() => {
+    console.log('[Rectangle] Subscribing to live positions for shape:', rectangle.id);
+    let clearTimer: NodeJS.Timeout | null = null;
+    
+    const unsubscribe = subscribeToLivePositions((livePositions) => {
+      const positionForThisShape = livePositions[rectangle.id];
+      console.log('[Rectangle] Live position update for', rectangle.id, ':', positionForThisShape ? 'YES' : 'NO');
+      
+      // Only use live position if it's from ANOTHER user (don't override own optimistic updates)
+      if (positionForThisShape && positionForThisShape.userId !== user?.userId) {
+        console.log('[Rectangle] Using live position from another user:', positionForThisShape.userId);
+        
+        // Clear any pending clear timer
+        if (clearTimer) {
+          clearTimeout(clearTimer);
+          clearTimer = null;
+        }
+        
+        setLivePositionState(positionForThisShape);
+        livePositionTimestampRef.current = Date.now();
+      } else if (!positionForThisShape && livePosition) {
+        // Live position was removed (user released shape)
+        // Keep it for 1 second to allow Firestore update to arrive
+        console.log('[Rectangle] Live position cleared, starting grace period');
+        livePositionTimestampRef.current = Date.now();
+        
+        clearTimer = setTimeout(() => {
+          console.log('[Rectangle] Grace period expired, clearing live position state');
+          setLivePositionState(null);
+        }, 1000);
+      }
+    });
+    
+    return () => {
+      if (clearTimer) clearTimeout(clearTimer);
+      unsubscribe();
+    };
+  }, [rectangle.id, user?.userId, livePosition]);
+  
+  // Calculate current position from either:
+  // 1. Live position from another user (real-time streaming)
+  // 2. The ref (during own drag/resize - optimistic update)
+  // 3. Props (default state) - but ignore if live position was active within last 500ms (anti-flicker)
   const getCurrentPos = () => {
+    // If another user is editing this shape, use their live position
+    if (livePosition) {
+      return {
+        x: livePosition.x,
+        y: livePosition.y,
+        width: livePosition.width,
+        height: livePosition.height
+      };
+    }
+    
+    // If we're editing this shape ourselves, use the ref for optimistic updates
     const rect = shapeRef.current;
     if ((isDragging || isResizing) && rect) {
       return { x: rect.x(), y: rect.y(), width: rect.width(), height: rect.height() };
     }
+    
+    // Default: use rectangle props
+    // BUT if live position was recently active (within 1000ms), keep using last known position to prevent flicker
+    const timeSinceLastLivePosition = Date.now() - livePositionTimestampRef.current;
+    if (timeSinceLastLivePosition > 0 && timeSinceLastLivePosition < 1000) {
+      // Use the ref if available (to avoid jumping back to old position during the grace period)
+      if (rect) {
+        return { x: rect.x(), y: rect.y(), width: rect.width(), height: rect.height() };
+      }
+    }
+    
+    // Grace period expired or never set - use props (normal Firestore state)
+    // Clear the timestamp so we don't keep using stale ref data
+    if (timeSinceLastLivePosition >= 1000 && livePositionTimestampRef.current > 0) {
+      livePositionTimestampRef.current = 0;
+    }
+    
     return { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height };
   };
   
@@ -75,13 +164,38 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     }
   };
 
-  // Handle drag move - position is automatically tracked via getCurrentPos()
+  // Handle drag move - stream live position to RTDB (60 FPS) + update cursor to shape center
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    const node = e.target;
+    
+    console.log('[Rectangle] handleDragMove called for', rectangle.id, 'at', node.x(), node.y());
+    
+    // Update cursor to center of shape
+    if (updateOwnCursor) {
+      const centerX = node.x() + rectangle.width / 2;
+      const centerY = node.y() + rectangle.height / 2;
+      updateOwnCursor(centerX, centerY);
+    }
+    
+    // Stream live position to RTDB (throttled to 16ms / 60 FPS)
+    if (user) {
+      throttledLivePositionUpdate.current(
+        rectangle.id,
+        user.userId,
+        node.x(),
+        node.y(),
+        rectangle.width,
+        rectangle.height
+      );
+    } else {
+      console.log('[Rectangle] No user, skipping live position update');
+    }
+    
     // Force React re-render to update handle position
     forceUpdate({});
   };
 
-  // Handle drag end - update position in context
+  // Handle drag end - update position in context and clear live position
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
     const node = e.target;
@@ -91,8 +205,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       lastModifiedBy: user?.email || rectangle.createdBy,
     });
     
-    // Clear active edit state
+    // Clear active edit state and live position
     clearActiveEdit(rectangle.id);
+    clearLivePosition(rectangle.id);
   };
 
   // Handle resize via bottom-right handle
@@ -143,6 +258,18 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       rect.width(newWidth);
       rect.height(newHeight);
 
+      // Stream live position to RTDB (throttled to 16ms / 60 FPS)
+      if (user) {
+        throttledLivePositionUpdate.current(
+          rectangle.id,
+          user.userId,
+          rect.x(),
+          newY,
+          newWidth,
+          newHeight
+        );
+      }
+
       // Force React re-render to update handle position (calculated via getCurrentPos())
       forceUpdate({});
       
@@ -165,8 +292,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         });
       }
       
-      // Clear active edit state
+      // Clear active edit state and live position
       clearActiveEdit(rectangle.id);
+      clearLivePosition(rectangle.id);
     };
 
     stage.on('mousemove', handleMouseMove);
@@ -192,15 +320,15 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       {/* Main Rectangle */}
       <Rect
         ref={shapeRef}
-        x={rectangle.x}
-        y={rectangle.y}
-        width={rectangle.width}
-        height={rectangle.height}
+        x={livePosition ? currentPos.x : rectangle.x}
+        y={livePosition ? currentPos.y : rectangle.y}
+        width={livePosition ? currentPos.width : rectangle.width}
+        height={livePosition ? currentPos.height : rectangle.height}
         fill={rectangle.color}
         stroke={isSelected ? '#1565C0' : undefined} // Dark blue outline when selected
         strokeWidth={isSelected ? 4 : 0} // Thicker stroke for visibility
         strokeScaleEnabled={false} // Keep stroke width constant when zooming
-        draggable
+        draggable={!livePosition} // Disable dragging if showing live position from another user
         onClick={onSelect}
         onTap={onSelect}
         onDragStart={handleDragStart}

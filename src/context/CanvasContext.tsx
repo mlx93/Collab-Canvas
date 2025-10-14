@@ -5,6 +5,7 @@ import { MIN_ZOOM, MAX_ZOOM } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
 import * as canvasService from '../services/canvas.service';
+import { setSelection, clearSelection } from '../services/selection.service';
 
 interface CanvasContextType {
   // State
@@ -235,6 +236,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   const setSelectedRectangle = (id: string | null) => {
     setCanvasState(prev => ({ ...prev, selectedRectangleId: id }));
+    
+    // Sync selection state to RTDB (ephemeral)
+    if (user) {
+      if (id === null) {
+        clearSelection(user.userId);
+      } else {
+        setSelection(user.userId, id);
+      }
+    }
   };
 
   // Z-index operations
