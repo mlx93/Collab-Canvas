@@ -62,11 +62,62 @@ async function fetchUserData(userId: string): Promise<User | null> {
   }
 }
 
+/**
+ * Update user profile (firstName, lastName) in Firestore
+ * Used for profile editing and migrating legacy accounts
+ */
+async function updateUserProfile(userId: string, firstName: string, lastName: string): Promise<void> {
+  try {
+    if (!firstName || !lastName) {
+      throw new Error('First name and last name are required');
+    }
+    if (firstName.trim().length === 0) {
+      throw new Error('First name cannot be empty');
+    }
+    if (lastName.trim().length === 0) {
+      throw new Error('Last name cannot be empty');
+    }
+
+    // Check if user document exists
+    const userDocRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userDocRef);
+    
+    if (userDoc.exists()) {
+      // Update existing document
+      await setDoc(userDocRef, {
+        firstName: firstName.trim(),
+        lastName: lastName.trim()
+      }, { merge: true });
+    } else {
+      // Create new document for legacy users
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('No authenticated user');
+      }
+      await setDoc(userDocRef, {
+        userId,
+        email: user.email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        createdAt: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    throw error;
+  }
+}
+
 export const authService = {
   /**
    * Fetch user data from Firestore (exposed for AuthContext)
    */
   fetchUserData,
+
+  /**
+   * Update user profile (exposed for profile editing)
+   */
+  updateUserProfile,
 
   /**
    * Sign up a new user with email, password, first name, and last name

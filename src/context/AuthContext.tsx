@@ -12,6 +12,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (firstName: string, lastName: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -102,6 +103,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateProfile = async (firstName: string, lastName: string): Promise<void> => {
+    try {
+      if (!authState.user) {
+        throw new Error('No authenticated user');
+      }
+      setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      await authService.updateUserProfile(authState.user.userId, firstName, lastName);
+      
+      // Update local state
+      const updatedUser: User = {
+        ...authState.user,
+        firstName,
+        lastName
+      };
+      setAuthState({ user: updatedUser, loading: false, error: null });
+      toast.success('Profile updated successfully!');
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to update profile';
+      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
+      toast.error(errorMessage);
+      throw error;
+    }
+  };
+
   const clearError = () => {
     setAuthState(prev => ({ ...prev, error: null }));
   };
@@ -113,6 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signUp,
     signIn,
     signOut,
+    updateProfile,
     clearError
   };
 
