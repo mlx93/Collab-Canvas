@@ -12,6 +12,9 @@ import { CANVAS_ID } from '../../utils/constants';
 // Mock Firestore
 jest.mock('../firebase', () => ({
   db: {},
+  auth: {
+    currentUser: { email: 'test@example.com' },
+  },
 }));
 
 // Mock Firestore functions
@@ -130,6 +133,9 @@ describe('canvas.service', () => {
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce(undefined);
 
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({ empty: true }); // No existing shapes
+
       (firestore.doc as jest.Mock).mockReturnValue({ id: 'test-id' });
       (firestore.collection as jest.Mock).mockReturnValue({});
 
@@ -151,6 +157,9 @@ describe('canvas.service', () => {
     it('should show error toast after all retries fail', async () => {
       const mockSetDoc = firestore.setDoc as jest.Mock;
       mockSetDoc.mockRejectedValue(new Error('Network error'));
+
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({ empty: true }); // No existing shapes
 
       (firestore.doc as jest.Mock).mockReturnValue({ id: 'test-id' });
       (firestore.collection as jest.Mock).mockReturnValue({});
@@ -178,6 +187,12 @@ describe('canvas.service', () => {
       const mockUpdateDoc = firestore.updateDoc as jest.Mock;
       mockUpdateDoc.mockResolvedValue(undefined);
 
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({
+        empty: false,
+        docs: [{ data: () => ({ zIndex: 3 }) }]
+      }); // Max z-index is 3
+
       (firestore.doc as jest.Mock).mockReturnValue({});
 
       await updateRectangle('test-id', { x: 200, y: 200 });
@@ -188,14 +203,20 @@ describe('canvas.service', () => {
         expect.objectContaining({
           x: 200,
           y: 200,
-          zIndex: 1, // Auto-set to 1 on edit
+          zIndex: 4, // Auto-set to maxZIndex + 1 on edit
         })
       );
     });
 
-    it('should auto-set z-index to 1 on position/size/color update', async () => {
+    it('should auto-set z-index to maxZIndex + 1 on position/size/color update', async () => {
       const mockUpdateDoc = firestore.updateDoc as jest.Mock;
       mockUpdateDoc.mockResolvedValue(undefined);
+
+      const mockGetDocs = firestore.getDocs as jest.Mock;
+      mockGetDocs.mockResolvedValue({
+        empty: false,
+        docs: [{ data: () => ({ zIndex: 5 }) }]
+      }); // Max z-index is 5
 
       (firestore.doc as jest.Mock).mockReturnValue({});
 
@@ -205,7 +226,7 @@ describe('canvas.service', () => {
         expect.anything(),
         expect.objectContaining({
           color: '#FF0000',
-          zIndex: 1,
+          zIndex: 6, // maxZIndex + 1 (5 + 1)
         })
       );
     });
@@ -317,9 +338,9 @@ describe('canvas.service', () => {
         ])
       );
 
-      // Verify shapes are sorted by z-index (descending: higher first for rendering)
+      // Verify shapes are sorted by z-index ascending (lower first = back, higher last = front)
       const shapesArg = mockCallback.mock.calls[0][0];
-      expect(shapesArg[0].zIndex).toBeGreaterThan(shapesArg[1].zIndex);
+      expect(shapesArg[0].zIndex).toBeLessThan(shapesArg[1].zIndex);
 
       unsubscribe();
       expect(mockUnsubscribe).toHaveBeenCalled();

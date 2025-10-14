@@ -1,0 +1,999 @@
+
+> collabcanvas@0.1.0 test
+> react-scripts test --watchAll=false --verbose
+
+PASS src/services/__tests__/auth.service.test.ts
+  authService
+    signUp
+      ✓ should validate email and password are provided (7 ms)
+      ✓ should validate password is at least 6 characters (2 ms)
+      ✓ should create user in Firebase Auth and Firestore (1 ms)
+      ✓ should handle Firebase Auth errors
+    signIn
+      ✓ should validate email and password are provided
+      ✓ should sign in user and fetch user document (1 ms)
+      ✓ should handle invalid credentials
+    signOut
+      ✓ should call Firebase signOut (1 ms)
+      ✓ should handle signOut errors
+
+  console.error
+    Warning: Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?
+    
+    Check the render method of `Canvas`.
+        at Stage (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/__tests__/ui-layout.integration.test.tsx:51:13)
+        at div
+        at Canvas (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/components/Canvas/Canvas.tsx:17:166)
+        at div
+        at div
+        at div
+        at MainLayout (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/components/Layout/MainLayout.tsx:13:3)
+        at CanvasProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/CanvasContext.tsx:49:65)
+        at AuthProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/AuthContext.tsx:24:61)
+
+      64 |
+      65 |   it('should render 3-column layout with all sections', async () => {
+    > 66 |     render(
+         |           ^
+      67 |       <AuthProvider>
+      68 |         <CanvasProvider>
+      69 |           <MainLayout
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at validateFunctionComponentInDev (node_modules/react-dom/cjs/react-dom.development.js:20222:9)
+      at mountIndeterminateComponent (node_modules/react-dom/cjs/react-dom.development.js:20189:7)
+      at beginWork (node_modules/react-dom/cjs/react-dom.development.js:21626:16)
+      at beginWork$1 (node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+      at performUnitOfWork (node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+      at workLoopSync (node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+      at renderRootSync (node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+      at performConcurrentWorkOnRoot (node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:47:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:190:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:292:10)
+      at Object.<anonymous> (src/__tests__/ui-layout.integration.test.tsx:66:11)
+
+FAIL src/services/__tests__/canvas.service.test.ts
+  canvas.service
+    createRectangle
+      ✓ should create a rectangle in Firestore with correct data structure (1 ms)
+      ✓ should use canvas ID "default-canvas"
+      ✕ should retry on failure with exponential backoff (1 ms)
+      ✕ should show error toast after all retries fail (5 ms)
+    updateRectangle
+      ✕ should update rectangle with correct data
+      ✕ should auto-set z-index to 1 on position/size/color update
+    updateZIndex
+      ✓ should perform batch update for z-index recalculation
+    deleteRectangle
+      ✓ should delete rectangle from Firestore
+    subscribeToShapes
+      ✓ should subscribe to shapes and call callback with sorted data
+
+  ● canvas.service › createRectangle › should retry on failure with exponential backoff
+
+    TypeError: Cannot read properties of undefined (reading 'empty')
+
+      82 |   );
+      83 |   
+    > 84 |   const maxZIndex = shapesSnapshot.empty 
+         |                                    ^
+      85 |     ? 0 
+      86 |     : shapesSnapshot.docs[0].data().zIndex;
+      87 |
+
+      at createRectangle (src/services/canvas.service.ts:84:36)
+      at Object.<anonymous> (src/services/__tests__/canvas.service.test.ts:146:7)
+
+  ● canvas.service › createRectangle › should show error toast after all retries fail
+
+    expect(received).rejects.toThrow(expected)
+
+    Expected substring: "Network error"
+    Received message:   "Cannot read properties of undefined (reading 'empty')"
+
+          82 |   );
+          83 |   
+        > 84 |   const maxZIndex = shapesSnapshot.empty 
+             |                                    ^
+          85 |     ? 0 
+          86 |     : shapesSnapshot.docs[0].data().zIndex;
+          87 |
+
+      at createRectangle (src/services/canvas.service.ts:84:36)
+      at Object.<anonymous> (src/services/__tests__/canvas.service.test.ts:168:7)
+      at Object.toThrow (node_modules/expect/build/index.js:285:22)
+      at Object.<anonymous> (src/services/__tests__/canvas.service.test.ts:168:56)
+
+  ● canvas.service › updateRectangle › should update rectangle with correct data
+
+    TypeError: Cannot read properties of undefined (reading 'empty')
+
+      125 |     );
+      126 |     
+    > 127 |     const maxZIndex = shapesSnapshot.empty 
+          |                                      ^
+      128 |       ? 0 
+      129 |       : shapesSnapshot.docs[0].data().zIndex;
+      130 |     
+
+      at updateRectangle (src/services/canvas.service.ts:127:38)
+      at Object.<anonymous> (src/services/__tests__/canvas.service.test.ts:183:7)
+
+  ● canvas.service › updateRectangle › should auto-set z-index to 1 on position/size/color update
+
+    TypeError: Cannot read properties of undefined (reading 'empty')
+
+      125 |     );
+      126 |     
+    > 127 |     const maxZIndex = shapesSnapshot.empty 
+          |                                      ^
+      128 |       ? 0 
+      129 |       : shapesSnapshot.docs[0].data().zIndex;
+      130 |     
+
+      at updateRectangle (src/services/canvas.service.ts:127:38)
+      at Object.<anonymous> (src/services/__tests__/canvas.service.test.ts:202:7)
+
+FAIL src/hooks/__tests__/useCanvas.test.tsx
+  useCanvas hook
+    ✓ should initialize with default viewport state (6 ms)
+    ✓ should initialize with empty rectangles array (1 ms)
+    Viewport operations
+      ✓ should update viewport with setViewport (2 ms)
+      ✓ should pan viewport with panViewport (1 ms)
+      ✓ should accumulate pan deltas (1 ms)
+      ✓ should zoom viewport with zoomViewport
+      ✓ should respect minimum zoom limit
+      ✓ should respect maximum zoom limit (1 ms)
+    Rectangle operations
+      ✓ should add rectangle with generated id and zIndex (1 ms)
+      ✕ should add new rectangles to front (zIndex = 1) (1 ms)
+      ✓ should update rectangle properties (1 ms)
+      ✓ should delete rectangle
+      ✓ should set selected rectangle
+    Z-index operations
+      ✕ should bring rectangle to front
+      ✕ should send rectangle to back (1 ms)
+    Tool operations
+      ✓ should set current tool
+
+  ● useCanvas hook › Rectangle operations › should add new rectangles to front (zIndex = 1)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 1
+
+      197 |       const secondRect = result.current.rectangles.find(r => r.id !== firstId);
+      198 |
+    > 199 |       expect(firstRect?.zIndex).toBe(2);
+          |                                 ^
+      200 |       expect(secondRect?.zIndex).toBe(1);
+      201 |     });
+      202 |
+
+      at Object.<anonymous> (src/hooks/__tests__/useCanvas.test.tsx:199:33)
+
+  ● useCanvas hook › Z-index operations › should bring rectangle to front
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 4
+
+      325 |
+      326 |       const rect1 = result.current.rectangles.find(r => r.id === rect1Id);
+    > 327 |       expect(rect1?.zIndex).toBe(1);
+          |                             ^
+      328 |     });
+      329 |
+      330 |     it('should send rectangle to back', () => {
+
+      at Object.<anonymous> (src/hooks/__tests__/useCanvas.test.tsx:327:29)
+
+  ● useCanvas hook › Z-index operations › should send rectangle to back
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 1
+
+      376 |
+      377 |       const rect3 = result.current.rectangles.find(r => r.id === rect3Id);
+    > 378 |       expect(rect3?.zIndex).toBe(3);
+          |                             ^
+      379 |     });
+      380 |   });
+      381 |
+
+      at Object.<anonymous> (src/hooks/__tests__/useCanvas.test.tsx:378:29)
+
+  console.error
+    Warning: Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?
+    
+    Check the render method of `Canvas`.
+        at Stage (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/__tests__/canvas.integration.test.tsx:49:13)
+        at div
+        at Canvas (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/components/Canvas/Canvas.tsx:17:166)
+        at CanvasProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/CanvasContext.tsx:49:65)
+        at AuthProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/AuthContext.tsx:24:61)
+
+      81 | describe('Canvas Interactions Integration', () => {
+      82 |   const renderCanvas = () => {
+    > 83 |     return render(
+         |                  ^
+      84 |       <AuthProvider>
+      85 |         <CanvasProvider>
+      86 |           <Canvas />
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at validateFunctionComponentInDev (node_modules/react-dom/cjs/react-dom.development.js:20222:9)
+      at mountIndeterminateComponent (node_modules/react-dom/cjs/react-dom.development.js:20189:7)
+      at beginWork (node_modules/react-dom/cjs/react-dom.development.js:21626:16)
+      at beginWork$1 (node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+      at performUnitOfWork (node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+      at workLoopSync (node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+      at renderRootSync (node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+      at performConcurrentWorkOnRoot (node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:47:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:190:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:292:10)
+      at renderCanvas (src/__tests__/canvas.integration.test.tsx:83:18)
+      at Object.<anonymous> (src/__tests__/canvas.integration.test.tsx:93:5)
+
+FAIL src/services/__tests__/zIndex.service.test.ts
+  zIndex.service
+    autoUpdateZIndex
+      ✕ should move shape to front (highest z-index) (1 ms)
+      ✓ should keep other shapes unchanged when moving to front
+      ✓ should not create duplicate z-indices
+      ✓ should maintain all z-indices as positive integers (1 ms)
+      ✓ should handle already front shape correctly (1 ms)
+      ✓ should return original array if shape not found
+    manualSetZIndex
+      ✓ should set specific z-index correctly
+      ✓ should trigger push-down recalculation when moving forward (toward front)
+      ✓ should trigger push-down recalculation when moving backward (toward back)
+      ✓ should not create duplicate z-indices after manual set (1 ms)
+      ✓ should reject z-index less than 1
+      ✓ should handle no change when setting same z-index
+      ✓ should return original array if shape not found
+    recalculateAllZIndices
+      ✕ should assign sequential z-indices starting from 1
+      ✕ should maintain relative order of shapes
+      ✕ should remove duplicate z-indices
+      ✕ should fill gaps in z-indices (1 ms)
+      ✕ should handle empty array
+      ✕ should handle single shape
+    validateZIndices
+      ✓ should return valid for correct z-indices
+      ✓ should detect duplicate z-indices
+      ✓ should detect gaps in z-indices (5 ms)
+      ✓ should detect both duplicates and gaps
+      ✓ should handle empty array
+    stress testing
+      ✕ should handle 50 shapes without duplicates
+      ✕ should handle multiple sequential auto-updates (1 ms)
+      ✓ should handle multiple manual z-index changes (1 ms)
+
+  ● zIndex.service › autoUpdateZIndex › should move shape to front (highest z-index)
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 4
+    Received: 3
+
+      31 |
+      32 |       // With new convention: higher = front, so c should be maxZIndex + 1 = 4
+    > 33 |       expect(shapeC?.zIndex).toBe(4);
+         |                              ^
+      34 |     });
+      35 |
+      36 |     it('should keep other shapes unchanged when moving to front', () => {
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:33:30)
+
+  ● zIndex.service › recalculateAllZIndices › should assign sequential z-indices starting from 1
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      218 |       ];
+      219 |
+    > 220 |       const result = recalculateAllZIndices(shapes);
+          |                      ^
+      221 |       const zIndices = result.map(s => s.zIndex).sort((a, b) => a - b);
+      222 |
+      223 |       expect(zIndices).toEqual([1, 2, 3]);
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:220:22)
+
+  ● zIndex.service › recalculateAllZIndices › should maintain relative order of shapes
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      231 |       ];
+      232 |
+    > 233 |       const result = recalculateAllZIndices(shapes);
+          |                      ^
+      234 |
+      235 |       // Shape c (originally 3) should be z-index 1
+      236 |       // Shape a (originally 5) should be z-index 2
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:233:22)
+
+  ● zIndex.service › recalculateAllZIndices › should remove duplicate z-indices
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      248 |       ];
+      249 |
+    > 250 |       const result = recalculateAllZIndices(shapes);
+          |                      ^
+      251 |       const zIndices = result.map(s => s.zIndex);
+      252 |
+      253 |       const hasDuplicates = zIndices.some((val, idx) => zIndices.indexOf(val) !== idx);
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:250:22)
+
+  ● zIndex.service › recalculateAllZIndices › should fill gaps in z-indices
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      262 |       ];
+      263 |
+    > 264 |       const result = recalculateAllZIndices(shapes);
+          |                      ^
+      265 |       const zIndices = result.map(s => s.zIndex).sort((a, b) => a - b);
+      266 |
+      267 |       expect(zIndices).toEqual([1, 2, 3]);
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:264:22)
+
+  ● zIndex.service › recalculateAllZIndices › should handle empty array
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      269 |
+      270 |     it('should handle empty array', () => {
+    > 271 |       const result = recalculateAllZIndices([]);
+          |                      ^
+      272 |
+      273 |       expect(result).toEqual([]);
+      274 |     });
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:271:22)
+
+  ● zIndex.service › recalculateAllZIndices › should handle single shape
+
+    ReferenceError: recalculateAllZIndices is not defined
+
+      277 |       const shapes: Rectangle[] = [createMockRect('a', 5)];
+      278 |
+    > 279 |       const result = recalculateAllZIndices(shapes);
+          |                      ^
+      280 |
+      281 |       expect(result[0].zIndex).toBe(1);
+      282 |     });
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:279:22)
+
+  ● zIndex.service › stress testing › should handle 50 shapes without duplicates
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      358 |       const validation = validateZIndices(result);
+      359 |
+    > 360 |       expect(validation.isValid).toBe(true);
+          |                                  ^
+      361 |       expect(result.find(s => s.id === 'shape-24')?.zIndex).toBe(1);
+      362 |     });
+      363 |
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:360:34)
+
+  ● zIndex.service › stress testing › should handle multiple sequential auto-updates
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      376 |
+      377 |       const validation = validateZIndices(shapes);
+    > 378 |       expect(validation.isValid).toBe(true);
+          |                                  ^
+      379 |       expect(shapes.find(s => s.id === 'c')?.zIndex).toBe(1);
+      380 |     });
+      381 |
+
+      at Object.<anonymous> (src/services/__tests__/zIndex.service.test.ts:378:34)
+
+FAIL src/__tests__/ui-layout.integration.test.tsx
+  UI Layout Integration
+    ✕ should render 3-column layout with all sections (43 ms)
+    ✓ should display FPS counter in header when enabled (14 ms)
+    ✓ should not display FPS counter when disabled (4 ms)
+    ✓ should display user email in header (5 ms)
+    ✓ should have proper layout structure (6 ms)
+    ✓ should render canvas with Konva Stage and Layer (3 ms)
+    ✓ should display zoom indicator (6 ms)
+
+  ● UI Layout Integration › should render 3-column layout with all sections
+
+    TestingLibraryElementError: Unable to find an element by: [data-testid="properties"]
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-col h-screen bg-gray-100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex-none"[39m
+          [36m>[39m
+            [36m<header[39m
+              [33mclass[39m=[32m"bg-white border-b border-gray-200 shadow-sm"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between h-14 px-6"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center space-x-4"[39m
+                [36m>[39m
+                  [36m<h1[39m
+                    [33mclass[39m=[32m"text-xl font-bold text-gray-900"[39m
+                  [36m>[39m
+                    [0mCollabCanvas[0m
+                  [36m</h1>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-sm text-gray-500"[39m
+                  [36m>[39m
+                    [0m|[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-sm text-gray-600"[39m
+                  [36m/>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center space-x-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center space-x-2"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs font-mono text-gray-500"[39m
+                    [36m>[39m
+                      [0mFPS:[0m
+                    [36m</span>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-sm font-mono font-semibold text-green-600"[39m
+                    [36m>[39m
+                      [0m60[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"px-4 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition"[39m
+                  [36m>[39m
+                    [0mSign Out[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</header>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-1 overflow-hidden"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-none w-16 bg-white border-r border-gray-200 shadow-sm"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"toolbar"[39m
+              [36m>[39m
+                [0mToolbar[0m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-1 bg-gray-50 overflow-hidden relative"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"relative w-full h-full"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mdata-testid[39m=[32m"konva-stage"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mdata-testid[39m=[32m"konva-layer"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mdata-testid[39m=[32m"konva-rect"[39m
+                    [36m/>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1.5 rounded-md text-sm font-mono"[39m
+                [36m>[39m
+                  [0m100[0m
+                  [0m%[0m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-none bg-white border-l border-gray-200 shadow-sm overflow-y-auto transition-all duration-300 w-0 border-l-0 overflow-hidden"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</body>[39m
+
+      90 |
+      91 |     // Check properties panel (right)
+    > 92 |     expect(screen.getByTestId('properties')).toBeInTheDocument();
+         |                   ^
+      93 |   });
+      94 |
+      95 |   it('should display FPS counter in header when enabled', async () => {
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at getByTestId (node_modules/@testing-library/dom/dist/query-helpers.js:95:19)
+      at Object.<anonymous> (src/__tests__/ui-layout.integration.test.tsx:92:19)
+
+FAIL src/__tests__/zindex.integration.test.tsx
+  Z-Index Integration Tests
+    ✓ should create 3 rectangles with last created at z-index 1 (front) (23 ms)
+    ✕ should move rectangle to front (z-index 1) when updated (9 ms)
+    ✓ should manually set z-index via setZIndex with push-down recalculation (3 ms)
+    ✓ should verify no duplicate z-indices with multiple rectangles (6 ms)
+    ✕ should bring rectangle to front using bringToFront (3 ms)
+    ✕ should maintain z-ordering after multiple operations (3 ms)
+    ✓ should verify z-indices are sequential (1, 2, 3, ...) (3 ms)
+
+  ● Z-Index Integration Tests › should move rectangle to front (z-index 1) when updated
+
+    expect(element).toHaveAttribute("data-zindex", "1") // element.getAttribute("data-zindex") === "1"
+
+    Expected the element to have attribute:
+      data-zindex="1"
+    Received:
+      data-zindex="4"
+
+      184 |     // After update, it should move to front (z-index 1)
+      185 |     const updatedRect = screen.getByTestId(`rect-${targetRectId}`);
+    > 186 |     expect(updatedRect).toHaveAttribute('data-zindex', '1');
+          |                         ^
+      187 |   });
+      188 |
+      189 |   it('should manually set z-index via setZIndex with push-down recalculation', () => {
+
+      at Object.<anonymous> (src/__tests__/zindex.integration.test.tsx:186:25)
+
+  ● Z-Index Integration Tests › should bring rectangle to front using bringToFront
+
+    expect(element).toHaveAttribute("data-zindex", "1") // element.getAttribute("data-zindex") === "1"
+
+    Expected the element to have attribute:
+      data-zindex="1"
+    Received:
+      data-zindex="4"
+
+      291 |     // Should now be at front (z-index 1)
+      292 |     const updatedRect = screen.getByTestId(`rect-${targetRectId}`);
+    > 293 |     expect(updatedRect).toHaveAttribute('data-zindex', '1');
+          |                         ^
+      294 |   });
+      295 |
+      296 |   it('should maintain z-ordering after multiple operations', () => {
+
+      at Object.<anonymous> (src/__tests__/zindex.integration.test.tsx:293:25)
+
+  ● Z-Index Integration Tests › should maintain z-ordering after multiple operations
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 3
+
+      330 |     
+      331 |     expect(uniqueZIndices.size).toBe(4); // All unique
+    > 332 |     expect(Math.min(...zIndices)).toBe(1);
+          |                                   ^
+      333 |     expect(Math.max(...zIndices)).toBe(4);
+      334 |   });
+      335 |
+
+      at Object.<anonymous> (src/__tests__/zindex.integration.test.tsx:332:35)
+
+PASS src/App.test.tsx
+  ✓ renders CollabCanvas app (21 ms)
+
+FAIL src/__tests__/canvas.integration.test.tsx
+  Canvas Interactions Integration
+    ✓ should render canvas with correct dimensions (40 ms)
+    ✓ should render canvas with off-white background (2 ms)
+    ✓ should initialize viewport at origin with scale 1 (1 ms)
+    ✓ should display FPS counter in development mode (5 ms)
+    ✓ should hide FPS counter in production mode (2 ms)
+    ✓ should display zoom percentage indicator (1 ms)
+    ✓ should render Stage with correct initial props (2 ms)
+    ✓ should render Layer inside Stage (1 ms)
+    ✓ should render background rectangle with canvas dimensions (1 ms)
+  Canvas with MainLayout Integration
+    ✕ should render canvas within main layout structure (4 ms)
+    ✓ should display header with FPS when enabled (1 ms)
+    ✓ should maintain canvas state independently of viewport changes (1 ms)
+
+  ● Canvas with MainLayout Integration › should render canvas within main layout structure
+
+    TestingLibraryElementError: Unable to find an element by: [data-testid="mock-properties"]
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex flex-col h-screen bg-gray-100"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex-none"[39m
+          [36m>[39m
+            [36m<header[39m
+              [33mclass[39m=[32m"bg-white border-b border-gray-200 shadow-sm"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between h-14 px-6"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center space-x-4"[39m
+                [36m>[39m
+                  [36m<h1[39m
+                    [33mclass[39m=[32m"text-xl font-bold text-gray-900"[39m
+                  [36m>[39m
+                    [0mCollabCanvas[0m
+                  [36m</h1>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-sm text-gray-500"[39m
+                  [36m>[39m
+                    [0m|[0m
+                  [36m</span>[39m
+                  [36m<span[39m
+                    [33mclass[39m=[32m"text-sm text-gray-600"[39m
+                  [36m/>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"flex items-center space-x-4"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"flex items-center space-x-2"[39m
+                  [36m>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-xs font-mono text-gray-500"[39m
+                    [36m>[39m
+                      [0mFPS:[0m
+                    [36m</span>[39m
+                    [36m<span[39m
+                      [33mclass[39m=[32m"text-sm font-mono font-semibold text-green-600"[39m
+                    [36m>[39m
+                      [0m60[0m
+                    [36m</span>[39m
+                  [36m</div>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"px-4 py-1.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition"[39m
+                  [36m>[39m
+                    [0mSign Out[0m
+                  [36m</button>[39m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</header>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-1 overflow-hidden"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-none w-16 bg-white border-r border-gray-200 shadow-sm"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mdata-testid[39m=[32m"mock-toolbar"[39m
+              [36m>[39m
+                [0mToolbar[0m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-1 bg-gray-50 overflow-hidden relative"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"relative w-full h-full"[39m
+              [36m>[39m
+                [36m<div[39m
+                  [33mdata-scale[39m=[32m"1"[39m
+                  [33mdata-testid[39m=[32m"konva-stage"[39m
+                  [33mdata-x[39m=[32m"0"[39m
+                  [33mdata-y[39m=[32m"0"[39m
+                [36m>[39m
+                  [36m<div[39m
+                    [33mdata-testid[39m=[32m"konva-layer"[39m
+                  [36m>[39m
+                    [36m<div[39m
+                      [33mdata-fill[39m=[32m"#FAFAFA"[39m
+                      [33mdata-height[39m=[32m"5000"[39m
+                      [33mdata-testid[39m=[32m"konva-rect"[39m
+                      [33mdata-width[39m=[32m"5000"[39m
+                      [33mdata-x[39m=[32m"0"[39m
+                      [33mdata-y[39m=[32m"0"[39m
+                    [36m/>[39m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1.5 rounded-md text-sm font-mono"[39m
+                [36m>[39m
+                  [0m100[0m
+                  [0m%[0m
+                [36m</div>[39m
+              [36m</div>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex-none bg-white border-l border-gray-200 shadow-sm overflow-y-auto transition-all duration-300 w-0 border-l-0 overflow-hidden"[39m
+            [36m/>[39m
+          [36m</div>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</body>[39m
+
+      194 |     expect(screen.getByTestId('mock-toolbar')).toBeInTheDocument();
+      195 |     expect(screen.getByTestId('konva-stage')).toBeInTheDocument();
+    > 196 |     expect(screen.getByTestId('mock-properties')).toBeInTheDocument();
+          |                   ^
+      197 |   });
+      198 |
+      199 |   it('should display header with FPS when enabled', () => {
+
+      at Object.getElementError (node_modules/@testing-library/dom/dist/config.js:37:19)
+      at node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at getByTestId (node_modules/@testing-library/dom/dist/query-helpers.js:95:19)
+      at Object.<anonymous> (src/__tests__/canvas.integration.test.tsx:196:19)
+
+FAIL src/__tests__/rectangle.operations.test.tsx
+  Rectangle Operations
+    addRectangle
+      ✓ should create rectangle at viewport center with default size 100x100px (6 ms)
+      ✓ should assign z-index 1 to new rectangle (2 ms)
+      ✓ should push existing rectangles back when adding new one (1 ms)
+      ✓ should auto-select newly created rectangle (1 ms)
+      ✓ should use predefined colors only (1 ms)
+    updateRectangle
+      ✕ should update position and auto-set z-index 1 (1 ms)
+      ✕ should update dimensions and auto-set z-index 1 (1 ms)
+      ✕ should change color and auto-set z-index 1
+      ✓ should manually set z-index without auto-update (1 ms)
+      ✓ should update lastModified timestamp (1 ms)
+    deleteRectangle
+      ✓ should remove rectangle from state (1 ms)
+      ✓ should deselect if deleted rectangle was selected
+      ✓ should not deselect if deleted rectangle was not selected (1 ms)
+    selection operations
+      ✓ should select rectangle
+      ✓ should only allow one rectangle selected at a time
+      ✓ should deselect all when setting to null (1 ms)
+    z-index operations
+      ✕ should manually set z-index with push-down recalculation
+      ✕ should bring rectangle to front
+      ✕ should send rectangle to back
+      ✓ should ensure no duplicate z-indices after operations (1 ms)
+
+  ● Rectangle Operations › updateRectangle › should update position and auto-set z-index 1
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      222 |       expect(rect.x).toBe(300);
+      223 |       expect(rect.y).toBe(300);
+    > 224 |       expect(rect.zIndex).toBe(1);
+          |                           ^
+      225 |     });
+      226 |
+      227 |     it('should update dimensions and auto-set z-index 1', () => {
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:224:27)
+
+  ● Rectangle Operations › updateRectangle › should update dimensions and auto-set z-index 1
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      233 |       expect(rect.width).toBe(200);
+      234 |       expect(rect.height).toBe(150);
+    > 235 |       expect(rect.zIndex).toBe(1);
+          |                           ^
+      236 |     });
+      237 |
+      238 |     it('should change color and auto-set z-index 1', () => {
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:235:27)
+
+  ● Rectangle Operations › updateRectangle › should change color and auto-set z-index 1
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 2
+
+      243 |       const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
+      244 |       expect(rect.color).toBe('#F44336');
+    > 245 |       expect(rect.zIndex).toBe(1);
+          |                           ^
+      246 |     });
+      247 |
+      248 |     it('should manually set z-index without auto-update', () => {
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:245:27)
+
+  ● Rectangle Operations › z-index operations › should manually set z-index with push-down recalculation
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 1
+
+      497 |       const initialRect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
+      498 |       
+    > 499 |       expect(initialRect1.zIndex).toBe(3); // Oldest, at back
+          |                                   ^
+      500 |       expect(initialRect2.zIndex).toBe(2);
+      501 |       expect(initialRect3.zIndex).toBe(1); // Most recent, at front
+      502 |       
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:499:35)
+
+  ● Rectangle Operations › z-index operations › should bring rectangle to front
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: 4
+
+      523 |
+      524 |       const rect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
+    > 525 |       expect(rect1.zIndex).toBe(1);
+          |                            ^
+      526 |     });
+      527 |
+      528 |     it('should send rectangle to back', () => {
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:525:28)
+
+  ● Rectangle Operations › z-index operations › should send rectangle to back
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: 1
+
+      533 |
+      534 |       const rect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
+    > 535 |       expect(rect3.zIndex).toBe(3);
+          |                            ^
+      536 |     });
+      537 |
+      538 |     it('should ensure no duplicate z-indices after operations', () => {
+
+      at Object.<anonymous> (src/__tests__/rectangle.operations.test.tsx:535:28)
+
+PASS src/__tests__/persistence.integration.test.tsx
+  Persistence Integration Tests
+    ✓ should subscribe to Firestore shapes on mount (13 ms)
+    ✓ should sync rectangles from Firestore (5 ms)
+    ✓ should call createRectangle when adding a rectangle (13 ms)
+    ✓ should maintain z-index ordering from Firestore (7 ms)
+    ✓ should handle Firestore sync errors gracefully (8 ms)
+    ✓ should persist loading state during initial fetch (105 ms)
+    ✓ should use canvas ID "default-canvas" (2 ms)
+
+  console.error
+    Warning: Function components cannot be given refs. Attempts to access this ref will fail. Did you mean to use React.forwardRef()?
+    
+    Check the render method of `Canvas`.
+        at Stage (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/__tests__/auth.integration.test.tsx:31:13)
+        at div
+        at Canvas (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/components/Canvas/Canvas.tsx:17:166)
+        at div
+        at div
+        at div
+        at MainLayout (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/components/Layout/MainLayout.tsx:13:3)
+        at CanvasLayout (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/App.tsx:21:44)
+        at CanvasProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/CanvasContext.tsx:49:65)
+        at ProtectedCanvas
+        at AppContent (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/App.tsx:45:36)
+        at AuthProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/AuthContext.tsx:24:61)
+        at App
+
+      197 |       mockedAuthService.signOut = jest.fn();
+      198 |
+    > 199 |       render(<App />);
+          |             ^
+      200 |       
+      201 |       // In PR #3, authenticated users see the canvas UI with header
+      202 |       expect(screen.getByText('CollabCanvas')).toBeInTheDocument();
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at validateFunctionComponentInDev (node_modules/react-dom/cjs/react-dom.development.js:20222:9)
+      at mountIndeterminateComponent (node_modules/react-dom/cjs/react-dom.development.js:20189:7)
+      at beginWork (node_modules/react-dom/cjs/react-dom.development.js:21626:16)
+      at beginWork$1 (node_modules/react-dom/cjs/react-dom.development.js:27465:14)
+      at performUnitOfWork (node_modules/react-dom/cjs/react-dom.development.js:26599:12)
+      at workLoopSync (node_modules/react-dom/cjs/react-dom.development.js:26505:5)
+      at renderRootSync (node_modules/react-dom/cjs/react-dom.development.js:26473:7)
+      at performConcurrentWorkOnRoot (node_modules/react-dom/cjs/react-dom.development.js:25777:74)
+      at flushActQueue (node_modules/react/cjs/react.development.js:2667:24)
+      at act (node_modules/react/cjs/react.development.js:2582:11)
+      at node_modules/@testing-library/react/dist/act-compat.js:47:25
+      at renderRoot (node_modules/@testing-library/react/dist/pure.js:190:26)
+      at render (node_modules/@testing-library/react/dist/pure.js:292:10)
+      at Object.<anonymous> (src/__tests__/auth.integration.test.tsx:199:13)
+
+  console.error
+    Warning: An update to AuthProvider inside a test was not wrapped in act(...).
+    
+    When testing, code that causes React state updates should be wrapped into act(...):
+    
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+    
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+        at AuthProvider (/Users/mylessjs/Desktop/Collab-Canvas/collabcanvas/src/context/AuthContext.tsx:24:61)
+        at App
+
+      85 |       setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      86 |       await authService.signOut();
+    > 87 |       setAuthState({ user: null, loading: false, error: null });
+         |       ^
+      88 |       toast.success('Signed out successfully!');
+      89 |     } catch (error: any) {
+      90 |       const errorMessage = error.message || 'Failed to sign out';
+
+      at printWarning (node_modules/react-dom/cjs/react-dom.development.js:86:30)
+      at error (node_modules/react-dom/cjs/react-dom.development.js:60:7)
+      at warnIfUpdatesNotWrappedWithActDEV (node_modules/react-dom/cjs/react-dom.development.js:27628:9)
+      at scheduleUpdateOnFiber (node_modules/react-dom/cjs/react-dom.development.js:25547:5)
+      at setAuthState (node_modules/react-dom/cjs/react-dom.development.js:16708:7)
+      at signOut (src/context/AuthContext.tsx:87:7)
+
+PASS src/__tests__/auth.integration.test.tsx
+  Authentication Integration Tests
+    Login Flow
+      ✓ should display login form by default (35 ms)
+      ✓ should validate email and password on submit (12 ms)
+      ✓ should call signIn service when form is submitted with valid data (8 ms)
+      ✓ should switch to signup form when clicking sign up link (7 ms)
+    Signup Flow
+      ✓ should display signup form when switching from login (6 ms)
+      ✓ should validate passwords match (8 ms)
+      ✓ should call signUp service when form is submitted with valid data (7 ms)
+      ✓ should switch back to login form when clicking sign in link (8 ms)
+    Protected Route
+      ✓ should show canvas when user is authenticated (30 ms)
+      ✓ should call signOut when sign out button is clicked (9 ms)
+    Loading State
+      ✓ should show loading state while checking authentication (1 ms)
+
+Test Suites: 7 failed, 4 passed, 11 total
+Tests:       27 failed, 99 passed, 126 total
+Snapshots:   0 total
+Time:        1.612 s, estimated 4 s
+Ran all test suites.

@@ -184,6 +184,7 @@ describe('Canvas with MainLayout Integration', () => {
             toolbar={mockToolbar}
             canvas={<Canvas />}
             properties={mockProperties}
+            hasSelection={true} // Show properties panel for test
           />
         </CanvasProvider>
       </AuthProvider>

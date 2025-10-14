@@ -105,7 +105,8 @@ export const manualSetZIndex = (shapes: Rectangle[], shapeId: string, newZIndex:
 };
 
 /**
- * Validate z-indices: Check for duplicates and gaps
+ * Validate z-indices: Check for duplicates only (gaps are allowed with new convention)
+ * NEW CONVENTION: Higher z-index = front, gaps allowed (no recalculation needed)
  * @param shapes - All rectangles in the canvas
  * @returns { isValid: boolean, duplicates: number[], gaps: number[] }
  */
@@ -116,16 +117,16 @@ export const validateZIndices = (shapes: Rectangle[]): {
 } => {
   const zIndices = shapes.map(s => s.zIndex).sort((a, b) => a - b);
   const duplicates: number[] = [];
-  const gaps: number[] = [];
+  const gaps: number[] = []; // Gaps are tracked but allowed (for backward compatibility)
 
-  // Check for duplicates
+  // Check for duplicates (NOT ALLOWED - this is the only validation that matters)
   for (let i = 0; i < zIndices.length - 1; i++) {
     if (zIndices[i] === zIndices[i + 1] && !duplicates.includes(zIndices[i])) {
       duplicates.push(zIndices[i]);
     }
   }
 
-  // Check for gaps (expected: 1, 2, 3, ..., n)
+  // Check for gaps (for informational purposes only - gaps are EXPECTED and ALLOWED)
   for (let i = 1; i <= shapes.length; i++) {
     if (!zIndices.includes(i)) {
       gaps.push(i);
@@ -133,7 +134,7 @@ export const validateZIndices = (shapes: Rectangle[]): {
   }
 
   return {
-    isValid: duplicates.length === 0 && gaps.length === 0,
+    isValid: duplicates.length === 0, // Only check duplicates, gaps are fine!
     duplicates,
     gaps
   };

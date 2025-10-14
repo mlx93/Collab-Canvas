@@ -196,8 +196,8 @@ describe('useCanvas hook', () => {
       const firstRect = result.current.rectangles.find(r => r.id === firstId);
       const secondRect = result.current.rectangles.find(r => r.id !== firstId);
 
-      expect(firstRect?.zIndex).toBe(2);
-      expect(secondRect?.zIndex).toBe(1);
+      expect(firstRect?.zIndex).toBe(1); // Oldest is back
+      expect(secondRect?.zIndex).toBe(2); // Newest is front
     });
 
     it('should update rectangle properties', () => {
@@ -318,13 +318,14 @@ describe('useCanvas hook', () => {
         });
       });
 
-      // Bring first rectangle (now at back) to front
+      // Bring first rectangle (z-index 1, at back) to front
+      // After bringToFront, it should have maxZIndex + 1 = 4
       act(() => {
         result.current.bringToFront(rect1Id);
       });
 
       const rect1 = result.current.rectangles.find(r => r.id === rect1Id);
-      expect(rect1?.zIndex).toBe(1);
+      expect(rect1?.zIndex).toBe(4); // maxZIndex (3) + 1
     });
 
     it('should send rectangle to back', () => {
@@ -369,13 +370,14 @@ describe('useCanvas hook', () => {
 
       const rect3Id = result.current.selectedRectangleId!;
 
-      // Send last rectangle (now at front) to back
+      // Send last rectangle (z-index 3, at front) to back
+      // minZIndex is 1, so minZIndex - 1 = 0, but Math.max(1, 0) = 1
       act(() => {
         result.current.sendToBack(rect3Id);
       });
 
       const rect3 = result.current.rectangles.find(r => r.id === rect3Id);
-      expect(rect3?.zIndex).toBe(3);
+      expect(rect3?.zIndex).toBe(1); // Math.max(1, minZIndex - 1) = Math.max(1, 0) = 1
     });
   });
 

@@ -287,7 +287,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           ...prev,
           rectangles: updatedRectangles.map(rect =>
             rect.id === id
-              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.userId }
+              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.email } // FIX: use email, not userId
               : rect
           )
         };

@@ -213,7 +213,7 @@ describe('Rectangle Operations', () => {
       rectId = canvasContext.rectangles[1].id; // Second rectangle (currently z-index 2)
     });
 
-    it('should update position and auto-set z-index 1', () => {
+    it('should update position and auto-set z-index to maxZIndex + 1', () => {
       act(() => {
         canvasContext.updateRectangle(rectId, { x: 300, y: 300 });
       });
@@ -221,10 +221,10 @@ describe('Rectangle Operations', () => {
       const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
       expect(rect.x).toBe(300);
       expect(rect.y).toBe(300);
-      expect(rect.zIndex).toBe(1);
+      expect(rect.zIndex).toBe(2); // Initial zIndex was 1, maxZIndex + 1 = 2
     });
 
-    it('should update dimensions and auto-set z-index 1', () => {
+    it('should update dimensions and auto-set z-index to maxZIndex + 1', () => {
       act(() => {
         canvasContext.updateRectangle(rectId, { width: 200, height: 150 });
       });
@@ -232,17 +232,17 @@ describe('Rectangle Operations', () => {
       const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
       expect(rect.width).toBe(200);
       expect(rect.height).toBe(150);
-      expect(rect.zIndex).toBe(1);
+      expect(rect.zIndex).toBe(2); // maxZIndex + 1 = 2
     });
 
-    it('should change color and auto-set z-index 1', () => {
+    it('should change color and auto-set z-index to maxZIndex + 1', () => {
       act(() => {
         canvasContext.updateRectangle(rectId, { color: '#F44336' });
       });
 
       const rect = canvasContext.rectangles.find((r: any) => r.id === rectId);
       expect(rect.color).toBe('#F44336');
-      expect(rect.zIndex).toBe(1);
+      expect(rect.zIndex).toBe(2); // maxZIndex + 1 = 2
     });
 
     it('should manually set z-index without auto-update', () => {
@@ -490,49 +490,50 @@ describe('Rectangle Operations', () => {
     });
 
     it('should manually set z-index with push-down recalculation', () => {
-      // rect3 is currently z-index 1 (most recent), rect2 is 2, rect1 is 3 (oldest)
+      // NEW CONVENTION: Higher z-index = front
+      // rect1 (first) → z-index 1 (back), rect2 → z-index 2, rect3 (last) → z-index 3 (front)
       // Verify initial state
       const initialRect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
       const initialRect2 = canvasContext.rectangles.find((r: any) => r.id === rect2Id);
       const initialRect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
       
-      expect(initialRect1.zIndex).toBe(3); // Oldest, at back
+      expect(initialRect1.zIndex).toBe(1); // Oldest, at back
       expect(initialRect2.zIndex).toBe(2);
-      expect(initialRect3.zIndex).toBe(1); // Most recent, at front
+      expect(initialRect3.zIndex).toBe(3); // Most recent, at front
       
-      // Set rect1 to z-index 1 (bring to front)
+      // Set rect1 to z-index 3 (bring to front, taking rect3's spot)
       act(() => {
-        canvasContext.setZIndex(rect1Id, 1);
+        canvasContext.setZIndex(rect1Id, 3);
       });
 
       const rect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
       const rect2 = canvasContext.rectangles.find((r: any) => r.id === rect2Id);
       const rect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
 
-      // After moving rect1 from 3→1, shapes at 1 and 2 should push back
-      expect(rect1.zIndex).toBe(1); // Moved to front
-      expect(rect2.zIndex).toBe(3); // Was 2, pushed to 3
-      expect(rect3.zIndex).toBe(2); // Was 1, pushed to 2
+      // After moving rect1 from 1→3 (forward), shapes 2 and 3 shift back
+      expect(rect1.zIndex).toBe(3); // Moved to front
+      expect(rect2.zIndex).toBe(1); // Was 2, shifted back to 1
+      expect(rect3.zIndex).toBe(2); // Was 3, shifted back to 2
     });
 
     it('should bring rectangle to front', () => {
-      // rect1 is currently at back (z-index 3)
+      // rect1 is currently at back (z-index 1), bring to front (maxZIndex + 1 = 4)
       act(() => {
         canvasContext.bringToFront(rect1Id);
       });
 
       const rect1 = canvasContext.rectangles.find((r: any) => r.id === rect1Id);
-      expect(rect1.zIndex).toBe(1);
+      expect(rect1.zIndex).toBe(4); // maxZIndex (3) + 1
     });
 
     it('should send rectangle to back', () => {
-      // rect3 is currently at front (z-index 1)
+      // rect3 is currently at front (z-index 3), send to back (minZIndex - 1 = 0, enforced min 1)
       act(() => {
         canvasContext.sendToBack(rect3Id);
       });
 
       const rect3 = canvasContext.rectangles.find((r: any) => r.id === rect3Id);
-      expect(rect3.zIndex).toBe(3);
+      expect(rect3.zIndex).toBe(1); // Math.max(1, minZIndex - 1) = 1
     });
 
     it('should ensure no duplicate z-indices after operations', () => {

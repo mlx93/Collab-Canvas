@@ -71,6 +71,7 @@ describe('UI Layout Integration', () => {
             toolbar={mockToolbar}
             canvas={<Canvas />}
             properties={mockProperties}
+            hasSelection={true} // Show properties panel for test
           />
         </CanvasProvider>
       </AuthProvider>
@@ -88,7 +89,7 @@ describe('UI Layout Integration', () => {
     // Check canvas (center)
     expect(screen.getByTestId('konva-stage')).toBeInTheDocument();
 
-    // Check properties panel (right)
+    // Check properties panel (right) - visible when hasSelection=true
     expect(screen.getByTestId('properties')).toBeInTheDocument();
   });
 

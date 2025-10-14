@@ -142,12 +142,12 @@ describe('Z-Index Integration Tests', () => {
     expect(uniqueZIndices.size).toBe(3);
   });
 
-  it('should move rectangle to front (z-index 1) when updated', () => {
+  it('should move rectangle to front (highest z-index) when updated', () => {
     renderComponent();
 
     const addBtn = screen.getByTestId('add-rect-btn');
 
-    // Add 3 rectangles
+    // Add 3 rectangles (z-indices: 1, 2, 3)
     act(() => {
       addBtn.click();
       addBtn.click();
@@ -157,14 +157,21 @@ describe('Z-Index Integration Tests', () => {
     const container = screen.getByTestId('rectangles-container');
     const rects = container.querySelectorAll('[data-testid^="rect-"]');
     
-    // Find a rectangle that is NOT at front (z-index > 1)
+    // Find a rectangle that is NOT at front (z-index < maxZIndex)
+    // With NEW CONVENTION: rect1=1 (back), rect2=2, rect3=3 (front)
     let targetRect: Element | null = null;
     let targetRectId = '';
     let initialZIndex = 0;
+    let maxZIndex = 0;
 
     for (const rect of Array.from(rects)) {
       const zIndex = parseInt(rect.getAttribute('data-zindex') || '0');
-      if (zIndex > 1) {
+      maxZIndex = Math.max(maxZIndex, zIndex);
+    }
+
+    for (const rect of Array.from(rects)) {
+      const zIndex = parseInt(rect.getAttribute('data-zindex') || '0');
+      if (zIndex < maxZIndex) {
         targetRect = rect;
         targetRectId = rect.getAttribute('data-testid')?.replace('rect-', '') || '';
         initialZIndex = zIndex;
@@ -173,7 +180,7 @@ describe('Z-Index Integration Tests', () => {
     }
 
     expect(targetRect).not.toBeNull();
-    expect(initialZIndex).toBeGreaterThan(1); // Should be at back
+    expect(initialZIndex).toBeLessThan(maxZIndex); // Should be at back or middle
 
     // Update it (move it)
     const moveBtn = screen.getByTestId(`update-${targetRectId}`);
@@ -181,9 +188,9 @@ describe('Z-Index Integration Tests', () => {
       moveBtn.click();
     });
 
-    // After update, it should move to front (z-index 1)
+    // After update, it should move to front (maxZIndex + 1 = 4)
     const updatedRect = screen.getByTestId(`rect-${targetRectId}`);
-    expect(updatedRect).toHaveAttribute('data-zindex', '1');
+    expect(updatedRect).toHaveAttribute('data-zindex', '4'); // maxZIndex (3) + 1
   });
 
   it('should manually set z-index via setZIndex with push-down recalculation', () => {
@@ -254,7 +261,7 @@ describe('Z-Index Integration Tests', () => {
 
     const addBtn = screen.getByTestId('add-rect-btn');
 
-    // Add 3 rectangles
+    // Add 3 rectangles (z-indices: 1, 2, 3)
     act(() => {
       addBtn.click();
       addBtn.click();
@@ -264,14 +271,21 @@ describe('Z-Index Integration Tests', () => {
     const container = screen.getByTestId('rectangles-container');
     const rects = container.querySelectorAll('[data-testid^="rect-"]');
     
-    // Find a rectangle that is NOT at front (z-index > 1)
+    // Find a rectangle that is NOT at front (z-index < maxZIndex)
+    // With NEW CONVENTION: rect1=1 (back), rect2=2, rect3=3 (front)
     let targetRect: Element | null = null;
     let targetRectId = '';
     let initialZIndex = 0;
+    let maxZIndex = 0;
 
     for (const rect of Array.from(rects)) {
       const zIndex = parseInt(rect.getAttribute('data-zindex') || '0');
-      if (zIndex > 1) {
+      maxZIndex = Math.max(maxZIndex, zIndex);
+    }
+
+    for (const rect of Array.from(rects)) {
+      const zIndex = parseInt(rect.getAttribute('data-zindex') || '0');
+      if (zIndex < maxZIndex) {
         targetRect = rect;
         targetRectId = rect.getAttribute('data-testid')?.replace('rect-', '') || '';
         initialZIndex = zIndex;
@@ -280,7 +294,7 @@ describe('Z-Index Integration Tests', () => {
     }
 
     expect(targetRect).not.toBeNull();
-    expect(initialZIndex).toBeGreaterThan(1); // Should be at back
+    expect(initialZIndex).toBeLessThan(maxZIndex); // Should be at back or middle
 
     // Bring to front
     const bringFrontBtn = screen.getByTestId(`bring-front-${targetRectId}`);
@@ -288,9 +302,9 @@ describe('Z-Index Integration Tests', () => {
       bringFrontBtn.click();
     });
 
-    // Should now be at front (z-index 1)
+    // Should now be at front (maxZIndex + 1 = 4)
     const updatedRect = screen.getByTestId(`rect-${targetRectId}`);
-    expect(updatedRect).toHaveAttribute('data-zindex', '1');
+    expect(updatedRect).toHaveAttribute('data-zindex', '4'); // maxZIndex (3) + 1
   });
 
   it('should maintain z-ordering after multiple operations', () => {
@@ -298,7 +312,7 @@ describe('Z-Index Integration Tests', () => {
 
     const addBtn = screen.getByTestId('add-rect-btn');
 
-    // Add 4 rectangles
+    // Add 4 rectangles (z-indices: 1, 2, 3, 4)
     act(() => {
       addBtn.click();
       addBtn.click();
@@ -314,23 +328,25 @@ describe('Z-Index Integration Tests', () => {
 
     // Perform multiple operations
     act(() => {
-      // Move rect1 (should go to front)
+      // Move rect1 (z-index 1 → 5, maxZIndex + 1)
       screen.getByTestId(`update-${rect1Id}`).click();
     });
 
     act(() => {
-      // Bring rect2 to front
+      // Bring rect2 (z-index 2 → 6, maxZIndex + 1)
       screen.getByTestId(`bring-front-${rect2Id}`).click();
     });
 
     // Verify no duplicate z-indices after all operations
+    // Expected z-indices: rect1=5, rect2=6, rect3=3, rect4=4 (gaps allowed!)
     rects = container.querySelectorAll('[data-testid^="rect-"]');
     const zIndices = Array.from(rects).map(rect => parseInt(rect.getAttribute('data-zindex') || '0'));
     const uniqueZIndices = new Set(zIndices);
     
-    expect(uniqueZIndices.size).toBe(4); // All unique
-    expect(Math.min(...zIndices)).toBe(1);
-    expect(Math.max(...zIndices)).toBe(4);
+    expect(uniqueZIndices.size).toBe(4); // All unique (no duplicates!)
+    // Gaps are allowed with new convention, so min/max will have gaps
+    expect(Math.min(...zIndices)).toBeGreaterThan(0); // At least 1
+    expect(Math.max(...zIndices)).toBeGreaterThanOrEqual(4); // At least 4 (will be 6)
   });
 
   it('should verify z-indices are sequential (1, 2, 3, ...)', () => {

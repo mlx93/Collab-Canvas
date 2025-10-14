@@ -29,8 +29,8 @@ describe('zIndex.service', () => {
       const result = autoUpdateZIndex(shapes, 'c');
       const shapeC = result.find(s => s.id === 'c');
 
-      // With new convention: higher = front, so c should be maxZIndex + 1 = 4
-      expect(shapeC?.zIndex).toBe(4);
+      // Shape c is already at front (maxZIndex = 3), so no change
+      expect(shapeC?.zIndex).toBe(3);
     });
 
     it('should keep other shapes unchanged when moving to front', () => {
@@ -209,78 +209,8 @@ describe('zIndex.service', () => {
     });
   });
 
-  describe('recalculateAllZIndices', () => {
-    it('should assign sequential z-indices starting from 1', () => {
-      const shapes: Rectangle[] = [
-        createMockRect('a', 5),
-        createMockRect('b', 10),
-        createMockRect('c', 3)
-      ];
-
-      const result = recalculateAllZIndices(shapes);
-      const zIndices = result.map(s => s.zIndex).sort((a, b) => a - b);
-
-      expect(zIndices).toEqual([1, 2, 3]);
-    });
-
-    it('should maintain relative order of shapes', () => {
-      const shapes: Rectangle[] = [
-        createMockRect('a', 5),
-        createMockRect('b', 10),
-        createMockRect('c', 3)
-      ];
-
-      const result = recalculateAllZIndices(shapes);
-
-      // Shape c (originally 3) should be z-index 1
-      // Shape a (originally 5) should be z-index 2
-      // Shape b (originally 10) should be z-index 3
-      expect(result.find(s => s.id === 'c')?.zIndex).toBe(1);
-      expect(result.find(s => s.id === 'a')?.zIndex).toBe(2);
-      expect(result.find(s => s.id === 'b')?.zIndex).toBe(3);
-    });
-
-    it('should remove duplicate z-indices', () => {
-      const shapes: Rectangle[] = [
-        createMockRect('a', 1),
-        createMockRect('b', 1),
-        createMockRect('c', 2)
-      ];
-
-      const result = recalculateAllZIndices(shapes);
-      const zIndices = result.map(s => s.zIndex);
-
-      const hasDuplicates = zIndices.some((val, idx) => zIndices.indexOf(val) !== idx);
-      expect(hasDuplicates).toBe(false);
-    });
-
-    it('should fill gaps in z-indices', () => {
-      const shapes: Rectangle[] = [
-        createMockRect('a', 1),
-        createMockRect('b', 5),
-        createMockRect('c', 10)
-      ];
-
-      const result = recalculateAllZIndices(shapes);
-      const zIndices = result.map(s => s.zIndex).sort((a, b) => a - b);
-
-      expect(zIndices).toEqual([1, 2, 3]);
-    });
-
-    it('should handle empty array', () => {
-      const result = recalculateAllZIndices([]);
-
-      expect(result).toEqual([]);
-    });
-
-    it('should handle single shape', () => {
-      const shapes: Rectangle[] = [createMockRect('a', 5)];
-
-      const result = recalculateAllZIndices(shapes);
-
-      expect(result[0].zIndex).toBe(1);
-    });
-  });
+  // recalculateAllZIndices function removed - no longer needed with new z-index convention
+  // Higher z-index = front, lower z-index = back, no recalculation needed
 
   describe('validateZIndices', () => {
     it('should return valid for correct z-indices', () => {
@@ -310,7 +240,7 @@ describe('zIndex.service', () => {
       expect(validation.duplicates).toContain(2);
     });
 
-    it('should detect gaps in z-indices', () => {
+    it('should detect gaps in z-indices (but allow them)', () => {
       const shapes: Rectangle[] = [
         createMockRect('a', 1),
         createMockRect('b', 3),
@@ -319,8 +249,9 @@ describe('zIndex.service', () => {
 
       const validation = validateZIndices(shapes);
 
-      expect(validation.isValid).toBe(false);
-      expect(validation.gaps).toContain(2);
+      // Gaps are ALLOWED with new convention!
+      expect(validation.isValid).toBe(true); // Still valid despite gap
+      expect(validation.gaps).toContain(2); // Gap detected but not an error
     });
 
     it('should detect both duplicates and gaps', () => {
@@ -353,12 +284,14 @@ describe('zIndex.service', () => {
         createMockRect(`shape-${i}`, i + 1)
       );
 
-      // Move shape 25 to front
+      // Move shape-24 (z-index 25) to front → becomes maxZIndex + 1 = 51
       const result = autoUpdateZIndex(shapes, 'shape-24');
-      const validation = validateZIndices(result);
-
-      expect(validation.isValid).toBe(true);
-      expect(result.find(s => s.id === 'shape-24')?.zIndex).toBe(1);
+      
+      // Check no duplicates (gaps are allowed with new convention)
+      const zIndices = result.map(s => s.zIndex);
+      const hasDuplicates = zIndices.some((val, idx) => zIndices.indexOf(val) !== idx);
+      expect(hasDuplicates).toBe(false);
+      expect(result.find(s => s.id === 'shape-24')?.zIndex).toBe(51); // maxZIndex + 1
     });
 
     it('should handle multiple sequential auto-updates', () => {
@@ -370,13 +303,15 @@ describe('zIndex.service', () => {
       ];
 
       // Move shapes to front in sequence
-      shapes = autoUpdateZIndex(shapes, 'd');
-      shapes = autoUpdateZIndex(shapes, 'a');
-      shapes = autoUpdateZIndex(shapes, 'c');
+      shapes = autoUpdateZIndex(shapes, 'd'); // d: 4 → 4 (already at front)
+      shapes = autoUpdateZIndex(shapes, 'a'); // a: 1 → 5 (maxZIndex + 1)
+      shapes = autoUpdateZIndex(shapes, 'c'); // c: 3 → 6 (maxZIndex + 1)
 
-      const validation = validateZIndices(shapes);
-      expect(validation.isValid).toBe(true);
-      expect(shapes.find(s => s.id === 'c')?.zIndex).toBe(1);
+      // Check no duplicates (gaps allowed)
+      const zIndices = shapes.map(s => s.zIndex);
+      const hasDuplicates = zIndices.some((val, idx) => zIndices.indexOf(val) !== idx);
+      expect(hasDuplicates).toBe(false);
+      expect(shapes.find(s => s.id === 'c')?.zIndex).toBe(6); // Last moved to front
     });
 
     it('should handle multiple manual z-index changes', () => {
@@ -391,8 +326,10 @@ describe('zIndex.service', () => {
       shapes = manualSetZIndex(shapes, 'd', 1);
       shapes = manualSetZIndex(shapes, 'b', 4);
 
-      const validation = validateZIndices(shapes);
-      expect(validation.isValid).toBe(true);
+      // Check no duplicates (manual z-index uses atomic 3-phase approach)
+      const zIndices = shapes.map(s => s.zIndex);
+      const hasDuplicates = zIndices.some((val, idx) => zIndices.indexOf(val) !== idx);
+      expect(hasDuplicates).toBe(false);
     });
   });
 });

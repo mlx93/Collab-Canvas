@@ -13,7 +13,7 @@ import {
   writeBatch,
   getDocs,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { Rectangle } from '../types/canvas.types';
 import { CANVAS_ID } from '../utils/constants';
 import toast from 'react-hot-toast';
@@ -91,6 +91,7 @@ export async function createRectangle(
     zIndex: maxZIndex + 1, // New rectangles go to front (higher = front)
     createdAt: Timestamp.now(),
     lastModified: Timestamp.now(),
+    lastModifiedBy: rectangle.lastModifiedBy ?? rectangle.createdBy,
   };
 
   await retryOperation(
@@ -113,6 +114,15 @@ export async function updateRectangle(
     ...updates,
     lastModified: Timestamp.now(),
   };
+
+  // Ensure lastModifiedBy is always set to the current user's email when available
+  const currentEmail = auth.currentUser?.email;
+  if (currentEmail) {
+    updateData.lastModifiedBy = currentEmail;
+  } else if (!updateData.lastModifiedBy) {
+    // As a fallback (should rarely happen), leave it to existing rule checks
+    // or let Firestore reject if required
+  }
 
   // If this is a position/size/color update (not just z-index), auto-set z-index to front
   if (updates.x !== undefined || updates.y !== undefined || 
@@ -149,8 +159,8 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
     const batch = writeBatch(db);
     const shapes: Rectangle[] = [];
 
-    snapshot.forEach((doc) => {
-      shapes.push(doc.data() as Rectangle);
+    snapshot.forEach((docSnap) => {
+      shapes.push(docSnap.data() as Rectangle);
     });
 
     // Find the target shape
@@ -160,36 +170,59 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
     }
 
     const oldZIndex = targetShape.zIndex;
+    if (oldZIndex === newZIndex) {
+      return; // nothing to do
+    }
 
-    // Recalculate z-indices with push-down logic
+    // NEW CONVENTION: Higher z-index = front, lower = back
+    // Atomic 3-phase approach to avoid temporary conflicts:
+    // Phase 1: Move target to a temporary high value (maxZIndex + 1000)
+    // Phase 2: Shift other shapes to make room at target z-index
+    // Phase 3: Move target to final desired z-index
+
+    const maxZIndex = shapes.length > 0 ? Math.max(...shapes.map(s => s.zIndex)) : 0;
+    const TEMP_HIGH_VALUE = maxZIndex + 1000;
+
+    // Phase 1: target → TEMP_HIGH_VALUE
+    batch.update(getShapeDoc(shapeId), {
+      zIndex: TEMP_HIGH_VALUE,
+      lastModified: Timestamp.now(),
+      lastModifiedBy: auth.currentUser?.email ?? targetShape.lastModifiedBy ?? targetShape.createdBy,
+    });
+
+    // Phase 2: shift other shapes to make room
     shapes.forEach((shape) => {
-      let updatedZIndex = shape.zIndex;
+      if (shape.id === shapeId) return;
 
-      if (shape.id === shapeId) {
-        // Set target shape to new z-index
-        updatedZIndex = newZIndex;
-      } else if (newZIndex < oldZIndex) {
-        // Moving target forward (lower number = front)
-        // Push shapes in range [newZIndex, oldZIndex) back by 1
-        if (shape.zIndex >= newZIndex && shape.zIndex < oldZIndex) {
-          updatedZIndex = shape.zIndex + 1;
-        }
-      } else if (newZIndex > oldZIndex) {
-        // Moving target backward (higher number = back)
-        // Pull shapes in range (oldZIndex, newZIndex] forward by 1
+      let updatedZIndex = shape.zIndex;
+      if (newZIndex > oldZIndex) {
+        // Moving target forward (toward front)
+        // Shapes in (oldZIndex, newZIndex] shift back by 1
         if (shape.zIndex > oldZIndex && shape.zIndex <= newZIndex) {
           updatedZIndex = shape.zIndex - 1;
         }
+      } else {
+        // Moving target backward (toward back)
+        // Shapes in [newZIndex, oldZIndex) shift forward by 1
+        if (shape.zIndex >= newZIndex && shape.zIndex < oldZIndex) {
+          updatedZIndex = shape.zIndex + 1;
+        }
       }
 
-      // Update if z-index changed
       if (updatedZIndex !== shape.zIndex) {
-        const shapeRef = getShapeDoc(shape.id);
-        batch.update(shapeRef, {
+        batch.update(getShapeDoc(shape.id), {
           zIndex: updatedZIndex,
           lastModified: Timestamp.now(),
+          lastModifiedBy: auth.currentUser?.email ?? shape.lastModifiedBy ?? shape.createdBy,
         });
       }
+    });
+
+    // Phase 3: target → newZIndex
+    batch.update(getShapeDoc(shapeId), {
+      zIndex: newZIndex,
+      lastModified: Timestamp.now(),
+      lastModifiedBy: auth.currentUser?.email ?? targetShape.lastModifiedBy ?? targetShape.createdBy,
     });
 
     await batch.commit();
@@ -240,8 +273,9 @@ export function subscribeToShapes(
         });
       });
 
-      // Sort by z-index (1 = front, higher = back) for rendering order
-      shapes.sort((a, b) => b.zIndex - a.zIndex);
+      // Sort by z-index ascending for rendering order
+      // Lower z-index renders first (back), higher z-index last (front)
+      shapes.sort((a, b) => a.zIndex - b.zIndex);
 
       callback(shapes);
     },
