@@ -70,7 +70,7 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({
 
             {/* User name label */}
             <div
-              className="absolute left-6 top-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap"
+              className="absolute left-4 top-1 px-2 py-1 rounded text-xs font-medium whitespace-nowrap"
               style={{
                 backgroundColor: cursor.cursorColor,
                 color: '#FFFFFF',
