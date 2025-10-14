@@ -1,11 +1,12 @@
 /**
  * CursorOverlay component
- * Renders other users' cursors with colored labels showing color names
+ * Renders other users' cursors with colored labels showing user names
  * Uses absolute positioning over the canvas
  */
 import React from 'react';
 import { Cursor } from '../../types/cursor.types';
 import { useAuth } from '../../hooks/useAuth';
+import { generateCursorLabel } from '../../utils/helpers';
 
 interface CursorOverlayProps {
   cursors: Record<string, Cursor>;
@@ -22,6 +23,9 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({
 }) => {
   const { user } = useAuth();
 
+  // Get all cursors as array for label generation
+  const allCursors = Object.values(cursors);
+
   return (
     <div
       className="absolute inset-0 pointer-events-none"
@@ -34,6 +38,9 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({
         // Transform cursor position to screen coordinates
         const screenX = cursor.x * scale + viewportX;
         const screenY = cursor.y * scale + viewportY;
+
+        // Generate display label (first name, or "John D." if collision)
+        const displayLabel = generateCursorLabel(cursor, allCursors);
 
         return (
           <div
@@ -61,7 +68,7 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({
               />
             </svg>
 
-            {/* Color name label */}
+            {/* User name label */}
             <div
               className="absolute left-6 top-2 px-2 py-1 rounded text-xs font-medium whitespace-nowrap"
               style={{
@@ -70,7 +77,7 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({
                 boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
               }}
             >
-              {cursor.colorName}
+              {displayLabel}
             </div>
           </div>
         );

@@ -45,3 +45,34 @@ export const getColorName = (hexColor: string): string => {
   return colorMap[hexColor] || 'Custom';
 };
 
+/**
+ * Generate cursor display label from user names
+ * If multiple users have the same first name, add last initial
+ * Examples:
+ *   - "John" (unique first name)
+ *   - "John D." (when there's also a "John S.")
+ */
+export interface CursorWithName {
+  userId: string;
+  firstName: string;
+  lastName: string;
+}
+
+export const generateCursorLabel = (cursor: CursorWithName, allCursors: CursorWithName[]): string => {
+  const { firstName, lastName } = cursor;
+  
+  // Count how many users have the same first name
+  const sameFirstNameCount = allCursors.filter(
+    c => c.firstName.toLowerCase() === firstName.toLowerCase()
+  ).length;
+
+  // If unique first name, just show first name
+  if (sameFirstNameCount === 1) {
+    return firstName;
+  }
+
+  // If multiple users with same first name, add last initial
+  const lastInitial = lastName ? lastName.charAt(0).toUpperCase() : '';
+  return lastInitial ? `${firstName} ${lastInitial}.` : firstName;
+};
+

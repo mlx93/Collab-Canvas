@@ -66,12 +66,16 @@ export function getCursorColorForUser(email: string): {
  * 
  * @param userId - Current user's ID
  * @param email - Current user's email (for color generation)
+ * @param firstName - Current user's first name
+ * @param lastName - Current user's last name
  * @param x - Canvas x coordinate
  * @param y - Canvas y coordinate
  */
 export async function updateCursorPosition(
   userId: string,
   email: string,
+  firstName: string,
+  lastName: string,
   x: number,
   y: number
 ): Promise<void> {
@@ -82,12 +86,14 @@ export async function updateCursorPosition(
     x,
     y,
     userId,
+    firstName,
+    lastName,
     colorName,
     cursorColor,
     lastUpdate: Date.now(),
   };
 
-  console.log('[cursor.service] Updating cursor position:', { userId, email, x, y, colorName });
+  console.log('[cursor.service] Updating cursor position:', { userId, email, firstName, x, y, colorName });
 
   try {
     await set(cursorRef, cursorData);
