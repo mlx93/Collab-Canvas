@@ -15,15 +15,33 @@ jest.mock('../services/firebase', () => ({
   rtdb: {}
 }));
 
-// Mock authService
+// Mock authService with proper unsubscribe
 jest.mock('../services/auth.service', () => ({
   authService: {
     onAuthStateChange: jest.fn((callback) => {
-      callback({ uid: 'test-user', email: 'test@example.com' });
-      return jest.fn();
+      callback({
+        userId: 'test-user-id',
+        email: 'test@example.com',
+        username: 'test@example.com',
+      });
+      return jest.fn(); // unsubscribe function
     }),
     signOut: jest.fn(),
+    signIn: jest.fn(),
+    signUp: jest.fn(),
   }
+}));
+
+// Mock canvas.service with proper unsubscribe
+jest.mock('../services/canvas.service', () => ({
+  createRectangle: jest.fn().mockResolvedValue(undefined),
+  updateRectangle: jest.fn().mockResolvedValue(undefined),
+  updateZIndex: jest.fn().mockResolvedValue(undefined),
+  deleteRectangle: jest.fn().mockResolvedValue(undefined),
+  subscribeToShapes: jest.fn((callback) => {
+    setTimeout(() => callback([]), 0); // Async but immediate
+    return jest.fn(); // Fresh unsubscribe function
+  }),
 }));
 
 // Mock Konva with simple test IDs

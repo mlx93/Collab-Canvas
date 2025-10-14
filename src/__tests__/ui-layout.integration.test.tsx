@@ -34,6 +34,18 @@ jest.mock('../services/auth.service', () => {
   };
 });
 
+// Mock canvas.service with proper unsubscribe
+jest.mock('../services/canvas.service', () => ({
+  createRectangle: jest.fn().mockResolvedValue(undefined),
+  updateRectangle: jest.fn().mockResolvedValue(undefined),
+  updateZIndex: jest.fn().mockResolvedValue(undefined),
+  deleteRectangle: jest.fn().mockResolvedValue(undefined),
+  subscribeToShapes: jest.fn((callback) => {
+    setTimeout(() => callback([]), 0); // Async but immediate
+    return jest.fn(); // Fresh unsubscribe function
+  }),
+}));
+
 // Mock Konva
 jest.mock('react-konva', () => ({
   Stage: ({ children }: any) => <div data-testid="konva-stage">{children}</div>,

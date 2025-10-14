@@ -38,6 +38,18 @@ jest.mock('../hooks/useFPS', () => ({
   useFPS: () => 60
 }));
 
+// Mock canvas.service with proper unsubscribe
+jest.mock('../services/canvas.service', () => ({
+  createRectangle: jest.fn().mockResolvedValue(undefined),
+  updateRectangle: jest.fn().mockResolvedValue(undefined),
+  updateZIndex: jest.fn().mockResolvedValue(undefined),
+  deleteRectangle: jest.fn().mockResolvedValue(undefined),
+  subscribeToShapes: jest.fn((callback) => {
+    setTimeout(() => callback([]), 0); // Async but immediate
+    return jest.fn(); // Fresh unsubscribe function
+  }),
+}));
+
 describe('Authentication Integration Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();

@@ -1,9 +1,10 @@
-// Canvas Context with React Context API
-import React, { createContext, useState, ReactNode } from 'react';
+// Canvas Context with React Context API and Firestore integration
+import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { Rectangle, CanvasState, Viewport, Tool } from '../types/canvas.types';
 import { MIN_ZOOM, MAX_ZOOM } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
+import * as canvasService from '../services/canvas.service';
 
 interface CanvasContextType {
   // State
@@ -50,9 +51,26 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     viewport: { x: 0, y: 0, scale: 1 },
     selectedRectangleId: null,
     currentTool: 'select',
-    loading: false,
+    loading: true, // Start with loading true while fetching from Firestore
     error: null
   });
+
+  // Subscribe to Firestore real-time updates
+  useEffect(() => {
+    const unsubscribe = canvasService.subscribeToShapes((shapes) => {
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: shapes,
+        loading: false
+      }));
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
 
   // Viewport operations
   const setViewport = (viewport: Viewport) => {
@@ -101,10 +119,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   };
 
   // Rectangle operations
-  const addRectangle = (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>) => {
+  const addRectangle = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>) => {
+    // Optimistic update: add to local state immediately
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newRectangle: Rectangle = {
       ...rectangle,
-      id: `rect-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      id: tempId,
       zIndex: 1, // New rectangles go to front
       createdAt: new Date(),
       lastModified: new Date()
@@ -121,9 +141,23 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedRectangleId: newRectangle.id // Auto-select newly created rectangle
       };
     });
+
+    // Sync to Firestore in background
+    try {
+      await canvasService.createRectangle(rectangle);
+    } catch (error) {
+      console.error('Failed to create rectangle in Firestore:', error);
+      // Revert optimistic update on failure
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => r.id !== tempId),
+        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+      }));
+    }
   };
 
-  const updateRectangle = (id: string, updates: Partial<Rectangle>) => {
+  const updateRectangle = async (id: string, updates: Partial<Rectangle>) => {
+    // Optimistic update: update local state immediately
     setCanvasState(prev => {
       // If manual z-index update, use manualSetZIndex (don't apply zIndex in map yet)
       if (updates.zIndex !== undefined) {
@@ -167,14 +201,31 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         rectangles: updatedRectangles
       };
     });
+
+    // Sync to Firestore in background
+    try {
+      await canvasService.updateRectangle(id, updates);
+    } catch (error) {
+      console.error('Failed to update rectangle in Firestore:', error);
+      // The Firestore listener will eventually sync the correct state
+    }
   };
 
-  const deleteRectangle = (id: string) => {
+  const deleteRectangle = async (id: string) => {
+    // Optimistic update: remove from local state immediately
     setCanvasState(prev => ({
       ...prev,
       rectangles: prev.rectangles.filter(rect => rect.id !== id),
       selectedRectangleId: prev.selectedRectangleId === id ? null : prev.selectedRectangleId
     }));
+
+    // Sync to Firestore in background
+    try {
+      await canvasService.deleteRectangle(id);
+    } catch (error) {
+      console.error('Failed to delete rectangle from Firestore:', error);
+      // The Firestore listener will eventually sync the correct state
+    }
   };
 
   const setSelectedRectangle = (id: string | null) => {
@@ -226,7 +277,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     });
   };
 
-  const setZIndex = (id: string, zIndex: number) => {
+  const setZIndex = async (id: string, zIndex: number) => {
+    // Optimistic update: update local state immediately
     setCanvasState(prev => {
       const updatedRectangles = manualSetZIndex(prev.rectangles, id, zIndex);
       
@@ -247,6 +299,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         rectangles: updatedRectangles
       };
     });
+
+    // Sync to Firestore in background
+    try {
+      await canvasService.updateZIndex(id, zIndex);
+    } catch (error) {
+      console.error('Failed to update z-index in Firestore:', error);
+      // The Firestore listener will eventually sync the correct state
+    }
   };
 
   // Tool operations

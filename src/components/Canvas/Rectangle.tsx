@@ -16,25 +16,30 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
   const { updateRectangle } = useCanvas();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [currentPos, setCurrentPos] = useState({ x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height });
+  const [, forceUpdate] = useState({});
   const shapeRef = useRef<Konva.Rect>(null);
-
-  // Update current position when rectangle prop changes (e.g., from context updates)
-  React.useEffect(() => {
-    if (!isDragging && !isResizing) {
-      setCurrentPos({ x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height });
+  const handleRef = useRef<Konva.Circle>(null);
+  
+  // Calculate current position from either the ref (during drag/resize) or props
+  const getCurrentPos = () => {
+    const rect = shapeRef.current;
+    if ((isDragging || isResizing) && rect) {
+      return { x: rect.x(), y: rect.y(), width: rect.width(), height: rect.height() };
     }
-  }, [rectangle.x, rectangle.y, rectangle.width, rectangle.height, isDragging, isResizing]);
+    return { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height };
+  };
+  
+  const currentPos = getCurrentPos();
 
   // Handle drag start
   const handleDragStart = () => {
     setIsDragging(true);
   };
 
-  // Handle drag move - update current position for handle
+  // Handle drag move - position is automatically tracked via getCurrentPos()
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    const node = e.target;
-    setCurrentPos({ x: node.x(), y: node.y(), width: node.width(), height: node.height() });
+    // Force React re-render to update handle position
+    forceUpdate({});
   };
 
   // Handle drag end - update position in context
@@ -49,61 +54,74 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
   };
 
   // Handle resize via bottom-right handle
-  const handleResizeStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+  const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true; // Prevent drag propagation
     setIsResizing(true);
-  };
-
-  const handleResizeMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    e.cancelBubble = true; // Prevent drag propagation
-    if (!isResizing) return;
-
+    
+    // Attach mouse move and mouse up listeners to the stage
     const stage = e.target.getStage();
     const rect = shapeRef.current;
-    if (!rect || !stage) return;
+    if (!stage || !rect) return;
 
-    // Get the current pointer position
-    const pointerPos = stage.getPointerPosition();
-    if (!pointerPos) return;
+    // Store initial state when resize starts
+    const initialPointerPos = stage.getPointerPosition();
+    if (!initialPointerPos) return;
 
-    // Top-right corner resize: anchor is bottom-left
+    const initialWidth = rect.width();
+    const initialHeight = rect.height();
+    const initialY = rect.y();
     const anchorX = rect.x();
     const anchorY = rect.y() + rect.height(); // Bottom edge stays fixed
 
-    // Calculate new dimensions based on pointer position
-    const newWidth = Math.max(MIN_RECT_SIZE, Math.min(MAX_RECT_SIZE, pointerPos.x - anchorX));
-    const newHeight = Math.max(MIN_RECT_SIZE, Math.min(MAX_RECT_SIZE, anchorY - pointerPos.y));
-    
-    // New Y position (top edge moves with pointer)
-    const newY = anchorY - newHeight;
+    const handleMouseMove = () => {
+      const handle = handleRef.current;
+      if (!rect || !stage || !handle) return;
 
-    // Update the rectangle dimensions and position immediately for visual feedback
-    rect.y(newY);
-    rect.width(newWidth);
-    rect.height(newHeight);
+      // Get the current pointer position
+      const pointerPos = stage.getPointerPosition();
+      if (!pointerPos) return;
 
-    // Update current position state for handle tracking
-    setCurrentPos({ x: anchorX, y: newY, width: newWidth, height: newHeight });
+      // Calculate delta from initial click position
+      const deltaX = pointerPos.x - initialPointerPos.x;
+      const deltaY = pointerPos.y - initialPointerPos.y;
 
-    // Force re-render
-    rect.getLayer()?.batchDraw();
-  };
+      // Calculate new dimensions based on deltas
+      const newWidth = Math.max(MIN_RECT_SIZE, Math.min(MAX_RECT_SIZE, initialWidth + deltaX));
+      const newHeight = Math.max(MIN_RECT_SIZE, Math.min(MAX_RECT_SIZE, initialHeight - deltaY));
+      
+      // New Y position (top edge moves when height changes)
+      const newY = anchorY - newHeight;
 
-  const handleResizeEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    e.cancelBubble = true; // Prevent drag propagation
-    setIsResizing(false);
+      // Update the rectangle dimensions and position immediately for visual feedback
+      rect.y(newY);
+      rect.width(newWidth);
+      rect.height(newHeight);
 
-    const rect = shapeRef.current;
-    if (!rect) return;
+      // Force React re-render to update handle position (calculated via getCurrentPos())
+      forceUpdate({});
+      
+      // Force Konva re-render for smooth animation
+      rect.getLayer()?.batchDraw();
+    };
 
-    // Update rectangle in context with final dimensions and position
-    // (Y position changes with top-right resize)
-    updateRectangle(rectangle.id, {
-      y: rect.y(),
-      width: rect.width(),
-      height: rect.height(),
-      lastModifiedBy: rectangle.createdBy,
-    });
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      stage.off('mousemove', handleMouseMove);
+      stage.off('mouseup', handleMouseUp);
+      
+      // Finalize the resize
+      if (rect) {
+        updateRectangle(rectangle.id, {
+          y: rect.y(),
+          width: rect.width(),
+          height: rect.height(),
+          lastModifiedBy: rectangle.createdBy,
+        });
+      }
+    };
+
+    stage.on('mousemove', handleMouseMove);
+    stage.on('mouseup', handleMouseUp);
   };
 
   return (
@@ -137,23 +155,14 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
       {isSelected && (
         <>
           <Circle
+            ref={handleRef}
             x={currentPos.x + currentPos.width}
             y={currentPos.y}
             radius={10} // Larger radius for easier grabbing
             fill="#1565C0" // Blue fill for better visibility
             stroke="white"
             strokeWidth={2}
-            draggable
-            dragBoundFunc={(pos) => {
-              // Constrain handle to stay within bounds
-              return {
-                x: Math.max(currentPos.x + MIN_RECT_SIZE, Math.min(currentPos.x + MAX_RECT_SIZE, pos.x)),
-                y: Math.max(currentPos.y - MAX_RECT_SIZE, Math.min(currentPos.y + currentPos.height - MIN_RECT_SIZE, pos.y))
-              };
-            }}
-            onDragStart={handleResizeStart}
-            onDragMove={handleResizeMove}
-            onDragEnd={handleResizeEnd}
+            onMouseDown={handleResizeStart}
             onMouseEnter={() => {
               document.body.style.cursor = 'nesw-resize'; // Diagonal cursor for top-right
             }}
@@ -161,6 +170,8 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
               document.body.style.cursor = 'default';
             }}
             perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+            hitStrokeWidth={20}
           />
         </>
       )}
