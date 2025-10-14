@@ -93,7 +93,7 @@ export const Canvas: React.FC = () => {
   // Handle pan (drag empty space) - manual implementation
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     // Check if clicked on background (deselect all)
-    const clickedOnEmpty = e.target === e.target.getStage() || e.target.getClassName() === 'Rect' && e.target.listening() === false;
+    const clickedOnEmpty = e.target === e.target.getStage() || (e.target.getClassName() === 'Rect' && e.target.listening() === false);
     if (clickedOnEmpty) {
       setSelectedRectangle(null);
       

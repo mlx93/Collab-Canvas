@@ -16,7 +16,7 @@ export const PropertiesPanel: React.FC = () => {
     if (selectedRectangle) {
       setZIndexInput(selectedRectangle.zIndex.toString());
     }
-  }, [selectedRectangle?.id, selectedRectangle?.zIndex]);
+  }, [selectedRectangle]);
 
   // Get color name for display
   const getColorName = (hex: string): string => {
@@ -73,13 +73,15 @@ export const PropertiesPanel: React.FC = () => {
           return; // Allow backspace in input fields
         }
         e.preventDefault();
-        handleDelete();
+        // Delete inline to avoid dependency issues
+        deleteRectangle(selectedRectangle.id);
+        setSelectedRectangle(null);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRectangleId, selectedRectangle?.id]);
+  }, [selectedRectangle, deleteRectangle, setSelectedRectangle]);
 
   // If nothing selected, show empty state
   if (!selectedRectangle) {

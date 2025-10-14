@@ -1,6 +1,6 @@
 // Rectangle component for Konva canvas
 import React, { useRef, useState } from 'react';
-import { Rect, Circle, Group, Text } from 'react-konva';
+import { Rect, Circle, Group } from 'react-konva';
 import Konva from 'konva';
 import { Rectangle as RectangleType } from '../../types/canvas.types';
 import { MIN_RECT_SIZE, MAX_RECT_SIZE } from '../../utils/constants';
@@ -69,9 +69,7 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
 
     const initialWidth = rect.width();
     const initialHeight = rect.height();
-    const initialY = rect.y();
-    const anchorX = rect.x();
-    const anchorY = rect.y() + rect.height(); // Bottom edge stays fixed
+    const anchorY = rect.y() + rect.height(); // Bottom edge stays fixed (for top-right handle)
 
     const handleMouseMove = () => {
       const handle = handleRef.current;

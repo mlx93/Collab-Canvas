@@ -39,13 +39,18 @@ export const LeftToolbar: React.FC = () => {
     let attempt = 0;
     let foundNonOverlappingPosition = false;
 
-    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
-      // Check if current position overlaps with any existing rectangle
-      const hasOverlap = rectangles.some(rect => {
-        const distanceX = Math.abs(rect.x - targetX);
-        const distanceY = Math.abs(rect.y - targetY);
+    // Helper to check overlap at a given position
+    const checkOverlap = (x: number, y: number) => {
+      return rectangles.some(rect => {
+        const distanceX = Math.abs(rect.x - x);
+        const distanceY = Math.abs(rect.y - y);
         return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
       });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      // Check if current position overlaps with any existing rectangle
+      const hasOverlap = checkOverlap(targetX, targetY);
 
       if (!hasOverlap) {
         // Found a non-overlapping position
