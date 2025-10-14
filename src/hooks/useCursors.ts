@@ -51,6 +51,7 @@ export function useCursors(): UseCursorsReturn {
         removeCursor(user.userId);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId, user?.email]);
 
   // Subscribe to all cursors
@@ -69,6 +70,7 @@ export function useCursors(): UseCursorsReturn {
     });
 
     return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 
   // Callback for updating own cursor position
