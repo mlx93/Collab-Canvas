@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { PREDEFINED_COLORS } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useAuth } from '../../hooks/useAuth';
 
 export const PropertiesPanel: React.FC = () => {
   const { rectangles, selectedRectangleId, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex } = useCanvas();
+  const { user } = useAuth();
   const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
   const [zIndexInput, setZIndexInput] = useState<string>(''); // Local state for z-index input
 
@@ -29,7 +31,7 @@ export const PropertiesPanel: React.FC = () => {
     if (!selectedRectangle) return;
     updateRectangle(selectedRectangle.id, {
       color: newColor,
-      lastModifiedBy: selectedRectangle.createdBy, // Will be updated with actual user
+      lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
     setIsColorDropdownOpen(false);
   };
