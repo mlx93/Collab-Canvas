@@ -206,7 +206,7 @@ export const Canvas: React.FC = () => {
   }, [viewport, setViewport]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className="absolute inset-0">
       {/* FPS Counter (dev mode) */}
       <FPSCounter show={process.env.NODE_ENV === 'development'} />
 
