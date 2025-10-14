@@ -1,5 +1,5 @@
 // Unit tests for z-index service
-import { autoUpdateZIndex, manualSetZIndex, recalculateAllZIndices, validateZIndices } from '../zIndex.service';
+import { autoUpdateZIndex, manualSetZIndex, validateZIndices } from '../zIndex.service';
 import { Rectangle } from '../../types/canvas.types';
 
 // Helper to create mock rectangle
@@ -19,7 +19,7 @@ const createMockRect = (id: string, zIndex: number): Rectangle => ({
 
 describe('zIndex.service', () => {
   describe('autoUpdateZIndex', () => {
-    it('should move shape to front (z-index 1)', () => {
+    it('should move shape to front (highest z-index)', () => {
       const shapes: Rectangle[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
@@ -29,10 +29,11 @@ describe('zIndex.service', () => {
       const result = autoUpdateZIndex(shapes, 'c');
       const shapeC = result.find(s => s.id === 'c');
 
-      expect(shapeC?.zIndex).toBe(1);
+      // With new convention: higher = front, so c should be maxZIndex + 1 = 4
+      expect(shapeC?.zIndex).toBe(4);
     });
 
-    it('should push other shapes back by 1 when moving to front', () => {
+    it('should keep other shapes unchanged when moving to front', () => {
       const shapes: Rectangle[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
@@ -43,8 +44,9 @@ describe('zIndex.service', () => {
       const shapeA = result.find(s => s.id === 'a');
       const shapeB = result.find(s => s.id === 'b');
 
-      expect(shapeA?.zIndex).toBe(2);
-      expect(shapeB?.zIndex).toBe(3);
+      // Other shapes remain unchanged (no push-down needed!)
+      expect(shapeA?.zIndex).toBe(1);
+      expect(shapeB?.zIndex).toBe(2);
     });
 
     it('should not create duplicate z-indices', () => {
