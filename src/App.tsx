@@ -1,39 +1,42 @@
 import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
+import { CanvasProvider } from './context/CanvasContext';
 import { useAuth } from './hooks/useAuth';
+import { useCanvas } from './hooks/useCanvas';
+import { useFPS } from './hooks/useFPS';
 import { AuthLayout } from './components/Auth/AuthLayout';
 import { LoginForm } from './components/Auth/LoginForm';
 import { SignupForm } from './components/Auth/SignupForm';
+import { MainLayout } from './components/Layout/MainLayout';
+import { Header } from './components/Layout/Header';
+import { Canvas } from './components/Canvas/Canvas';
+import { LeftToolbar } from './components/Canvas/LeftToolbar';
+import { PropertiesPanel } from './components/Canvas/PropertiesPanel';
 import './App.css';
+
+// Inner component that has access to canvas context
+const CanvasLayout: React.FC = () => {
+  const fps = useFPS({ sampleSize: 60 });
+  const { selectedRectangleId } = useCanvas();
+
+  return (
+    <MainLayout
+      header={<Header fps={fps} showFPS={process.env.NODE_ENV === 'development'} />}
+      toolbar={<LeftToolbar />}
+      canvas={<Canvas />}
+      properties={<PropertiesPanel />}
+      hasSelection={!!selectedRectangleId}
+    />
+  );
+};
 
 // Protected route component that shows canvas when authenticated
 const ProtectedCanvas: React.FC = () => {
-  const { user, signOut } = useAuth();
-
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Welcome to CollabCanvas</h1>
-            <button
-              onClick={signOut}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition"
-            >
-              Sign Out
-            </button>
-          </div>
-          <div className="text-gray-600 space-y-2">
-            <p>✅ Authentication working!</p>
-            <p>👤 Logged in as: <span className="font-semibold">{user?.email}</span></p>
-            <p className="text-sm text-gray-500 mt-4">
-              Canvas UI will be implemented in PR #3
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+    <CanvasProvider>
+      <CanvasLayout />
+    </CanvasProvider>
   );
 };
 

@@ -1,8 +1,8 @@
 // Firebase initialization with hybrid database setup
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getDatabase } from 'firebase/database';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import { getDatabase, connectDatabaseEmulator } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -22,6 +22,26 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app); // Firestore for persistent data
 export const rtdb = getDatabase(app); // Realtime Database for ephemeral data
+
+// Connect to emulators in development mode
+if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATORS === 'true') {
+  console.log('🔧 Connecting to Firebase Emulators...');
+  
+  // Connect Auth Emulator
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  
+  // Connect Firestore Emulator
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  
+  // Connect Realtime Database Emulator
+  connectDatabaseEmulator(rtdb, '127.0.0.1', 9000);
+  
+  console.log('✅ Connected to Firebase Emulators');
+  console.log('   - Auth: http://127.0.0.1:9099');
+  console.log('   - Firestore: http://127.0.0.1:8080');
+  console.log('   - RTDB: http://127.0.0.1:9000');
+  console.log('   - Emulator UI: http://127.0.0.1:4000');
+}
 
 export default app;
 
