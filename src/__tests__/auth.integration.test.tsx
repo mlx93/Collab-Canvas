@@ -26,6 +26,18 @@ jest.mock('react-hot-toast', () => ({
   Toaster: () => null,
 }));
 
+// Mock Konva
+jest.mock('react-konva', () => ({
+  Stage: ({ children }: any) => <div data-testid="konva-stage">{children}</div>,
+  Layer: ({ children }: any) => <div data-testid="konva-layer">{children}</div>,
+  Rect: () => <div data-testid="konva-rect" />
+}));
+
+// Mock useFPS hook
+jest.mock('../hooks/useFPS', () => ({
+  useFPS: () => 60
+}));
+
 describe('Authentication Integration Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -174,9 +186,11 @@ describe('Authentication Integration Tests', () => {
 
       render(<App />);
       
-      expect(screen.getByText('Welcome to CollabCanvas')).toBeInTheDocument();
-      expect(screen.getByText(/logged in as:/i)).toBeInTheDocument();
-      expect(screen.getByText('test@example.com')).toBeInTheDocument();
+      // In PR #3, authenticated users see the canvas UI with header
+      expect(screen.getByText('CollabCanvas')).toBeInTheDocument();
+      expect(screen.getByText('Sign Out')).toBeInTheDocument();
+      // Canvas components are rendered
+      expect(screen.getByTestId('konva-stage')).toBeInTheDocument();
     });
 
     it('should call signOut when sign out button is clicked', () => {

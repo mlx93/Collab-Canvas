@@ -1,7 +1,13 @@
-// useCanvas hook - Placeholder
-// Will be implemented in PR #3
-export const useCanvas = () => {
-  // Canvas hook implementation
-  return {};
-};
+// useCanvas hook - Consumes CanvasContext
+import { useContext } from 'react';
+import { CanvasContext } from '../context/CanvasContext';
 
+export const useCanvas = () => {
+  const context = useContext(CanvasContext);
+
+  if (context === undefined) {
+    throw new Error('useCanvas must be used within a CanvasProvider');
+  }
+
+  return context;
+};

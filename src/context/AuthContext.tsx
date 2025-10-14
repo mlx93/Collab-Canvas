@@ -30,7 +30,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Subscribe to Firebase auth state changes
   useEffect(() => {
-    const unsubscribe = authService.onAuthStateChange(async (firebaseUser: FirebaseUser | null) => {
+    const unsubscribe = authService.onAuthStateChange((firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
         // User is signed in, create User object
         const user: User = {
@@ -45,7 +45,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
 
   const signUp = async (email: string, password: string): Promise<void> => {
