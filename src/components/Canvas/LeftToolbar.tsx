@@ -69,8 +69,8 @@ export const LeftToolbar: React.FC = () => {
       width: 100,
       height: 100,
       color: selectedColor,
-      createdBy: user.userId,
-      lastModifiedBy: user.userId,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
     });
   };
 

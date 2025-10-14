@@ -5,6 +5,7 @@ import Konva from 'konva';
 import { Rectangle as RectangleType } from '../../types/canvas.types';
 import { MIN_RECT_SIZE, MAX_RECT_SIZE } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
+import { useAuth } from '../../hooks/useAuth';
 
 interface RectangleProps {
   rectangle: RectangleType;
@@ -14,6 +15,7 @@ interface RectangleProps {
 
 export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onSelect }) => {
   const { updateRectangle } = useCanvas();
+  const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [, forceUpdate] = useState({});
@@ -49,7 +51,7 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
     updateRectangle(rectangle.id, {
       x: node.x(),
       y: node.y(),
-      lastModifiedBy: rectangle.createdBy, // Will be updated with actual user in multiplayer
+      lastModifiedBy: user?.email || rectangle.createdBy,
     });
   };
 
@@ -113,7 +115,7 @@ export const Rectangle: React.FC<RectangleProps> = ({ rectangle, isSelected, onS
           y: rect.y(),
           width: rect.width(),
           height: rect.height(),
-          lastModifiedBy: rectangle.createdBy,
+          lastModifiedBy: user?.email || rectangle.createdBy,
         });
       }
     };
