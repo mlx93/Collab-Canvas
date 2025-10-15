@@ -1,6 +1,7 @@
 // SignupForm component with validation
 import React, { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
+import { ProfileEditModal } from '../Profile/ProfileEditModal';
 
 interface SignupFormProps {
   onSwitchToLogin: () => void;
@@ -75,10 +76,19 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Account</h2>
-      </div>
+    <>
+      {showProfileModal && (
+        <ProfileEditModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          required={true}
+        />
+      )}
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Create Account</h2>
+        </div>
 
       {(validationError || error) && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md text-sm">
@@ -220,6 +230,7 @@ export const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin }) => {
         </button>
       </div>
     </form>
+    </>
   );
 };
 
