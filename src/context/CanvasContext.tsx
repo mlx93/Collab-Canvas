@@ -62,11 +62,42 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // Subscribe to Firestore real-time updates
   useEffect(() => {
     const unsubscribe = canvasService.subscribeToShapes((shapes) => {
-      setCanvasState(prev => ({
-        ...prev,
-        rectangles: shapes,
-        loading: false
-      }));
+      setCanvasState(prev => {
+        let newSelectedId = prev.selectedRectangleId;
+        
+        // If we have a temp ID selected and a new real shape came in, 
+        // find if the new shape matches and update selection to the real ID
+        if (newSelectedId && newSelectedId.startsWith('temp-')) {
+          const tempRect = prev.rectangles.find(r => r.id === newSelectedId);
+          if (tempRect) {
+            // Find matching shape in new shapes (same position, size, color, and recent timestamp)
+            const matchingShape = shapes.find(s => {
+              // Convert Firestore Timestamp to Date if needed
+              const createdAtTime = s.createdAt instanceof Date 
+                ? s.createdAt.getTime() 
+                : (s.createdAt as any).toDate().getTime();
+              
+              return Math.abs(s.x - tempRect.x) < 1 &&
+                Math.abs(s.y - tempRect.y) < 1 &&
+                Math.abs(s.width - tempRect.width) < 1 &&
+                Math.abs(s.height - tempRect.height) < 1 &&
+                s.color === tempRect.color &&
+                Math.abs(createdAtTime - Date.now()) < 5000; // Created within last 5 seconds
+            });
+            
+            if (matchingShape) {
+              newSelectedId = matchingShape.id;
+            }
+          }
+        }
+        
+        return {
+          ...prev,
+          rectangles: shapes,
+          selectedRectangleId: newSelectedId,
+          loading: false
+        };
+      });
     });
 
     return () => {

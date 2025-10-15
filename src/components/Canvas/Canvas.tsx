@@ -139,12 +139,6 @@ export const Canvas: React.FC = () => {
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
-    // Update cursor position for multiplayer (convert screen coords to canvas coords)
-    const canvasX = (pos.x - viewport.x) / viewport.scale;
-    const canvasY = (pos.y - viewport.y) / viewport.scale;
-    // console.log('[Canvas] Updating cursor position:', canvasX, canvasY);
-    updateOwnCursor(canvasX, canvasY);
-
     // Handle panning if dragging
     if (isDragging && lastPosRef.current) {
       // Calculate the delta movement in screen space
@@ -156,7 +150,18 @@ export const Canvas: React.FC = () => {
 
       // Update last position for next delta calculation
       lastPosRef.current = { x: pos.x, y: pos.y };
+      
+      // DON'T update cursor position while panning - cursor is stationary on the canvas
+      // during panning, only the viewport moves
+      return;
     }
+
+    // Update cursor position for multiplayer ONLY when not panning
+    // (convert screen coords to canvas coords)
+    const canvasX = (pos.x - viewport.x) / viewport.scale;
+    const canvasY = (pos.y - viewport.y) / viewport.scale;
+    // console.log('[Canvas] Updating cursor position:', canvasX, canvasY);
+    updateOwnCursor(canvasX, canvasY);
   };
 
   const handleMouseUp = () => {
