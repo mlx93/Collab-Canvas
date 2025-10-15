@@ -12,6 +12,7 @@ interface AuthContextType {
   error: string | null;
   signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<{ needsProfileCompletion: boolean }>;
   signOut: () => Promise<void>;
   updateProfile: (firstName: string, lastName: string) => Promise<void>;
   clearError: () => void;
@@ -90,6 +91,32 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signInWithGoogle = async (): Promise<{ needsProfileCompletion: boolean }> => {
+    try {
+      setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      const { user, needsProfileCompletion } = await authService.signInWithGoogle();
+      setAuthState({ user, loading: false, error: null });
+      
+      if (needsProfileCompletion) {
+        toast.success('Signed in with Google! Please complete your profile.');
+      } else {
+        toast.success('Signed in with Google successfully!');
+      }
+      
+      return { needsProfileCompletion };
+    } catch (error: any) {
+      // Don't show error for cancelled popup
+      const errorMessage = error.message || 'Failed to sign in with Google';
+      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
+      
+      if (errorMessage !== 'Sign in cancelled') {
+        toast.error(errorMessage);
+      }
+      
+      throw error;
+    }
+  };
+
   const signOut = async (): Promise<void> => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }));
@@ -145,6 +172,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error: authState.error,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     updateProfile,
     clearError

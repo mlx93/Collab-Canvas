@@ -4,7 +4,9 @@ import {
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut,
   User as FirebaseUser,
-  onAuthStateChanged
+  onAuthStateChanged,
+  GoogleAuthProvider,
+  signInWithPopup
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
@@ -210,6 +212,76 @@ export const authService = {
       return user;
     } catch (error: any) {
       console.error('Sign in error:', error);
+      throw new Error(getAuthErrorMessage(error));
+    }
+  },
+
+  /**
+   * Sign in with Google OAuth
+   * Returns user data and a flag indicating if names are missing
+   */
+  signInWithGoogle: async (): Promise<{ user: User; needsProfileCompletion: boolean }> => {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+
+      const result = await signInWithPopup(auth, provider);
+      const firebaseUser = result.user;
+
+      // Extract first/last name from Google profile if available
+      const displayName = firebaseUser.displayName || '';
+      const nameParts = displayName.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Check if user document exists
+      const userDocRef = doc(db, 'users', firebaseUser.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      let user: User;
+      let needsProfileCompletion = false;
+
+      if (userDoc.exists()) {
+        // Existing user - get their data
+        const userData = userDoc.data();
+        user = {
+          userId: firebaseUser.uid,
+          email: firebaseUser.email!,
+          firstName: userData.firstName || firstName || 'User',
+          lastName: userData.lastName || lastName || '',
+          createdAt: new Date(userData.createdAt)
+        };
+
+        // Check if names are missing
+        needsProfileCompletion = !userData.firstName || !userData.lastName;
+      } else {
+        // New user - create document
+        user = {
+          userId: firebaseUser.uid,
+          email: firebaseUser.email!,
+          firstName: firstName || '',
+          lastName: lastName || '',
+          createdAt: new Date()
+        };
+
+        await setDoc(userDocRef, {
+          ...user,
+          createdAt: user.createdAt.toISOString()
+        });
+
+        // Check if names are missing
+        needsProfileCompletion = !firstName || !lastName;
+      }
+
+      return { user, needsProfileCompletion };
+    } catch (error: any) {
+      // Handle popup closed by user
+      if (error.code === 'auth/popup-closed-by-user' || error.code === 'auth/cancelled-popup-request') {
+        throw new Error('Sign in cancelled');
+      }
+      console.error('Google sign in error:', error);
       throw new Error(getAuthErrorMessage(error));
     }
   },
