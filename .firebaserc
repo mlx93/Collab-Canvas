@@ -1,6 +1,8 @@
 {
   "projects": {
-    "default": "collab-canvas-mlx93"
+    "default": "collab-canvas-mlx93",
+    "production": "collab-canvas-mlx93",
+    "staging": "collab-canvas-mlx93-staging"
   }
 }
 

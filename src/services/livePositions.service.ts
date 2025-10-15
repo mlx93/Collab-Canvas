@@ -120,3 +120,31 @@ export function subscribeToLivePositions(
   );
 }
 
+/**
+ * Subscribe to live position for a SPECIFIC shape only
+ * This is more efficient than subscribing to all shapes when you only need one.
+ * Use this when you know a specific shape is being edited by another user.
+ * 
+ * @param shapeId - The specific shape ID to monitor
+ * @param callback - Called with LivePosition or null when position updates/clears
+ * @returns Unsubscribe function
+ */
+export function subscribeToShapeLivePosition(
+  shapeId: string,
+  callback: (livePosition: LivePosition | null) => void
+): Unsubscribe {
+  const shapeLivePositionRef = getLivePositionRef(shapeId);
+
+  return onValue(
+    shapeLivePositionRef,
+    (snapshot) => {
+      const data = snapshot.val();
+      callback(data || null);
+    },
+    (error) => {
+      console.error(`Error subscribing to live position for shape ${shapeId}:`, error);
+      callback(null);
+    }
+  );
+}
+

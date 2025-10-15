@@ -16,7 +16,7 @@ import {
 import {
   setLivePosition,
   clearLivePosition,
-  subscribeToLivePositions,
+  subscribeToShapeLivePosition,
   LivePosition
 } from '../../services/livePositions.service';
 import { throttle } from '../../utils/throttle';
@@ -71,18 +71,26 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     return unsubscribe;
   }, [rectangle.id, user?.userId]);
   
-  // Subscribe to live positions for ALL shapes (to detect if THIS shape is being edited by others)
+  // Subscribe to live positions ONLY when another user is actively editing this shape
+  // This dramatically reduces RTDB subscriptions (from 100+ to ~1-2 at a time)
   useEffect(() => {
-    console.log('[Rectangle] Subscribing to live positions for shape:', rectangle.id);
+    // Only subscribe if another user is actively editing this shape
+    if (!activeEdit) {
+      // No one is editing - clear any stale live position state
+      setLivePositionState(null);
+      return;
+    }
+    
+    console.log('[Rectangle] Subscribing to live position for shape being edited by:', activeEdit.userId);
     let clearTimer: NodeJS.Timeout | null = null;
     
-    const unsubscribe = subscribeToLivePositions((livePositions) => {
-      const positionForThisShape = livePositions[rectangle.id];
-      console.log('[Rectangle] Live position update for', rectangle.id, ':', positionForThisShape ? 'YES' : 'NO');
+    // Subscribe to just THIS shape's live position
+    const unsubscribe = subscribeToShapeLivePosition(rectangle.id, (livePositionData) => {
+      console.log('[Rectangle] Live position update for', rectangle.id, ':', livePositionData ? 'YES' : 'NO');
       
       // Only use live position if it's from ANOTHER user (don't override own optimistic updates)
-      if (positionForThisShape && positionForThisShape.userId !== user?.userId) {
-        console.log('[Rectangle] Using live position from another user:', positionForThisShape.userId);
+      if (livePositionData && livePositionData.userId !== user?.userId) {
+        console.log('[Rectangle] Using live position from another user:', livePositionData.userId);
         
         // Clear any pending clear timer
         if (clearTimer) {
@@ -90,9 +98,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
           clearTimer = null;
         }
         
-        setLivePositionState(positionForThisShape);
+        setLivePositionState(livePositionData);
         livePositionTimestampRef.current = Date.now();
-      } else if (!positionForThisShape && livePosition) {
+      } else if (!livePositionData && livePosition) {
         // Live position was removed (user released shape)
         // Keep it for 1 second to allow Firestore update to arrive
         console.log('[Rectangle] Live position cleared, starting grace period');
@@ -109,7 +117,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       if (clearTimer) clearTimeout(clearTimer);
       unsubscribe();
     };
-  }, [rectangle.id, user?.userId, livePosition]);
+  }, [rectangle.id, user?.userId, livePosition, activeEdit]);
   
   // Calculate current position from either:
   // 1. Live position from another user (real-time streaming)
