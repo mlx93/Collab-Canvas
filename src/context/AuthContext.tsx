@@ -2,6 +2,7 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
 import { authService } from '../services/auth.service';
+import { setUserOffline } from '../services/presence.service';
 import { User, AuthState } from '../types/user.types';
 import toast from 'react-hot-toast';
 
@@ -92,6 +93,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async (): Promise<void> => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }));
+      
+      // Clean up presence BEFORE signing out to ensure it completes
+      if (authState.user?.userId) {
+        console.log('[AuthContext] Cleaning up presence before sign-out:', authState.user.userId);
+        await setUserOffline(authState.user.userId);
+      }
+      
       await authService.signOut();
       setAuthState({ user: null, loading: false, error: null });
       toast.success('Signed out successfully!');

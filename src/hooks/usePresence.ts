@@ -24,6 +24,7 @@ export function usePresence(): UsePresenceReturn {
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const wasConnectedRef = useRef<boolean | null>(null); // null = initial state, not yet connected
   const isFirstConnectionRef = useRef(true);
+  const previousUserIdRef = useRef<string | null>(null);
 
   console.log('[usePresence] Hook initialized, user:', user?.email, 'online users count:', onlineUsers.length);
 
@@ -31,8 +32,19 @@ export function usePresence(): UsePresenceReturn {
   useEffect(() => {
     if (!user?.userId || !user?.email) {
       console.log('[usePresence] User not ready:', { userId: user?.userId, email: user?.email });
+      
+      // If we had a user before but now we don't, they signed out - clean up presence
+      if (previousUserIdRef.current) {
+        console.log('[usePresence] User signed out, cleaning up presence for:', previousUserIdRef.current);
+        setUserOffline(previousUserIdRef.current);
+        previousUserIdRef.current = null;
+      }
+      
       return;
     }
+
+    // Store current user ID for sign-out detection
+    previousUserIdRef.current = user.userId;
 
     // Use firstName/lastName if available, otherwise use 'User' as fallback
     const firstName = user.firstName || 'User';
@@ -60,7 +72,7 @@ export function usePresence(): UsePresenceReturn {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      console.log('[usePresence] Cleaning up presence for:', user.userId);
+      console.log('[usePresence] Cleanup function called for:', user.userId);
 
       // Clear heartbeat
       if (heartbeatIntervalRef.current) {
@@ -68,12 +80,11 @@ export function usePresence(): UsePresenceReturn {
         heartbeatIntervalRef.current = null;
       }
 
-      // Only set user offline on actual unmount, not during React Strict Mode double-mount
-      // The onDisconnect handler in Firebase will auto-cleanup if connection is lost
-      // We rely on that + the beforeunload handler for actual cleanup
-
       // Remove event listener
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      
+      // Don't call setUserOffline here - it will be handled when user becomes null
+      // This prevents React Strict Mode from setting users offline during double-mount
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
