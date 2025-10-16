@@ -9,7 +9,6 @@ import { Rectangle } from './Rectangle';
 import Circle from './Circle';
 import Triangle from './Triangle';
 import { CursorOverlay } from '../Collaboration/CursorOverlay';
-import { subscribeToAllActiveEdits, ActiveEdit } from '../../services/activeEdits.service';
 import { subscribeToLivePositions, LivePosition } from '../../services/livePositions.service';
 import {
   CANVAS_WIDTH,
