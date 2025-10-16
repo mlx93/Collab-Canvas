@@ -114,7 +114,7 @@ export const Text: React.FC<TextProps> = ({
 
   // Handle active edit subscription
   useEffect(() => {
-    if (!user?.email || renderOnlyIndicator) return;
+    if (!user?.email) return;
 
     const unsubscribe = subscribeToActiveEdit(text.id, (edit: ActiveEdit | null) => {
       if (edit && edit.userId !== user.userId) {
@@ -129,11 +129,11 @@ export const Text: React.FC<TextProps> = ({
 
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text.id, user?.userId, renderOnlyIndicator]);
+  }, [text.id, user?.userId]);
 
   // Handle live position subscription
   useEffect(() => {
-    if (!activeEdit || renderOnlyIndicator) {
+    if (!activeEdit) {
       setLivePositionState(null);
       return;
     }
@@ -150,7 +150,7 @@ export const Text: React.FC<TextProps> = ({
       unsubscribe();
       setLivePositionState(null);
     };
-  }, [text.id, user?.userId, activeEdit, renderOnlyIndicator]);
+  }, [text.id, user?.userId, activeEdit]);
 
   const handleDragStart = () => {
     if (renderOnlyIndicator) return;
