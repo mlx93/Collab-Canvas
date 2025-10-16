@@ -43,10 +43,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [resizeDimensions, setResizeDimensions] = useState<{ y: number; width: number; height: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
-  const livePositionTimestampRef = useRef<number>(0);
   const shapeRef = useRef<Konva.Rect>(null);
   const handleRef = useRef<Konva.Circle>(null);
   
@@ -88,78 +88,39 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     const unsubscribe = subscribeToShapeLivePosition(rectangle.id, (livePositionData) => {
       console.log('[Rectangle] Live position update for', rectangle.id, ':', livePositionData ? 'YES' : 'NO');
       
-      // Only use live position if it's from ANOTHER user (don't override own optimistic updates)
       if (livePositionData && livePositionData.userId !== user?.userId) {
         console.log('[Rectangle] Using live position from another user:', livePositionData.userId);
-        
-        // Clear any pending clear timer
         if (clearTimer) {
           clearTimeout(clearTimer);
           clearTimer = null;
         }
-        
         setLivePositionState(livePositionData);
-        livePositionTimestampRef.current = Date.now();
-      } else if (!livePositionData && livePosition) {
-        // Live position was removed (user released shape)
-        // Keep it for 1 second to allow Firestore update to arrive
-        console.log('[Rectangle] Live position cleared, starting grace period');
-        livePositionTimestampRef.current = Date.now();
-        
-        clearTimer = setTimeout(() => {
-          console.log('[Rectangle] Grace period expired, clearing live position state');
-          setLivePositionState(null);
-        }, 1000);
+      } else if (livePositionData && livePositionData.userId === user?.userId) {
+        // If it's our own live position, clear it after a grace period
+        if (!clearTimer) {
+          clearTimer = setTimeout(() => {
+            setLivePositionState(null);
+            clearTimer = null;
+          }, 1000);
+        }
+      } else {
+        // Live position cleared by other user
+        setLivePositionState(null);
       }
     });
     
     return () => {
-      if (clearTimer) clearTimeout(clearTimer);
       unsubscribe();
+      setLivePositionState(null);
     };
-  }, [rectangle.id, user?.userId, livePosition, activeEdit]);
+  }, [rectangle.id, user?.userId, activeEdit]);
   
-  // Calculate current position from either:
-  // 1. Live position from another user (real-time streaming)
-  // 2. The ref (during own drag/resize - optimistic update)
-  // 3. Props (default state) - but ignore if live position was active within last 500ms (anti-flicker)
-  const getCurrentPos = () => {
-    // If another user is editing this shape, use their live position
-    if (livePosition) {
-      return {
-        x: livePosition.x,
-        y: livePosition.y,
-        width: livePosition.width,
-        height: livePosition.height
-      };
-    }
-    
-    // If we're editing this shape ourselves, use the ref for optimistic updates
-    const rect = shapeRef.current;
-    if ((isDragging || isResizing) && rect) {
-      return { x: rect.x(), y: rect.y(), width: rect.width(), height: rect.height() };
-    }
-    
-    // Default: use rectangle props
-    // BUT if live position was recently active (within 1000ms), keep using last known position to prevent flicker
-    const timeSinceLastLivePosition = Date.now() - livePositionTimestampRef.current;
-    if (timeSinceLastLivePosition > 0 && timeSinceLastLivePosition < 1000) {
-      // Use the ref if available (to avoid jumping back to old position during the grace period)
-      if (rect) {
-        return { x: rect.x(), y: rect.y(), width: rect.width(), height: rect.height() };
-      }
-    }
-    
-    // Grace period expired or never set - use props (normal Firestore state)
-    // Clear the timestamp so we don't keep using stale ref data
-    if (timeSinceLastLivePosition >= 1000 && livePositionTimestampRef.current > 0) {
-      livePositionTimestampRef.current = 0;
-    }
-    
-    return { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height };
-  };
-  
-  const currentPos = getCurrentPos();
+  // Use live position if available, or resize dimensions if actively resizing
+  const currentPos = livePosition && livePosition.userId !== user?.userId
+    ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
+    : resizeDimensions && isResizing
+    ? { x: rectangle.x, y: resizeDimensions.y, width: resizeDimensions.width, height: resizeDimensions.height }
+    : { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height };
 
   // Handle drag start
   const handleDragStart = () => {
@@ -179,8 +140,16 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     const stage = node.getStage();
+    const x = node.x();
+    const y = node.y();
     
-    console.log('[Rectangle] handleDragMove called for', rectangle.id, 'at', node.x(), node.y());
+    console.log('[Rectangle] handleDragMove called for', rectangle.id, 'at', x, y);
+    
+    // Update resize handle position during drag (top-right corner)
+    if (handleRef.current) {
+      handleRef.current.x(x + rectangle.width);
+      handleRef.current.y(y); // Keep at top edge, not bottom
+    }
     
     // Update cursor to actual mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
@@ -198,8 +167,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       throttledLivePositionUpdate.current(
         rectangle.id,
         user.userId,
-        node.x(),
-        node.y(),
+        x,
+        y,
         rectangle.width,
         rectangle.height
       );
@@ -211,19 +180,18 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     forceUpdate({});
   };
 
-  // Handle drag end - update position in context and clear live position
-  const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+  // Handle drag end - update position in context
+  const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
     const node = e.target;
-    updateRectangle(rectangle.id, {
+    await updateRectangle(rectangle.id, {
       x: node.x(),
       y: node.y(),
       lastModifiedBy: user?.email || rectangle.createdBy,
     });
     
-    // Clear active edit state and live position
+    // Clear active edit state after Firestore update completes
     clearActiveEdit(rectangle.id);
-    clearLivePosition(rectangle.id);
   };
 
   // Handle resize via bottom-right handle
@@ -269,10 +237,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       // New Y position (top edge moves when height changes)
       const newY = anchorY - newHeight;
 
-      // Update the rectangle dimensions and position immediately for visual feedback
-      rect.y(newY);
-      rect.width(newWidth);
-      rect.height(newHeight);
+      // Update resize dimensions for visual feedback
+      setResizeDimensions({ y: newY, width: newWidth, height: newHeight });
+
+      // Update handle position
+      handle.x(rect.x() + newWidth);
+      handle.y(newY);
 
       // Stream live position to RTDB (throttled to 16ms / 60 FPS)
       if (user) {
@@ -286,31 +256,37 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         );
       }
 
-      // Force React re-render to update handle position (calculated via getCurrentPos())
+      // Force React re-render
       forceUpdate({});
-      
-      // Force Konva re-render for smooth animation
-      rect.getLayer()?.batchDraw();
     };
 
-    const handleMouseUp = () => {
-      setIsResizing(false);
+    const handleMouseUp = async () => {
       stage.off('mousemove', handleMouseMove);
       stage.off('mouseup', handleMouseUp);
       
-      // Finalize the resize
-      if (rect) {
-        updateRectangle(rectangle.id, {
-          y: rect.y(),
-          width: rect.width(),
-          height: rect.height(),
-          lastModifiedBy: user?.email || rectangle.createdBy,
-        });
-      }
+      if (!rect) return;
       
-      // Clear active edit state and live position
+      const handle = handleRef.current;
+      if (!handle) return;
+      
+      const finalY = handle.y();
+      const finalWidth = handle.x() - rect.x();
+      const finalHeight = anchorY - finalY;
+      
+      // Clear resize dimensions
+      setResizeDimensions(null);
+      
+      // Finalize the resize and wait for Firestore to complete
+      await updateRectangle(rectangle.id, {
+        y: finalY,
+        width: finalWidth,
+        height: finalHeight,
+        lastModifiedBy: user?.email || rectangle.createdBy,
+      });
+      
+      // Clear active edit state AFTER Firestore update completes
       clearActiveEdit(rectangle.id);
-      clearLivePosition(rectangle.id);
+      setIsResizing(false);
     };
 
     stage.on('mousemove', handleMouseMove);
@@ -336,10 +312,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       {/* Main Rectangle */}
       <Rect
         ref={shapeRef}
-        x={livePosition ? currentPos.x : rectangle.x}
-        y={livePosition ? currentPos.y : rectangle.y}
-        width={livePosition ? currentPos.width : rectangle.width}
-        height={livePosition ? currentPos.height : rectangle.height}
+        x={currentPos.x}
+        y={currentPos.y}
+        width={currentPos.width}
+        height={currentPos.height}
         fill={rectangle.color}
         opacity={rectangle.opacity ?? 1} // Default to 1 for existing rectangles
         rotation={rectangle.rotation ?? 0} // Default to 0 for existing rectangles
