@@ -59,6 +59,9 @@ export function getCursorColorForUser(email: string): {
   };
 }
 
+// Cache colors per user to avoid recalculation
+const colorCache = new Map<string, { colorName: string; cursorColor: string }>();
+
 /**
  * Update cursor position in RTDB
  * Should be called on mousemove (throttled to 16ms for 60 FPS)
@@ -80,7 +83,13 @@ export async function updateCursorPosition(
   y: number
 ): Promise<void> {
   const cursorRef = getCursorRef(userId);
-  const { colorName, cursorColor } = getCursorColorForUser(email);
+  
+  // Get color from cache or calculate once
+  let colorData = colorCache.get(userId);
+  if (!colorData) {
+    colorData = getCursorColorForUser(email);
+    colorCache.set(userId, colorData);
+  }
 
   const cursorData: Cursor = {
     x,
@@ -88,19 +97,17 @@ export async function updateCursorPosition(
     userId,
     firstName,
     lastName,
-    colorName,
-    cursorColor,
+    colorName: colorData.colorName,
+    cursorColor: colorData.cursorColor,
     lastUpdate: Date.now(),
   };
 
-  console.log('[cursor.service] Updating cursor position:', { userId, email, firstName, x, y, colorName });
-
   try {
-    await set(cursorRef, cursorData);
-    console.log('[cursor.service] Cursor position updated successfully');
-
-    // Configure auto-cleanup on disconnect
-    await onDisconnect(cursorRef).remove();
+    // Update position (don't await - fire and forget for speed)
+    set(cursorRef, cursorData);
+    
+    // Configure auto-cleanup on disconnect (don't await - not time sensitive)
+    onDisconnect(cursorRef).remove();
   } catch (error) {
     console.error('[cursor.service] Failed to update cursor position:', error);
     // Don't throw - collaboration features are non-critical
@@ -136,13 +143,11 @@ export function subscribeToCursors(
   callback: (cursors: Record<string, Cursor>) => void
 ): Unsubscribe {
   const allCursorsRef = ref(rtdb, `cursors/${CANVAS_ID}`);
-  console.log('[cursor.service] Setting up subscription to:', `cursors/${CANVAS_ID}`);
 
   return onValue(
     allCursorsRef,
     (snapshot) => {
       const data = snapshot.val();
-      console.log('[cursor.service] Received cursor data:', data);
       callback(data || {});
     },
     (error) => {

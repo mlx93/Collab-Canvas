@@ -26,30 +26,26 @@ export function useCursors(): UseCursorsReturn {
   
   // Only log when userId actually changes
   if (userIdRef.current !== user?.userId) {
-    console.log('[useCursors] User changed:', user?.email);
     userIdRef.current = user?.userId || null;
   }
 
   // Initialize throttled update function
   useEffect(() => {
     if (!user) {
-      console.log('[useCursors] No user in throttle effect');
       throttledUpdate.current = null;
       return;
     }
 
-    console.log('[useCursors] Creating throttled update for user:', user.email);
-    // Create throttled function for cursor updates (8ms = 120 FPS for smooth cursor movement)
+    // Create throttled function for cursor updates (16ms = 60 FPS for smooth cursor movement)
     throttledUpdate.current = throttle((x: number, y: number) => {
       const firstName = user.firstName || 'User';
       const lastName = user.lastName || '';
       updateCursorPosition(user.userId, user.email, firstName, lastName, x, y);
-    }, 8);
+    }, 16);
 
     // Cleanup: Remove cursor on unmount
     return () => {
       if (user) {
-        console.log('[useCursors] Cleanup: removing cursor for', user.email);
         removeCursor(user.userId);
       }
     };
@@ -59,14 +55,10 @@ export function useCursors(): UseCursorsReturn {
   // Subscribe to all cursors
   useEffect(() => {
     if (!user) {
-      console.log('[useCursors] No user, skipping cursor subscription');
       return;
     }
 
-    console.log('[useCursors] Subscribing to cursors for user:', user.email);
     const unsubscribe = subscribeToCursors((allCursors) => {
-      console.log('[useCursors] Received cursors update:', Object.keys(allCursors).length, 'total cursors');
-      
       // Store all cursors (CursorOverlay will filter out own cursor)
       setCursors(allCursors);
     });
