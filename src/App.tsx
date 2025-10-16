@@ -11,7 +11,7 @@ import { SignupForm } from './components/Auth/SignupForm';
 import { MainLayout } from './components/Layout/MainLayout';
 import { Header } from './components/Layout/Header';
 import { Canvas } from './components/Canvas/Canvas';
-import { LeftToolbar } from './components/Canvas/LeftToolbar';
+import { CompactToolbar } from './components/Canvas/CompactToolbar';
 import { PropertiesPanel } from './components/Canvas/PropertiesPanel';
 import './App.css';
 
@@ -23,7 +23,7 @@ const CanvasLayout: React.FC = () => {
   return (
     <MainLayout
       header={<Header fps={fps} showFPS={process.env.NODE_ENV === 'development'} />}
-      toolbar={<LeftToolbar />}
+      toolbar={<CompactToolbar />}
       canvas={<Canvas />}
       properties={<PropertiesPanel />}
       hasSelection={!!selectedRectangleId}

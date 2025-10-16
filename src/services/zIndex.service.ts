@@ -1,6 +1,6 @@
 // Z-Index service for automatic layering and manual override
 // CONVENTION: Higher z-index = front, lower z-index = back
-import { Rectangle } from '../types/canvas.types';
+import { Shape } from '../types/canvas.types';
 
 /**
  * Auto-update z-index: Move shape to front (highest z-index)
@@ -11,7 +11,7 @@ import { Rectangle } from '../types/canvas.types';
  * NOTE: Much simpler than old approach - no sorting or recalculation needed!
  * Just assign maxZIndex + 1 to the edited shape.
  */
-export const autoUpdateZIndex = (shapes: Rectangle[], shapeId: string): Rectangle[] => {
+export const autoUpdateZIndex = (shapes: Shape[], shapeId: string): Shape[] => {
   const shapeIndex = shapes.findIndex(s => s.id === shapeId);
   if (shapeIndex === -1) return shapes; // Shape not found
 
@@ -51,7 +51,7 @@ export const autoUpdateZIndex = (shapes: Rectangle[], shapeId: string): Rectangl
  * Phase 2: Shift D,E back: [A:1, B:2, D:3, E:4, C:1000]
  * Phase 3: C → 5: [A:1, B:2, D:3, E:4, C:5]
  */
-export const manualSetZIndex = (shapes: Rectangle[], shapeId: string, newZIndex: number): Rectangle[] => {
+export const manualSetZIndex = (shapes: Shape[], shapeId: string, newZIndex: number): Shape[] => {
   if (newZIndex < 1) return shapes; // Z-index must be positive
 
   const shapeIndex = shapes.findIndex(s => s.id === shapeId);
@@ -110,7 +110,7 @@ export const manualSetZIndex = (shapes: Rectangle[], shapeId: string, newZIndex:
  * @param shapes - All rectangles in the canvas
  * @returns { isValid: boolean, duplicates: number[], gaps: number[] }
  */
-export const validateZIndices = (shapes: Rectangle[]): { 
+export const validateZIndices = (shapes: Shape[]): { 
   isValid: boolean; 
   duplicates: number[]; 
   gaps: number[] 

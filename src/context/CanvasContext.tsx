@@ -1,7 +1,7 @@
 // Canvas Context with React Context API and Firestore integration
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { Rectangle, CanvasState, Viewport, Tool } from '../types/canvas.types';
-import { MIN_ZOOM, MAX_ZOOM } from '../utils/constants';
+import { Rectangle, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
+import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
 import * as canvasService from '../services/canvas.service';
@@ -9,7 +9,7 @@ import { setSelection, clearSelection } from '../services/selection.service';
 
 interface CanvasContextType {
   // State
-  rectangles: Rectangle[];
+  rectangles: Shape[]; // Now stores all shape types
   viewport: Viewport;
   selectedRectangleId: string | null;
   currentTool: Tool;
@@ -22,9 +22,10 @@ interface CanvasContextType {
   panViewport: (deltaX: number, deltaY: number) => void;
   zoomViewport: (delta: number, centerX?: number, centerY?: number) => void;
   
-  // Rectangle operations
-  addRectangle: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>) => void;
-  updateRectangle: (id: string, updates: Partial<Rectangle>) => void;
+  // Shape operations (simplified API for toolbar)
+  addRectangle: () => void; // Simplified: creates rectangle at viewport center with smart offset
+  addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
+  updateRectangle: (id: string, updates: Partial<Shape>) => void;
   deleteRectangle: (id: string) => void;
   setSelectedRectangle: (id: string | null) => void;
   
@@ -68,20 +69,23 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         // If we have a temp ID selected and a new real shape came in, 
         // find if the new shape matches and update selection to the real ID
         if (newSelectedId && newSelectedId.startsWith('temp-')) {
-          const tempRect = prev.rectangles.find(r => r.id === newSelectedId);
-          if (tempRect) {
-            // Find matching shape in new shapes (same position, size, color, and recent timestamp)
+          const tempShape = prev.rectangles.find(r => r.id === newSelectedId);
+          if (tempShape && tempShape.type === 'rectangle') {
+            // Only handle rectangle matching for now (other shapes will be added later)
             const matchingShape = shapes.find(s => {
+              if (s.type !== 'rectangle') return false;
+              
               // Convert Firestore Timestamp to Date if needed
               const createdAtTime = s.createdAt instanceof Date 
                 ? s.createdAt.getTime() 
                 : (s.createdAt as any).toDate().getTime();
               
-              return Math.abs(s.x - tempRect.x) < 1 &&
-                Math.abs(s.y - tempRect.y) < 1 &&
-                Math.abs(s.width - tempRect.width) < 1 &&
-                Math.abs(s.height - tempRect.height) < 1 &&
-                s.color === tempRect.color &&
+              // Match rectangles by position, size, color, and recent creation
+              return Math.abs(s.x - tempShape.x) < 1 &&
+                Math.abs(s.y - tempShape.y) < 1 &&
+                Math.abs(s.width - tempShape.width) < 1 &&
+                Math.abs(s.height - tempShape.height) < 1 &&
+                s.color === tempShape.color &&
                 Math.abs(createdAtTime - Date.now()) < 5000; // Created within last 5 seconds
             });
             
@@ -153,8 +157,62 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     });
   };
 
-  // Rectangle operations
-  const addRectangle = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>) => {
+  // Shape operations
+  // Simplified addRectangle for toolbar use
+  const addRectangle = () => {
+    if (!user) return;
+
+    // Calculate center of viewport with smart offset logic from LeftToolbar
+    const canvasVisibleWidth = canvasState.stageSize.width;
+    const canvasVisibleHeight = canvasState.stageSize.height;
+    
+    const baseCenterX = -canvasState.viewport.x / canvasState.viewport.scale + (canvasVisibleWidth / 2) / canvasState.viewport.scale - 50;
+    const baseCenterY = -canvasState.viewport.y / canvasState.viewport.scale + (canvasVisibleHeight / 2) / canvasState.viewport.scale - 50;
+
+    let targetX = baseCenterX;
+    let targetY = baseCenterY;
+
+    // Smart offset: Avoid overlapping with existing shapes
+    const OVERLAP_THRESHOLD = 50;
+    const OFFSET_AMOUNT = 20;
+    const MAX_ATTEMPTS = 50;
+
+    let attempt = 0;
+    let foundNonOverlappingPosition = false;
+
+    const checkOverlap = (x: number, y: number) => {
+      return canvasState.rectangles.some(rect => {
+        const distanceX = Math.abs(rect.x - x);
+        const distanceY = Math.abs(rect.y - y);
+        return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
+      });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      const hasOverlap = checkOverlap(targetX, targetY);
+      if (!hasOverlap) {
+        foundNonOverlappingPosition = true;
+      } else {
+        targetX = baseCenterX + (OFFSET_AMOUNT * (attempt + 1));
+        targetY = baseCenterY + (OFFSET_AMOUNT * (attempt + 1));
+        attempt++;
+      }
+    }
+
+    // Create rectangle with default values
+    addRectangleFull({
+      x: targetX,
+      y: targetY,
+      width: 100,
+      height: 100,
+      color: DEFAULT_COLOR,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+
+  // Full addRectangle for backward compatibility and tests
+  const addRectangleFull = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     // Optimistic update: add to local state immediately
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -166,7 +224,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       
       const newRectangle: Rectangle = {
         ...rectangle,
+        type: 'rectangle',
         id: tempId,
+        rotation: 0, // Default rotation
+        opacity: 1, // Default opacity
         zIndex: maxZIndex + 1, // New rectangle goes to front
         createdAt: new Date(),
         lastModified: new Date()
@@ -181,7 +242,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     // Sync to Firestore in background
     try {
-      await canvasService.createRectangle(rectangle);
+      // Add the required fields before persisting
+      const fullRectangle = {
+        ...rectangle,
+        type: 'rectangle' as const,
+        rotation: 0,
+        opacity: 1
+      };
+      await canvasService.createRectangle(fullRectangle);
     } catch (error) {
       console.error('Failed to create rectangle in Firestore:', error);
       // Revert optimistic update on failure
@@ -193,16 +261,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   };
 
-  const updateRectangle = async (id: string, updates: Partial<Rectangle>) => {
+  const updateRectangle = async (id: string, updates: Partial<Shape>) => {
     // Optimistic update: update local state immediately
     setCanvasState(prev => {
       // If manual z-index update, use manualSetZIndex (don't apply zIndex in map yet)
       if (updates.zIndex !== undefined) {
         // Apply non-zIndex updates first
         const { zIndex, ...otherUpdates } = updates;
-        const rectanglesWithOtherUpdates = prev.rectangles.map(rect =>
+        const rectanglesWithOtherUpdates: Shape[] = prev.rectangles.map(rect =>
           rect.id === id
-            ? { ...rect, ...otherUpdates, lastModified: new Date() }
+            ? { ...rect, ...otherUpdates, lastModified: new Date() } as Shape
             : rect
         );
         
@@ -214,15 +282,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
 
       // Update the rectangle for non-zIndex changes
-      const updatedRectangles = prev.rectangles.map(rect =>
+      const updatedRectangles: Shape[] = prev.rectangles.map(rect =>
         rect.id === id
-          ? { ...rect, ...updates, lastModified: new Date() }
+          ? { ...rect, ...updates, lastModified: new Date() } as Shape
           : rect
       );
 
       // Auto-move to front when editing position, size, or color
       const isEditAction = updates.x !== undefined || updates.y !== undefined || 
-                           updates.width !== undefined || updates.height !== undefined || 
+                           ('width' in updates && updates.width !== undefined) || 
+                           ('height' in updates && updates.height !== undefined) || 
+                           ('radius' in updates && updates.radius !== undefined) ||
                            updates.color !== undefined;
       
       if (isEditAction) {
@@ -241,7 +311,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     // Sync to Firestore in background
     try {
-      await canvasService.updateRectangle(id, updates);
+      await canvasService.updateRectangle(id, updates as any); // TODO: Update service to accept Shape
     } catch (error) {
       console.error('Failed to update rectangle in Firestore:', error);
       // The Firestore listener will eventually sync the correct state
@@ -384,8 +454,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     panViewport,
     zoomViewport,
     
-    // Rectangle operations
+    // Shape operations
     addRectangle,
+    addRectangleFull,
     updateRectangle,
     deleteRectangle,
     setSelectedRectangle,

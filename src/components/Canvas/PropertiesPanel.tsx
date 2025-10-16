@@ -171,31 +171,36 @@ export const PropertiesPanel: React.FC = () => {
         <p className="text-xs text-gray-500 mt-1">1 = back, higher = front</p>
       </div>
 
-      {/* Width Display (Read-only) */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Width
-        </label>
-        <input
-          type="text"
-          value={`${Math.round(selectedRectangle.width)}px`}
-          readOnly
-          className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-        />
-      </div>
+      {/* Shape-specific size properties */}
+      {selectedRectangle.type === 'rectangle' && (
+        <>
+          {/* Width Display (Read-only) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Width
+            </label>
+            <input
+              type="text"
+              value={`${Math.round(selectedRectangle.width)}px`}
+              readOnly
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
+            />
+          </div>
 
-      {/* Height Display (Read-only) */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Height
-        </label>
-        <input
-          type="text"
-          value={`${Math.round(selectedRectangle.height)}px`}
-          readOnly
-          className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-        />
-      </div>
+          {/* Height Display (Read-only) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Height
+            </label>
+            <input
+              type="text"
+              value={`${Math.round(selectedRectangle.height)}px`}
+              readOnly
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
+            />
+          </div>
+        </>
+      )}
 
       {/* X Position Display (Read-only) */}
       <div>

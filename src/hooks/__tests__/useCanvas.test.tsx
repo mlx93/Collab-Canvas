@@ -148,7 +148,7 @@ describe('useCanvas hook', () => {
       const { result } = renderHook(() => useCanvas(), { wrapper });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -168,7 +168,7 @@ describe('useCanvas hook', () => {
       const { result } = renderHook(() => useCanvas(), { wrapper });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -182,7 +182,7 @@ describe('useCanvas hook', () => {
       const firstId = result.current.rectangles[0].id;
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -204,7 +204,7 @@ describe('useCanvas hook', () => {
       const { result } = renderHook(() => useCanvas(), { wrapper });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -230,7 +230,7 @@ describe('useCanvas hook', () => {
       const { result } = renderHook(() => useCanvas(), { wrapper });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -254,7 +254,7 @@ describe('useCanvas hook', () => {
       const { result } = renderHook(() => useCanvas(), { wrapper });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -281,7 +281,7 @@ describe('useCanvas hook', () => {
 
       // Add 3 rectangles
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -295,7 +295,7 @@ describe('useCanvas hook', () => {
       const rect1Id = result.current.selectedRectangleId!;
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -307,7 +307,7 @@ describe('useCanvas hook', () => {
       });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 300,
           y: 300,
           width: 100,
@@ -333,7 +333,7 @@ describe('useCanvas hook', () => {
 
       // Add 3 rectangles
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -345,7 +345,7 @@ describe('useCanvas hook', () => {
       });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -357,7 +357,7 @@ describe('useCanvas hook', () => {
       });
 
       act(() => {
-        result.current.addRectangle({
+        result.current.addRectangleFull({
           x: 300,
           y: 300,
           width: 100,

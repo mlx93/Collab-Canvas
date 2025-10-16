@@ -260,12 +260,17 @@ export function subscribeToShapes(
         const data = doc.data();
         shapes.push({
           id: doc.id,
+          type: data.type || 'rectangle', // Default to rectangle for backward compatibility
           x: data.x,
           y: data.y,
           width: data.width,
           height: data.height,
           color: data.color,
+          rotation: data.rotation ?? 0, // Default rotation for existing shapes
+          opacity: data.opacity ?? 1, // Default opacity for existing shapes
           zIndex: data.zIndex,
+          visible: data.visible ?? true,
+          locked: data.locked ?? false,
           createdBy: data.createdBy,
           createdAt: data.createdAt,
           lastModifiedBy: data.lastModifiedBy,

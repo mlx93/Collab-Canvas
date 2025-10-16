@@ -2,7 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Rect, Circle, Group } from 'react-konva';
 import Konva from 'konva';
-import { Rectangle as RectangleType } from '../../types/canvas.types';
+import { RectangleShape } from '../../types/canvas.types';
 import { MIN_RECT_SIZE, MAX_RECT_SIZE } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
@@ -23,7 +23,7 @@ import { throttle } from '../../utils/throttle';
 import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
 interface RectangleProps {
-  rectangle: RectangleType;
+  rectangle: RectangleShape;
   isSelected: boolean;
   onSelect: () => void;
   showIndicator?: boolean;
@@ -333,6 +333,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         width={livePosition ? currentPos.width : rectangle.width}
         height={livePosition ? currentPos.height : rectangle.height}
         fill={rectangle.color}
+        opacity={rectangle.opacity ?? 1} // Default to 1 for existing rectangles
+        rotation={rectangle.rotation ?? 0} // Default to 0 for existing rectangles
         stroke={isSelected ? '#1565C0' : undefined} // Dark blue outline when selected
         strokeWidth={isSelected ? 4 : 0} // Thicker stroke for visibility
         strokeScaleEnabled={false} // Keep stroke width constant when zooming

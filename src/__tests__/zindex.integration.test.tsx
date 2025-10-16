@@ -51,7 +51,7 @@ const ZIndexTestComponent: React.FC = () => {
       <button
         data-testid="add-rect-btn"
         onClick={() => {
-          addRectangle({
+          addRectangleFull({
             x: 100,
             y: 100,
             width: 100,

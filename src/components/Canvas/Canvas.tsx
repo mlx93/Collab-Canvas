@@ -252,33 +252,47 @@ export const Canvas: React.FC = () => {
             listening={false}
           />
 
-          {/* Rectangles - sorted by z-index (lower z-index = further back) */}
+          {/* Shapes - sorted by z-index (lower z-index = further back) */}
           {rectangles
             .sort((a, b) => a.zIndex - b.zIndex) // Lower z-index renders first (back layer)
-            .map((rectangle) => (
-              <Rectangle
-                key={rectangle.id}
-                rectangle={rectangle}
-                isSelected={selectedRectangleId === rectangle.id}
-                onSelect={() => setSelectedRectangle(rectangle.id)}
-                showIndicator={false}
-                updateOwnCursor={updateOwnCursor}
-              />
-            ))}
+            .map((shape) => {
+              // Render based on shape type
+              if (shape.type === 'rectangle') {
+                return (
+                  <Rectangle
+                    key={shape.id}
+                    rectangle={shape}
+                    isSelected={selectedRectangleId === shape.id}
+                    onSelect={() => setSelectedRectangle(shape.id)}
+                    showIndicator={false}
+                    updateOwnCursor={updateOwnCursor}
+                  />
+                );
+              }
+              // TODO: Add Circle, Triangle, Line, Text rendering here
+              return null;
+            })}
         </Layer>
 
         {/* Indicators Layer - Always on top of all shapes */}
         <Layer listening={false}>
-          {rectangles.map((rectangle) => (
-            <Rectangle
-              key={`indicator-${rectangle.id}`}
-              rectangle={rectangle}
-              isSelected={false}
-              onSelect={() => {}}
-              showIndicator={true}
-              renderOnlyIndicator={true}
-            />
-          ))}
+          {rectangles.map((shape) => {
+            // Render indicator based on shape type
+            if (shape.type === 'rectangle') {
+              return (
+                <Rectangle
+                  key={`indicator-${shape.id}`}
+                  rectangle={shape}
+                  isSelected={false}
+                  onSelect={() => {}}
+                  showIndicator={true}
+                  renderOnlyIndicator={true}
+                />
+              );
+            }
+            // TODO: Add other shape type indicators here
+            return null;
+          })}
         </Layer>
       </Stage>
 

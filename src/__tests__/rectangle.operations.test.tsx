@@ -77,7 +77,7 @@ describe('Rectangle Operations', () => {
   describe('addRectangle', () => {
     it('should create rectangle at viewport center with default size 100x100px', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -95,7 +95,7 @@ describe('Rectangle Operations', () => {
 
     it('should assign z-index 1 to new rectangle', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -111,7 +111,7 @@ describe('Rectangle Operations', () => {
 
     it('should push existing rectangles back when adding new one', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -125,7 +125,7 @@ describe('Rectangle Operations', () => {
       const firstId = canvasContext.rectangles[0].id;
 
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -147,7 +147,7 @@ describe('Rectangle Operations', () => {
 
     it('should auto-select newly created rectangle', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -166,7 +166,7 @@ describe('Rectangle Operations', () => {
 
       colors.forEach((color) => {
         act(() => {
-          canvasContext.addRectangle({
+          canvasContext.addRectangleFull({
             x: 100,
             y: 100,
             width: 100,
@@ -190,7 +190,7 @@ describe('Rectangle Operations', () => {
 
     beforeEach(() => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -199,7 +199,7 @@ describe('Rectangle Operations', () => {
           createdBy: 'test-user',
           lastModifiedBy: 'test-user',
         });
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -269,7 +269,7 @@ describe('Rectangle Operations', () => {
   describe('deleteRectangle', () => {
     it('should remove rectangle from state', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -292,7 +292,7 @@ describe('Rectangle Operations', () => {
 
     it('should deselect if deleted rectangle was selected', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -315,7 +315,7 @@ describe('Rectangle Operations', () => {
 
     it('should not deselect if deleted rectangle was not selected', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -329,7 +329,7 @@ describe('Rectangle Operations', () => {
       const rect1Id = canvasContext.rectangles[0].id;
 
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -356,7 +356,7 @@ describe('Rectangle Operations', () => {
   describe('selection operations', () => {
     it('should select rectangle', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -378,7 +378,7 @@ describe('Rectangle Operations', () => {
 
     it('should only allow one rectangle selected at a time', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -392,7 +392,7 @@ describe('Rectangle Operations', () => {
       const rect1Id = canvasContext.rectangles[0].id;
 
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -418,7 +418,7 @@ describe('Rectangle Operations', () => {
 
     it('should deselect all when setting to null', () => {
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -448,7 +448,7 @@ describe('Rectangle Operations', () => {
     beforeEach(() => {
       // Add rect1 and capture its ID from selectedRectangleId (newly added rect is auto-selected)
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 100,
           y: 100,
           width: 100,
@@ -462,7 +462,7 @@ describe('Rectangle Operations', () => {
 
       // Add rect2 and capture its ID
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 200,
           y: 200,
           width: 100,
@@ -476,7 +476,7 @@ describe('Rectangle Operations', () => {
 
       // Add rect3 and capture its ID
       act(() => {
-        canvasContext.addRectangle({
+        canvasContext.addRectangleFull({
           x: 300,
           y: 300,
           width: 100,

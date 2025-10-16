@@ -68,7 +68,7 @@ describe('Persistence Integration Tests', () => {
       <div>
         <button
           onClick={() =>
-            canvas.addRectangle({
+            canvas.addRectangleFull({
               x: 100,
               y: 100,
               width: 100,

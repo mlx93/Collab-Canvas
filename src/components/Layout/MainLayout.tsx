@@ -25,8 +25,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
 
       {/* Main content area with 3 columns */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Toolbar */}
-        <div className="flex-none w-16 bg-white border-r border-gray-200 shadow-sm">
+        {/* Left Compact Toolbar - 48px (12 in Tailwind = 48px) */}
+        <div className="flex-none w-12 bg-white border-r border-gray-200 shadow-sm">
           {toolbar}
         </div>
 
