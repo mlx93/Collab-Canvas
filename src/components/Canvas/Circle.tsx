@@ -14,7 +14,6 @@ import {
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
-  clearLivePosition,
   subscribeToShapeLivePosition,
   LivePosition
 } from '../../services/livePositions.service';
@@ -41,7 +40,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   renderOnlyIndicator = false,
   updateOwnCursor
 }) => {
-  const { updateRectangle, viewport } = useCanvas();
+  const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
   const [, forceUpdate] = useState({});
@@ -49,11 +48,12 @@ const CircleComponent: React.FC<CircleProps> = ({
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
   const circleRef = useRef<Konva.Circle>(null);
   const handleRef = useRef<Konva.Circle>(null);
+  const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
   // Throttled function for live position updates (60 FPS)
   const throttledLivePositionUpdate = useRef(
-    throttle((shapeId: string, userId: string, x: number, y: number, radius: number) => {
-      setLivePosition(shapeId, userId, x, y, radius, radius); // width/height both set to radius for circles
+    throttle((shapeId: string, userId: string, x: number, y: number, radius: number, zIndex?: number) => {
+      setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
     }, 16)
   );
   
@@ -119,6 +119,11 @@ const CircleComponent: React.FC<CircleProps> = ({
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
+    
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(circle.id, user.userId, user.email, firstName, 'moving', cursorColor);
@@ -138,8 +143,8 @@ const CircleComponent: React.FC<CircleProps> = ({
       handleRef.current.y(y);
     }
     
-    // Stream live position to other users
-    throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius);
+    // Stream live position (with z-index) to other users
+    throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
     
     // Update cursor to actual mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
@@ -166,8 +171,10 @@ const CircleComponent: React.FC<CircleProps> = ({
     // Update shape in Firestore
     await updateRectangle(circle.id, { x, y, lastModifiedBy: user?.email || circle.createdBy });
     
-    // Clear live position and active edit
-    clearLivePosition(circle.id);
+    // Clear z-index ref
+    newZIndexRef.current = null;
+    
+    // Clear active edit (no need to clear live position - it expires naturally)
     clearActiveEdit(circle.id);
   };
 
@@ -182,6 +189,10 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     setIsResizing(true);
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
     
     if (user) {
       const cursorColor = getUserCursorColor(user.email);
@@ -220,14 +231,15 @@ const CircleComponent: React.FC<CircleProps> = ({
       handle.x(centerX + newRadius);
       handle.y(centerY);
       
-      // Stream live position to RTDB (throttled to 16ms / 60 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           circle.id,
           user.userId,
           centerX,
           centerY,
-          newRadius
+          newRadius,
+          newZIndexRef.current !== null ? newZIndexRef.current : undefined
         );
       }
       
@@ -245,6 +257,9 @@ const CircleComponent: React.FC<CircleProps> = ({
         radius: finalRadius,
         lastModifiedBy: user?.email || circle.createdBy,
       });
+      
+      // Clear z-index ref
+      newZIndexRef.current = null;
       
       clearActiveEdit(circle.id);
       setIsResizing(false);

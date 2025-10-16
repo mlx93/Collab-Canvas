@@ -38,7 +38,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   renderOnlyIndicator = false,
   updateOwnCursor
 }) => {
-  const { updateRectangle, viewport } = useCanvas();
+  const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -48,11 +48,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
   const shapeRef = useRef<Konva.Rect>(null);
   const handleRef = useRef<Konva.Circle>(null);
+  const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
   // Throttled function for live position updates (60 FPS)
   const throttledLivePositionUpdate = useRef(
-    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number) => {
-      setLivePosition(shapeId, userId, x, y, width, height);
+    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
+      setLivePosition(shapeId, userId, x, y, width, height, zIndex);
     }, 16)
   );
   
@@ -116,10 +117,28 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   
   // Use live position if available, or resize dimensions if actively resizing
   const currentPos = livePosition && livePosition.userId !== user?.userId
-    ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
+    ? { 
+        x: livePosition.x, 
+        y: livePosition.y, 
+        width: livePosition.width, 
+        height: livePosition.height,
+        zIndex: livePosition.zIndex !== undefined ? livePosition.zIndex : rectangle.zIndex 
+      }
     : resizeDimensions && isResizing
-    ? { x: rectangle.x, y: resizeDimensions.y, width: resizeDimensions.width, height: resizeDimensions.height }
-    : { x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height };
+    ? { 
+        x: rectangle.x, 
+        y: resizeDimensions.y, 
+        width: resizeDimensions.width, 
+        height: resizeDimensions.height,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : rectangle.zIndex 
+      }
+    : { 
+        x: rectangle.x, 
+        y: rectangle.y, 
+        width: rectangle.width, 
+        height: rectangle.height,
+        zIndex: rectangle.zIndex 
+      };
 
   // Handle drag start
   const handleDragStart = () => {
@@ -127,6 +146,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     
     // Select the shape when starting to drag
     onSelect();
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
     
     // Set active edit state in RTDB
     if (user) {
@@ -161,7 +184,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       }
     }
     
-    // Stream live position to RTDB (throttled to 16ms / 60 FPS)
+    // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
     if (user) {
       throttledLivePositionUpdate.current(
         rectangle.id,
@@ -169,7 +192,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         x,
         y,
         rectangle.width,
-        rectangle.height
+        rectangle.height,
+        newZIndexRef.current !== null ? newZIndexRef.current : undefined
       );
     } else {
       console.log('[Rectangle] No user, skipping live position update');
@@ -183,13 +207,20 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
     const node = e.target;
+    
+    // Wait for Firestore update to propagate before clearing active edit
+    // This ensures Browser 2 has the new rectangle props from Firestore
+    // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
     await updateRectangle(rectangle.id, {
       x: node.x(),
       y: node.y(),
       lastModifiedBy: user?.email || rectangle.createdBy,
     });
     
-    // Clear active edit state after Firestore update completes
+    // Clear z-index ref
+    newZIndexRef.current = null;
+    
+    // Clear active edit state after Firestore propagates
     clearActiveEdit(rectangle.id);
   };
 
@@ -197,6 +228,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true; // Prevent drag propagation
     setIsResizing(true);
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
     
     // Set active edit state in RTDB
     if (user) {
@@ -243,7 +278,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       handle.x(rect.x() + newWidth);
       handle.y(newY);
 
-      // Stream live position to RTDB (throttled to 16ms / 60 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           rectangle.id,
@@ -251,7 +286,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
           rect.x(),
           newY,
           newWidth,
-          newHeight
+          newHeight,
+          newZIndexRef.current !== null ? newZIndexRef.current : undefined
         );
       }
 
@@ -275,7 +311,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       // Clear resize dimensions
       setResizeDimensions(null);
       
-      // Finalize the resize and wait for Firestore to complete
+      // Wait for Firestore update to propagate before clearing active edit
+      // This ensures Browser 2 has the new rectangle props from Firestore
+      // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
       await updateRectangle(rectangle.id, {
         y: finalY,
         width: finalWidth,
@@ -283,7 +321,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         lastModifiedBy: user?.email || rectangle.createdBy,
       });
       
-      // Clear active edit state AFTER Firestore update completes
+      // Clear z-index ref
+      newZIndexRef.current = null;
+      
+      // Clear active edit state after Firestore propagates
       clearActiveEdit(rectangle.id);
       setIsResizing(false);
     };

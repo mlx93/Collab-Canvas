@@ -512,3 +512,172 @@ When implementing Triangle, Line, or Text:
 
 **Action for new shapes**: Modify these same 7 files.
 
+---
+
+## 12. Real-Time Z-Index Synchronization (Instant Bring-to-Front)
+
+### ❌ Problem
+When a user starts dragging/resizing a shape in Browser 1, it should instantly jump to the front in Browser 2. However, z-index updates were going through Firestore with 50-100ms lag, causing a noticeable delay where the shape would briefly appear behind other shapes.
+
+### ✅ Solution: Real-Time Z-Index via RTDB
+Synchronize z-index changes through RTDB (16ms) alongside position updates, not just through Firestore.
+
+#### Step 1: Add z-index to LivePosition Interface
+
+```typescript
+// src/services/livePositions.service.ts
+export interface LivePosition {
+  userId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zIndex?: number; // ← NEW: For instant layer updates
+  lastUpdate: number;
+}
+
+export async function setLivePosition(
+  shapeId: string,
+  userId: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  zIndex?: number // ← NEW: Optional z-index parameter
+): Promise<void> {
+  const positionData: LivePosition = {
+    userId,
+    x,
+    y,
+    width,
+    height,
+    ...(zIndex !== undefined && { zIndex }),
+    lastUpdate: Date.now(),
+  };
+  // ... rest of implementation
+}
+```
+
+#### Step 2: Calculate and Broadcast Z-Index in Shape Components
+
+```typescript
+// src/components/Canvas/Rectangle.tsx (also Circle.tsx, Triangle.tsx)
+const { updateRectangle, viewport, rectangles } = useCanvas(); // ← Add rectangles
+const newZIndexRef = useRef<number | null>(null); // ← Store calculated z-index
+
+// Update throttle signature to accept z-index
+const throttledLivePositionUpdate = useRef(
+  throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
+    setLivePosition(shapeId, userId, x, y, width, height, zIndex);
+  }, 16)
+);
+
+const handleDragStart = () => {
+  setIsDragging(true);
+  onSelect();
+  
+  // Calculate new z-index (bring to front) - maxZIndex + 1
+  const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+  newZIndexRef.current = maxZIndex + 1; // ← Calculate once at start
+  
+  if (user) {
+    const cursorColor = getUserCursorColor(user.email);
+    setActiveEdit(rectangle.id, user.userId, user.email, user.firstName, 'moving', cursorColor);
+  }
+};
+
+const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+  // ... position calculation
+  
+  // Stream live position WITH z-index to RTDB (60 FPS)
+  if (user) {
+    throttledLivePositionUpdate.current(
+      rectangle.id,
+      user.userId,
+      x,
+      y,
+      rectangle.width,
+      rectangle.height,
+      newZIndexRef.current !== null ? newZIndexRef.current : undefined // ← Include z-index
+    );
+  }
+  
+  forceUpdate({});
+};
+
+const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
+  setIsDragging(false);
+  const node = e.target;
+  
+  await updateRectangle(rectangle.id, {
+    x: node.x(),
+    y: node.y(),
+    lastModifiedBy: user?.email || rectangle.createdBy,
+  });
+  
+  newZIndexRef.current = null; // ← Clear z-index ref after drag
+  clearActiveEdit(rectangle.id);
+};
+```
+
+**IMPORTANT: Apply same pattern to `handleResizeStart` and resize `handleMouseUp`!**
+
+#### Step 3: Canvas Subscribes to Live Positions and Uses Live Z-Index
+
+```typescript
+// src/components/Canvas/Canvas.tsx
+import { subscribeToLivePositions, LivePosition } from '../../services/livePositions.service';
+
+const [livePositions, setLivePositions] = useState<Record<string, LivePosition>>({});
+
+// Subscribe to ALL live positions
+useEffect(() => {
+  const unsubscribe = subscribeToLivePositions((positions) => {
+    setLivePositions(positions);
+  });
+  
+  return unsubscribe;
+}, []);
+
+// Sort shapes using live z-index (instant!) or stored z-index (fallback)
+{rectangles
+  .sort((a, b) => {
+    const aZIndex = livePositions[a.id]?.zIndex ?? a.zIndex; // ← Use live z-index if available
+    const bZIndex = livePositions[b.id]?.zIndex ?? b.zIndex;
+    return aZIndex - bZIndex;
+  })
+  .map((shape) => {
+    // ... render shapes
+  })
+}
+```
+
+### Performance Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| **Layer change visible** | 50-100ms (Firestore lag) | **16ms (RTDB)** ✅ |
+| **User experience** | Noticeable delay | **Instant** ✅ |
+| **Movement sync** | 16ms | 16ms (unchanged) |
+
+### Why This Works
+
+1. **Browser 1:** User starts drag → calculates new z-index (maxZIndex + 1) → broadcasts via RTDB at 60 FPS
+2. **RTDB:** Propagates live position with z-index in ~16ms
+3. **Browser 2:** Canvas receives live position → re-sorts shapes using live z-index → shape instantly jumps to front
+4. **Background:** Firestore persists final z-index for permanent storage
+
+### Key Points
+
+✅ Calculate z-index ONCE at drag/resize start (not every frame)  
+✅ Clear `newZIndexRef` after drag/resize ends  
+✅ Apply to BOTH drag AND resize handlers  
+✅ Canvas must subscribe to all live positions (not individual shapes)  
+✅ Remove unused `clearLivePosition` imports (no longer needed with await pattern)
+
+### Common Mistake
+
+❌ **Don't use `node.moveToTop()`** - This doesn't work when React is managing render order via sorting. The Canvas sort logic will override it on the next render.
+
+✅ **Do use live z-index in Canvas sort** - This lets React's declarative rendering handle the layer order naturally.
+

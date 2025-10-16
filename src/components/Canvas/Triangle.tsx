@@ -13,7 +13,6 @@ import {
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
-  clearLivePosition,
   subscribeToShapeLivePosition,
   LivePosition
 } from '../../services/livePositions.service';
@@ -40,7 +39,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   renderOnlyIndicator = false,
   updateOwnCursor
 }) => {
-  const { updateRectangle, viewport } = useCanvas();
+  const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
@@ -50,11 +49,12 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const triangleRef = useRef<Konva.Line>(null);
   const handleRef = useRef<Konva.Circle>(null);
   const livePositionTimestampRef = useRef<number>(0);
+  const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
   // Throttled function for live position updates (60 FPS)
   const throttledLivePositionUpdate = useRef(
-    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number) => {
-      setLivePosition(shapeId, userId, x, y, width, height);
+    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
+      setLivePosition(shapeId, userId, x, y, width, height, zIndex);
     }, 16)
   );
   
@@ -156,6 +156,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
+    
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(triangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
@@ -175,8 +180,8 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       handleRef.current.y(y + triangle.height);
     }
     
-    // Stream live position to other users
-    throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height);
+    // Stream live position (with z-index) to other users
+    throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
     
     // Update cursor to actual mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
@@ -201,7 +206,10 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     
     await updateRectangle(triangle.id, { x, y, lastModifiedBy: user?.email || triangle.createdBy });
     
-    clearLivePosition(triangle.id);
+    // Clear z-index ref
+    newZIndexRef.current = null;
+    
+    // Clear active edit (no need to clear live position - it expires naturally)
     clearActiveEdit(triangle.id);
   };
 
@@ -214,6 +222,10 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
     setIsResizing(true);
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
     
     if (user) {
       const cursorColor = getUserCursorColor(user.email);
@@ -258,7 +270,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       handle.x(anchorX + newWidth);
       handle.y(anchorY + newHeight);
       
-      // Stream live position to RTDB
+      // Stream live position (with z-index) to RTDB
       if (user) {
         throttledLivePositionUpdate.current(
           triangle.id,
@@ -266,7 +278,8 @@ const TriangleComponent: React.FC<TriangleProps> = ({
           anchorX,
           anchorY,
           newWidth,
-          newHeight
+          newHeight,
+          newZIndexRef.current !== null ? newZIndexRef.current : undefined
         );
       }
       
@@ -293,6 +306,9 @@ const TriangleComponent: React.FC<TriangleProps> = ({
         height: finalHeight,
         lastModifiedBy: user?.email || triangle.createdBy,
       });
+      
+      // Clear z-index ref
+      newZIndexRef.current = null;
       
       clearActiveEdit(triangle.id);
       setIsResizing(false);

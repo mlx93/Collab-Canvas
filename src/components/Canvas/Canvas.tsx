@@ -9,6 +9,8 @@ import { Rectangle } from './Rectangle';
 import Circle from './Circle';
 import Triangle from './Triangle';
 import { CursorOverlay } from '../Collaboration/CursorOverlay';
+import { subscribeToAllActiveEdits, ActiveEdit } from '../../services/activeEdits.service';
+import { subscribeToLivePositions, LivePosition } from '../../services/livePositions.service';
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
@@ -24,6 +26,7 @@ export const Canvas: React.FC = () => {
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [livePositions, setLivePositions] = useState<Record<string, LivePosition>>({});
 
   // Update stage size on mount, window resize, AND container resize (e.g., properties panel open/close)
   useEffect(() => {
@@ -64,6 +67,15 @@ export const Canvas: React.FC = () => {
       }
     };
   }, [updateContextStageSize]);
+  
+  // Subscribe to live positions for instant z-index updates
+  useEffect(() => {
+    const unsubscribe = subscribeToLivePositions((positions) => {
+      setLivePositions(positions);
+    });
+    
+    return unsubscribe;
+  }, []);
 
   // Handle mouse wheel zoom
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -256,7 +268,12 @@ export const Canvas: React.FC = () => {
 
           {/* Shapes - sorted by z-index (lower z-index = further back) */}
           {rectangles
-            .sort((a, b) => a.zIndex - b.zIndex) // Lower z-index renders first (back layer)
+            .sort((a, b) => {
+              // Use live z-index if available (instant layer updates), otherwise use stored z-index
+              const aZIndex = livePositions[a.id]?.zIndex ?? a.zIndex;
+              const bZIndex = livePositions[b.id]?.zIndex ?? b.zIndex;
+              return aZIndex - bZIndex; // Lower z-index renders first (back layer)
+            })
             .map((shape) => {
               // Render based on shape type
               if (shape.type === 'rectangle') {
