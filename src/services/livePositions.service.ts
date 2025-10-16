@@ -70,11 +70,16 @@ export async function setLivePosition(
   console.log('[livePositions.service] Setting live position:', { shapeId, userId, x, y });
 
   try {
-    await set(livePositionRef, positionData);
-    console.log('[livePositions.service] Live position set successfully');
+    // Don't await - fire and forget for speed, handle errors separately
+    set(livePositionRef, positionData).catch((error) => {
+      // Silently handle RTDB write failures to prevent blocking
+      console.warn('[livePositions.service] RTDB write failed (non-blocking):', error.message);
+    });
 
-    // Configure auto-cleanup on disconnect
-    await onDisconnect(livePositionRef).remove();
+    // Configure auto-cleanup on disconnect (don't await)
+    onDisconnect(livePositionRef).remove().catch((error) => {
+      console.warn('[livePositions.service] onDisconnect setup failed (non-blocking):', error.message);
+    });
   } catch (error) {
     console.error('[livePositions.service] Failed to set live position:', error);
     // Don't throw - collaboration features are non-critical

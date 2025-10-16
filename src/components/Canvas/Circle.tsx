@@ -50,11 +50,11 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (120 FPS for smoother dragging)
+  // Throttled function for live position updates (60 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, radius: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
-    }, 8)
+    }, 16)
   );
   
   // Subscribe to active edits for this shape
@@ -143,22 +143,21 @@ const CircleComponent: React.FC<CircleProps> = ({
       handleRef.current.y(y);
     }
     
-    // Stream live position (with z-index) to other users
-    throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
-    
     // Update cursor to actual mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
       const pointerPos = stage.getPointerPosition();
       if (pointerPos) {
         // Convert screen coordinates to canvas coordinates (account for pan/zoom)
-        const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
-        const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+        // Cache viewport values for better performance
+        const { x: vx, y: vy, scale } = viewport;
+        const canvasX = (pointerPos.x - vx) / scale;
+        const canvasY = (pointerPos.y - vy) / scale;
         updateOwnCursor(canvasX, canvasY);
       }
     }
     
-    // Force re-render to update handle
-    forceUpdate({});
+    // Stream live position (with z-index) to other users
+    throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
   };
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -231,7 +230,7 @@ const CircleComponent: React.FC<CircleProps> = ({
       handle.x(centerX + newRadius);
       handle.y(centerY);
       
-      // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           circle.id,

@@ -23,7 +23,6 @@ export function useCursors(): UseCursorsReturn {
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
   const throttledUpdate = useRef<((x: number, y: number) => void) | null>(null);
   const userIdRef = useRef<string | null>(null);
-  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Only log when userId actually changes
   if (userIdRef.current !== user?.userId) {
@@ -37,12 +36,12 @@ export function useCursors(): UseCursorsReturn {
       return;
     }
 
-    // Create throttled function for cursor updates (8ms = 120 FPS for ultra-smooth cursor movement)
+    // Create throttled function for cursor updates (16ms = 60 FPS for optimal balance)
     throttledUpdate.current = throttle((x: number, y: number) => {
       const firstName = user.firstName || 'User';
       const lastName = user.lastName || '';
       updateCursorPosition(user.userId, user.email, firstName, lastName, x, y);
-    }, 8);
+    }, 16);
 
     // Cleanup: Remove cursor on unmount
     return () => {
@@ -60,23 +59,11 @@ export function useCursors(): UseCursorsReturn {
     }
 
     const unsubscribe = subscribeToCursors((allCursors) => {
-      // Debounce cursor updates to prevent race conditions
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-      debounceTimeoutRef.current = setTimeout(() => {
-        setCursors(allCursors);
-        debounceTimeoutRef.current = null;
-      }, 1); // Minimal debounce to prevent race conditions
+      // Direct state update - React handles batching automatically
+      setCursors(allCursors);
     });
 
-    return () => {
-      unsubscribe();
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-        debounceTimeoutRef.current = null;
-      }
-    };
+    return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 

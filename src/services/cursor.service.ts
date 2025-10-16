@@ -107,7 +107,10 @@ export async function updateCursorPosition(
 
   try {
     // Update position (don't await - fire and forget for speed)
-    set(cursorRef, cursorData);
+    set(cursorRef, cursorData).catch((error) => {
+      // Silently handle RTDB write failures to prevent blocking
+      console.warn('[cursor.service] RTDB write failed (non-blocking):', error.message);
+    });
     
     // Only set up onDisconnect handler once per user to avoid spam
     if (!disconnectHandlers.has(userId)) {

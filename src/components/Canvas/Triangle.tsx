@@ -51,11 +51,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const livePositionTimestampRef = useRef<number>(0);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (120 FPS for smoother dragging)
+  // Throttled function for live position updates (60 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 8)
+    }, 16)
   );
   
   // Subscribe to active edits for this shape
@@ -180,21 +180,21 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       handleRef.current.y(y + triangle.height);
     }
     
-    // Stream live position (with z-index) to other users
-    throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
-    
     // Update cursor to actual mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
       const pointerPos = stage.getPointerPosition();
       if (pointerPos) {
         // Convert screen coordinates to canvas coordinates (account for pan/zoom)
-        const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
-        const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+        // Cache viewport values for better performance
+        const { x: vx, y: vy, scale } = viewport;
+        const canvasX = (pointerPos.x - vx) / scale;
+        const canvasY = (pointerPos.y - vy) / scale;
         updateOwnCursor(canvasX, canvasY);
       }
     }
     
-    forceUpdate({});
+    // Stream live position (with z-index) to other users
+    throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
   };
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {

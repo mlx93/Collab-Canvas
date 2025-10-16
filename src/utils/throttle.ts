@@ -13,7 +13,8 @@ export function throttle<T extends (...args: any[]) => void>(
   let lastCall = 0;
   let timeoutId: NodeJS.Timeout | null = null;
   let pendingArgs: Parameters<T> | null = null;
-  let isExecuting = false;
+  let consecutiveFailures = 0;
+  const maxFailures = 3;
 
   return function throttled(...args: Parameters<T>): void {
     const now = Date.now();
@@ -22,9 +23,14 @@ export function throttle<T extends (...args: any[]) => void>(
     // Always store the most recent args
     pendingArgs = args;
 
-    if (timeSinceLastCall >= delay && !isExecuting) {
+    // Circuit breaker: if too many consecutive failures, skip execution
+    if (consecutiveFailures >= maxFailures) {
+      console.warn('[throttle] Circuit breaker active, skipping execution');
+      return;
+    }
+
+    if (timeSinceLastCall >= delay) {
       // Enough time has passed, execute immediately
-      isExecuting = true;
       lastCall = now;
       
       // Clear any pending timeout since we're executing now
@@ -35,35 +41,33 @@ export function throttle<T extends (...args: any[]) => void>(
       
       try {
         func(...args);
-      } finally {
-        isExecuting = false;
+        consecutiveFailures = 0; // Reset failure counter on success
         pendingArgs = null;
+      } catch (error) {
+        consecutiveFailures++;
+        console.warn('[throttle] Execution failed:', error);
       }
-    } else if (timeoutId === null && !isExecuting) {
-      // Only schedule if no timeout is already pending and not executing
+    } else if (timeoutId === null) {
+      // Only schedule if no timeout is already pending
       const remainingTime = delay - timeSinceLastCall;
       timeoutId = setTimeout(() => {
-        if (isExecuting) {
-          // If we're executing, reschedule
-          timeoutId = setTimeout(arguments.callee, remainingTime);
-          return;
-        }
-        
-        isExecuting = true;
         lastCall = Date.now();
         
         try {
           // Use the most recent args, not the args from when timeout was scheduled
           if (pendingArgs !== null) {
             func(...pendingArgs);
+            consecutiveFailures = 0; // Reset failure counter on success
             pendingArgs = null;
           }
-        } finally {
-          isExecuting = false;
-          timeoutId = null;
+        } catch (error) {
+          consecutiveFailures++;
+          console.warn('[throttle] Timeout execution failed:', error);
         }
+        
+        timeoutId = null;
       }, remainingTime);
     }
-    // If timeoutId is not null or we're executing, just update args for next execution
+    // If timeoutId is not null, just update args for next execution
   };
 }

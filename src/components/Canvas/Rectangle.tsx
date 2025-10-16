@@ -50,11 +50,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (120 FPS for smoother dragging)
+  // Throttled function for live position updates (60 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 8)
+    }, 16)
   );
   
   // Subscribe to active edits for this shape
@@ -158,14 +158,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     }
   };
 
-  // Handle drag move - stream live position to RTDB (60 FPS) + update cursor to actual mouse position
+  // Handle drag move - stream live position to RTDB (100 FPS) + update cursor position
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
     const stage = node.getStage();
     const x = node.x();
     const y = node.y();
-    
-    console.log('[Rectangle] handleDragMove called for', rectangle.id, 'at', x, y);
     
     // Update resize handle position during drag (top-right corner)
     if (handleRef.current) {
@@ -178,13 +176,15 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       const pointerPos = stage.getPointerPosition();
       if (pointerPos) {
         // Convert screen coordinates to canvas coordinates (account for pan/zoom)
-        const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
-        const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+        // Cache viewport values for better performance
+        const { x: vx, y: vy, scale } = viewport;
+        const canvasX = (pointerPos.x - vx) / scale;
+        const canvasY = (pointerPos.y - vy) / scale;
         updateOwnCursor(canvasX, canvasY);
       }
     }
     
-    // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
+    // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
     if (user) {
       throttledLivePositionUpdate.current(
         rectangle.id,
@@ -195,12 +195,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         rectangle.height,
         newZIndexRef.current !== null ? newZIndexRef.current : undefined
       );
-    } else {
-      console.log('[Rectangle] No user, skipping live position update');
     }
-    
-    // Force React re-render to update handle position
-    forceUpdate({});
   };
 
   // Handle drag end - update position in context
@@ -278,7 +273,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       handle.x(rect.x() + newWidth);
       handle.y(newY);
 
-      // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           rectangle.id,
