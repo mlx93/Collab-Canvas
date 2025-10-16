@@ -15,7 +15,6 @@ import {
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
-  clearLivePosition,
   subscribeToShapeLivePosition,
   LivePosition
 } from '../../services/livePositions.service';
