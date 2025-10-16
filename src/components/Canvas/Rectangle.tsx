@@ -175,17 +175,22 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     }
   };
 
-  // Handle drag move - stream live position to RTDB (60 FPS) + update cursor to shape center
+  // Handle drag move - stream live position to RTDB (60 FPS) + update cursor to actual mouse position
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const node = e.target;
+    const stage = node.getStage();
     
     console.log('[Rectangle] handleDragMove called for', rectangle.id, 'at', node.x(), node.y());
     
-    // Update cursor to center of shape
-    if (updateOwnCursor) {
-      const centerX = node.x() + rectangle.width / 2;
-      const centerY = node.y() + rectangle.height / 2;
-      updateOwnCursor(centerX, centerY);
+    // Update cursor to actual mouse position in canvas coordinates
+    if (updateOwnCursor && stage) {
+      const pointerPos = stage.getPointerPosition();
+      if (pointerPos) {
+        // Convert screen coordinates to canvas coordinates (account for pan/zoom)
+        const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
+        const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+        updateOwnCursor(canvasX, canvasY);
+      }
     }
     
     // Stream live position to RTDB (throttled to 16ms / 60 FPS)

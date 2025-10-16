@@ -165,6 +165,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
     const node = e.target;
+    const stage = node.getStage();
     const x = node.x();
     const y = node.y();
     
@@ -177,11 +178,15 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     // Stream live position to other users
     throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height);
     
-    // Update own cursor position to center of triangle
-    if (updateOwnCursor) {
-      const centerX = x + triangle.width / 2;
-      const centerY = y + triangle.height / 2;
-      updateOwnCursor(centerX, centerY);
+    // Update cursor to actual mouse position in canvas coordinates
+    if (updateOwnCursor && stage) {
+      const pointerPos = stage.getPointerPosition();
+      if (pointerPos) {
+        // Convert screen coordinates to canvas coordinates (account for pan/zoom)
+        const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
+        const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+        updateOwnCursor(canvasX, canvasY);
+      }
     }
     
     forceUpdate({});

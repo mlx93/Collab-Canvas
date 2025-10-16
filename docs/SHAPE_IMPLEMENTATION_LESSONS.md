@@ -219,37 +219,41 @@ const handleDragMove = (e) => {
 
 ## 7a. Cursor Position During Drag (Multi-user)
 
-### ❌ Problem (Triangle)
-When dragging a triangle, the cursor in other browsers appeared at the top-left corner of the shape instead of the center, making it look disconnected from where the user was actually dragging.
+### ❌ Problem
+When dragging a shape, the cursor in other browsers was being positioned at the center of the shape, not at the actual mouse position where the user was clicking/dragging. This made the cursor "jump" to the center and didn't accurately represent where the user was grabbing the shape.
 
 ### ✅ Solution
-Calculate the center of the shape and pass that to `updateOwnCursor`:
+Use `stage.getPointerPosition()` to get the **actual mouse position**, then convert from screen coordinates to canvas coordinates:
 
 ```typescript
 const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
   const node = e.target;
-  const x = node.x();
-  const y = node.y();
+  const stage = node.getStage();
   
-  // Update own cursor position to CENTER of shape (not top-left)
-  if (updateOwnCursor) {
-    const centerX = x + triangle.width / 2;
-    const centerY = y + triangle.height / 2;
-    updateOwnCursor(centerX, centerY);
+  // Update cursor to ACTUAL mouse position in canvas coordinates
+  if (updateOwnCursor && stage) {
+    const pointerPos = stage.getPointerPosition();
+    if (pointerPos) {
+      // CRITICAL: Convert screen coordinates to canvas coordinates
+      // Account for viewport pan (x, y) and zoom (scale)
+      const canvasX = (pointerPos.x - viewport.x) / viewport.scale;
+      const canvasY = (pointerPos.y - viewport.y) / viewport.scale;
+      updateOwnCursor(canvasX, canvasY);
+    }
   }
   
   // ... rest of drag logic
 };
 ```
 
-**Key principle**: Always pass the visual center of the shape to `updateOwnCursor`, not the shape's anchor point (x, y).
+**Key principle**: 
+1. Use `stage.getPointerPosition()` to get the real cursor location in **screen coordinates**
+2. **Convert to canvas coordinates** by applying the inverse viewport transformation: `(screenPos - pan) / scale`
 
-**Action for new shapes**:
-- **Rectangle**: Center = `(x + width/2, y + height/2)`
-- **Circle**: Center = `(x, y)` (circle's anchor is already its center)
-- **Triangle**: Center = `(x + width/2, y + height/2)` (approximate visual center)
-- **Line**: Center = `(x + (x2-x)/2, y + (y2-y)/2)` (midpoint)
-- **Text**: Center = `(x + width/2, y + height/2)` (bounding box center)
+**Why this matters**: 
+- `stage.getPointerPosition()` returns screen pixels, but cursors in other browsers need canvas coordinates
+- Without the transformation, cursors appear offset when users pan/zoom differently
+- This ensures accurate cursor positioning regardless of each user's viewport state
 
 ---
 
@@ -473,7 +477,7 @@ When implementing Triangle, Line, or Text:
 - [ ] Implement delta-based resizing (not absolute position)
 - [ ] Stream live position updates during ALL interactive operations
 - [ ] Update ALL visual handles during drag
-- [ ] **Pass shape CENTER to `updateOwnCursor` (not top-left anchor)**
+- [ ] **Use `stage.getPointerPosition()` for `updateOwnCursor` (shows actual mouse position)**
 - [ ] **Add `resizeDimensions` state for shapes with complex geometry (triangles, lines)**
 - [ ] Create CSS-styled toolbar icon (larger, grey color)
 - [ ] Handle TypeScript type narrowing with `as any` when needed
