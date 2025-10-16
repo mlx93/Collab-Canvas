@@ -300,6 +300,7 @@ export function subscribeToShapes(
           shape.fontStyle = data.fontStyle;
           shape.backgroundColor = data.backgroundColor;
           shape.textColor = data.textColor;
+          shape.borderColor = data.borderColor;
         }
         
         shapes.push(shape);

@@ -206,11 +206,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addRectangle = () => {
     if (!user) return;
 
-    // Calculate center of viewport with smart offset logic from LeftToolbar
+    // Calculate center of viewport accounting for properties panel (288px = w-72)
     const canvasVisibleWidth = canvasState.stageSize.width;
     const canvasVisibleHeight = canvasState.stageSize.height;
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
     
-    const baseCenterX = -canvasState.viewport.x / canvasState.viewport.scale + (canvasVisibleWidth / 2) / canvasState.viewport.scale - 50;
+    // Center in available canvas space (accounting for properties panel)
+    const availableWidth = canvasVisibleWidth - propertiesPanelWidth;
+    const baseCenterX = -canvasState.viewport.x / canvasState.viewport.scale + (availableWidth / 2) / canvasState.viewport.scale - 50;
     const baseCenterY = -canvasState.viewport.y / canvasState.viewport.scale + (canvasVisibleHeight / 2) / canvasState.viewport.scale - 50;
 
     let targetX = baseCenterX;
@@ -259,8 +262,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addCircle = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center accounting for sidebar, properties panel, and zoom
-    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
+    const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
     const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
@@ -357,8 +362,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addTriangle = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center
-    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
+    const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
     const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
@@ -498,8 +505,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addText = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center
-    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
+    const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
     const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
@@ -542,8 +551,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       fontWeight: 'normal',
       fontStyle: 'normal',
       color: DEFAULT_COLOR,
-      backgroundColor: '#FFFFFF',
+      backgroundColor: 'transparent', // Default to translucent background
       textColor: '#000000',
+      borderColor: 'transparent', // Default to translucent border
       createdBy: user.email,
       lastModifiedBy: user.email,
     });

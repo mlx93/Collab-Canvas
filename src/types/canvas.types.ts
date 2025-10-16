@@ -87,6 +87,7 @@ export interface TextShape extends BaseShape {
   fontStyle: string; // 'normal' | 'italic'
   backgroundColor?: string; // Background color (default: white)
   textColor?: string; // Text color (default: black)
+  borderColor?: string; // Border color (default: black)
 }
 
 /**

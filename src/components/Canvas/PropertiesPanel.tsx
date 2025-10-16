@@ -5,11 +5,44 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
 import { setActiveEdit, clearActiveEdit, getUserCursorColor } from '../../services/activeEdits.service';
 
+// Enhanced color palette with translucent options
+const TEXT_COLOR_PALETTE = {
+  ...PREDEFINED_COLORS,
+  'translucent': 'transparent'
+};
+
+// Click outside handler for color dropdowns
+const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) {
+        callback();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [ref, callback]);
+};
+
 export const PropertiesPanel: React.FC = () => {
   const { rectangles, selectedRectangleId, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex } = useCanvas();
   const { user } = useAuth();
   const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
+  const [isTextColorDropdownOpen, setIsTextColorDropdownOpen] = useState(false);
+  const [isBackgroundColorDropdownOpen, setIsBackgroundColorDropdownOpen] = useState(false);
+  const [isBorderColorDropdownOpen, setIsBorderColorDropdownOpen] = useState(false);
+  
+  // Refs for click-outside detection
+  const textColorRef = React.useRef<HTMLDivElement>(null);
+  const backgroundColorRef = React.useRef<HTMLDivElement>(null);
+  const borderColorRef = React.useRef<HTMLDivElement>(null);
+  
+  // Click outside handlers
+  useClickOutside(textColorRef, () => setIsTextColorDropdownOpen(false));
+  useClickOutside(backgroundColorRef, () => setIsBackgroundColorDropdownOpen(false));
+  useClickOutside(borderColorRef, () => setIsBorderColorDropdownOpen(false));
   const [zIndexInput, setZIndexInput] = useState<string>(''); // Local state for z-index input
+  const [fontSizeInput, setFontSizeInput] = useState<string>(''); // Local state for font size input
 
   // Get selected rectangle
   const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId);
@@ -18,6 +51,14 @@ export const PropertiesPanel: React.FC = () => {
   React.useEffect(() => {
     if (selectedRectangle) {
       setZIndexInput(selectedRectangle.zIndex.toString());
+    }
+  }, [selectedRectangle]);
+
+  // Sync fontSizeInput with selectedRectangle.fontSize when it changes
+  React.useEffect(() => {
+    if (selectedRectangle && selectedRectangle.type === 'text') {
+      const textShape = selectedRectangle as any; // Type assertion for text shape
+      setFontSizeInput((textShape.fontSize || 16).toString());
     }
   }, [selectedRectangle]);
 
@@ -51,6 +92,36 @@ export const PropertiesPanel: React.FC = () => {
     }, 500);
   };
 
+  // Handle text color change
+  const handleTextColorChange = (newColor: string) => {
+    if (!selectedRectangle) return;
+    
+    updateRectangle(selectedRectangle.id, {
+      textColor: newColor,
+      lastModifiedBy: user?.email || selectedRectangle.createdBy,
+    });
+  };
+
+  // Handle background color change
+  const handleBackgroundColorChange = (newColor: string) => {
+    if (!selectedRectangle) return;
+    
+    updateRectangle(selectedRectangle.id, {
+      backgroundColor: newColor,
+      lastModifiedBy: user?.email || selectedRectangle.createdBy,
+    });
+  };
+
+  // Handle border color change
+  const handleBorderColorChange = (newColor: string) => {
+    if (!selectedRectangle) return;
+    
+    updateRectangle(selectedRectangle.id, {
+      borderColor: newColor,
+      lastModifiedBy: user?.email || selectedRectangle.createdBy,
+    });
+  };
+
   // Handle z-index change
   const handleZIndexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -68,6 +139,27 @@ export const PropertiesPanel: React.FC = () => {
   const handleZIndexBlur = () => {
     if (selectedRectangle) {
       setZIndexInput(selectedRectangle.zIndex.toString());
+    }
+  };
+
+  // Handle font size change
+  const handleFontSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFontSizeInput(value); // Allow any input temporarily
+
+    // Only update context if valid number within range
+    if (!selectedRectangle || selectedRectangle.type !== 'text') return;
+    const newFontSize = parseInt(value, 10);
+    if (!isNaN(newFontSize) && newFontSize >= 1 && newFontSize <= 72) {
+      updateRectangle(selectedRectangle.id, { fontSize: newFontSize });
+    }
+  };
+
+  // Handle font size blur - reset to actual value if invalid
+  const handleFontSizeBlur = () => {
+    if (selectedRectangle && selectedRectangle.type === 'text') {
+      const textShape = selectedRectangle as any; // Type assertion for text shape
+      setFontSizeInput((textShape.fontSize || 16).toString());
     }
   };
 
@@ -113,67 +205,50 @@ export const PropertiesPanel: React.FC = () => {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Properties</h3>
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-4">Properties</h3>
 
-      {/* Color Picker */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Color
-        </label>
-        <div className="relative">
-          <button
-            onClick={() => setIsColorDropdownOpen(!isColorDropdownOpen)}
-            className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
-            style={{ backgroundColor: selectedRectangle.color }}
-          >
-            <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
-              {getColorName(selectedRectangle.color)}
-            </span>
-          </button>
+      {/* Color Picker - Only show for non-text shapes */}
+      {selectedRectangle.type !== 'text' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-2">
+            Color
+          </label>
+          <div className="relative">
+            <button
+              onClick={() => setIsColorDropdownOpen(!isColorDropdownOpen)}
+              className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
+              style={{ backgroundColor: selectedRectangle.color }}
+            >
+              <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
+                {getColorName(selectedRectangle.color)}
+              </span>
+            </button>
 
-          {/* Color Dropdown */}
-          {isColorDropdownOpen && (
-            <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 grid grid-cols-5 gap-2">
-              {Object.entries(PREDEFINED_COLORS).map(([name, hex]) => (
-                <button
-                  key={name}
-                  onClick={() => handleColorChange(hex)}
-                  className="w-10 h-10 rounded-md border-2 transition-all hover:scale-110"
-                  style={{
-                    backgroundColor: hex,
-                    borderColor: selectedRectangle.color === hex ? '#1565C0' : '#D1D5DB',
-                  }}
-                  title={name.charAt(0).toUpperCase() + name.slice(1)}
-                >
-                  <span className="sr-only">{name}</span>
-                </button>
-              ))}
-            </div>
-          )}
+            {/* Color Dropdown */}
+            {isColorDropdownOpen && (
+              <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 grid grid-cols-5 gap-2">
+                {Object.entries(PREDEFINED_COLORS).map(([name, hex]) => (
+                  <button
+                    key={name}
+                    onClick={() => handleColorChange(hex)}
+                    className="w-10 h-10 rounded-md border-2 transition-all hover:scale-110"
+                    style={{
+                      backgroundColor: hex,
+                      borderColor: selectedRectangle.color === hex ? '#1565C0' : '#D1D5DB',
+                    }}
+                    title={name.charAt(0).toUpperCase() + name.slice(1)}
+                  >
+                    <span className="sr-only">{name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Z-Index Input (Editable) */}
-      <div>
-        <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
-          Z-Index (Layer Order)
-        </label>
-        <input
-          id="zindex"
-          type="text"
-          value={zIndexInput}
-          onChange={handleZIndexChange}
-          onBlur={handleZIndexBlur}
-          placeholder="Enter layer number"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck="false"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-500 mt-1">1 = back, higher = front</p>
-      </div>
 
       {/* Shape-specific size properties */}
       {selectedRectangle.type === 'rectangle' && (
@@ -294,20 +369,225 @@ export const PropertiesPanel: React.FC = () => {
             />
           </div>
 
+          {/* Text Color */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Text Color
+            </label>
+            <div className="relative" ref={textColorRef}>
+              <button
+                onClick={() => setIsTextColorDropdownOpen(!isTextColorDropdownOpen)}
+                className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
+                style={{ 
+                  backgroundColor: selectedRectangle.textColor || '#000000',
+                  backgroundImage: (selectedRectangle.textColor === 'transparent' || !selectedRectangle.textColor) ? 
+                    'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                  backgroundSize: '8px 8px',
+                  backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
+                }}
+              >
+                <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
+                  {selectedRectangle.textColor === 'transparent' ? 'Clear' : 'Text'}
+                </span>
+              </button>
+
+              {/* Text Color Dropdown */}
+              {isTextColorDropdownOpen && (
+                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 min-w-[200px]">
+                  <div className="grid grid-cols-6 gap-2 mb-3">
+                    {Object.entries(TEXT_COLOR_PALETTE).map(([name, hex]) => (
+                      <button
+                        key={name}
+                        onClick={() => {
+                          handleTextColorChange(hex);
+                          setIsTextColorDropdownOpen(false);
+                        }}
+                        className="w-8 h-8 rounded-md border-2 transition-all hover:scale-110 relative"
+                        style={{
+                          backgroundColor: hex,
+                          borderColor: (selectedRectangle.textColor || '#000000') === hex ? '#1565C0' : '#D1D5DB',
+                          backgroundImage: hex === 'transparent' ? 
+                            'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                          backgroundSize: '4px 4px',
+                          backgroundPosition: '0 0, 0 2px, 2px -2px, -2px 0px'
+                        }}
+                        title={name.charAt(0).toUpperCase() + name.slice(1)}
+                      >
+                        <span className="sr-only">{name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-200 pt-2">
+                    <button
+                      onClick={() => setIsTextColorDropdownOpen(false)}
+                      className="w-full text-xs text-gray-500 hover:text-gray-700 py-1 text-center"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Background Color */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Background Color
+            </label>
+            <div className="relative" ref={backgroundColorRef}>
+              <button
+                onClick={() => setIsBackgroundColorDropdownOpen(!isBackgroundColorDropdownOpen)}
+                className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
+                style={{ 
+                  backgroundColor: selectedRectangle.backgroundColor || '#FFFFFF',
+                  backgroundImage: (selectedRectangle.backgroundColor === 'transparent' || !selectedRectangle.backgroundColor) ? 
+                    'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                  backgroundSize: '8px 8px',
+                  backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
+                }}
+              >
+                <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
+                  {selectedRectangle.backgroundColor === 'transparent' ? 'Clear' : 'Background'}
+                </span>
+              </button>
+
+              {/* Background Color Dropdown */}
+              {isBackgroundColorDropdownOpen && (
+                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 min-w-[200px]">
+                  <div className="grid grid-cols-6 gap-2 mb-3">
+                    {Object.entries(TEXT_COLOR_PALETTE).map(([name, hex]) => (
+                      <button
+                        key={name}
+                        onClick={() => {
+                          handleBackgroundColorChange(hex);
+                          setIsBackgroundColorDropdownOpen(false);
+                        }}
+                        className="w-8 h-8 rounded-md border-2 transition-all hover:scale-110 relative"
+                        style={{
+                          backgroundColor: hex,
+                          borderColor: (selectedRectangle.backgroundColor || '#FFFFFF') === hex ? '#1565C0' : '#D1D5DB',
+                          backgroundImage: hex === 'transparent' ? 
+                            'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                          backgroundSize: '4px 4px',
+                          backgroundPosition: '0 0, 0 2px, 2px -2px, -2px 0px'
+                        }}
+                        title={name.charAt(0).toUpperCase() + name.slice(1)}
+                      >
+                        <span className="sr-only">{name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-200 pt-2">
+                    <button
+                      onClick={() => setIsBackgroundColorDropdownOpen(false)}
+                      className="w-full text-xs text-gray-500 hover:text-gray-700 py-1 text-center"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Border Color */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Border Color
+            </label>
+            <div className="relative" ref={borderColorRef}>
+              <button
+                onClick={() => setIsBorderColorDropdownOpen(!isBorderColorDropdownOpen)}
+                className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
+                style={{ 
+                  backgroundColor: selectedRectangle.borderColor || '#000000',
+                  backgroundImage: (selectedRectangle.borderColor === 'transparent' || !selectedRectangle.borderColor) ? 
+                    'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                  backgroundSize: '8px 8px',
+                  backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
+                }}
+              >
+                <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
+                  {selectedRectangle.borderColor === 'transparent' ? 'Clear' : 'Border'}
+                </span>
+              </button>
+
+              {/* Border Color Dropdown */}
+              {isBorderColorDropdownOpen && (
+                <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 min-w-[200px]">
+                  <div className="grid grid-cols-6 gap-2 mb-3">
+                    {Object.entries(TEXT_COLOR_PALETTE).map(([name, hex]) => (
+                      <button
+                        key={name}
+                        onClick={() => {
+                          handleBorderColorChange(hex);
+                          setIsBorderColorDropdownOpen(false);
+                        }}
+                        className="w-8 h-8 rounded-md border-2 transition-all hover:scale-110 relative"
+                        style={{
+                          backgroundColor: hex,
+                          borderColor: (selectedRectangle.borderColor || '#000000') === hex ? '#1565C0' : '#D1D5DB',
+                          backgroundImage: hex === 'transparent' ? 
+                            'linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%)' : 'none',
+                          backgroundSize: '4px 4px',
+                          backgroundPosition: '0 0, 0 2px, 2px -2px, -2px 0px'
+                        }}
+                        title={name.charAt(0).toUpperCase() + name.slice(1)}
+                      >
+                        <span className="sr-only">{name}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-gray-200 pt-2">
+                    <button
+                      onClick={() => setIsBorderColorDropdownOpen(false)}
+                      className="w-full text-xs text-gray-500 hover:text-gray-700 py-1 text-center"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Z-Index Input (Editable) */}
+          <div>
+            <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
+              Z-Index (Layer Order)
+            </label>
+            <input
+              id="zindex"
+              type="text"
+              value={zIndexInput}
+              onChange={handleZIndexChange}
+              onBlur={handleZIndexBlur}
+              placeholder="Enter layer number"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <p className="text-xs text-gray-500 mt-1">1 = back, higher = front</p>
+          </div>
+
           {/* Font Size */}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">
               Font Size
             </label>
             <input
-              type="number"
-              min="8"
-              max="72"
-              value={selectedRectangle.fontSize || 16}
-              onChange={(e) => {
-                const fontSize = Math.max(8, Math.min(72, parseInt(e.target.value) || 16));
-                updateRectangle(selectedRectangle.id, { fontSize });
-              }}
+              type="text"
+              value={fontSizeInput}
+              onChange={handleFontSizeChange}
+              onBlur={handleFontSizeBlur}
+              placeholder="Enter font size (1-72)"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck="false"
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -333,23 +613,6 @@ export const PropertiesPanel: React.FC = () => {
             </select>
           </div>
 
-          {/* Font Weight */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Font Weight
-            </label>
-            <select
-              value={selectedRectangle.fontWeight || 'normal'}
-              onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { fontWeight: e.target.value });
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="normal">Normal</option>
-              <option value="bold">Bold</option>
-              <option value="lighter">Lighter</option>
-            </select>
-          </div>
 
           {/* Font Style */}
           <div>
@@ -368,35 +631,6 @@ export const PropertiesPanel: React.FC = () => {
             </select>
           </div>
 
-          {/* Text Color */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Text Color
-            </label>
-            <input
-              type="color"
-              value={selectedRectangle.textColor || '#000000'}
-              onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { textColor: e.target.value });
-              }}
-              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer"
-            />
-          </div>
-
-          {/* Background Color */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Background Color
-            </label>
-            <input
-              type="color"
-              value={selectedRectangle.backgroundColor || '#FFFFFF'}
-              onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { backgroundColor: e.target.value });
-              }}
-              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer"
-            />
-          </div>
         </>
       )}
 
@@ -426,17 +660,20 @@ export const PropertiesPanel: React.FC = () => {
         />
       </div>
 
-      {/* Delete Button */}
-      <button
-        onClick={handleDelete}
-        className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors font-medium text-sm"
-      >
-        Delete Rectangle
-      </button>
-
-      <p className="text-xs text-gray-500 mt-2">
-        Press Delete or Backspace key to delete
-      </p>
+      </div>
+      
+      {/* Sticky Delete Button at Bottom */}
+      <div className="p-4 border-t border-gray-200 bg-white">
+        <button
+          onClick={handleDelete}
+          className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors font-medium text-sm"
+        >
+          Delete {selectedRectangle.type === 'text' ? 'Text Box' : 'Rectangle'}
+        </button>
+        <p className="text-xs text-gray-500 mt-2 text-center">
+          Press Delete or Backspace key to delete
+        </p>
+      </div>
     </div>
   );
 };

@@ -383,12 +383,6 @@ const RectangleComponent: React.FC<RectangleProps> = ({
             stroke="white"
             strokeWidth={2}
             onMouseDown={handleResizeStart}
-            onMouseEnter={() => {
-              document.body.style.cursor = 'nesw-resize'; // Diagonal cursor for top-right
-            }}
-            onMouseLeave={() => {
-              document.body.style.cursor = 'default';
-            }}
             perfectDrawEnabled={false}
             shadowForStrokeEnabled={false}
             hitStrokeWidth={20}

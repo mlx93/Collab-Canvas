@@ -52,7 +52,7 @@ export const Text: React.FC<TextProps> = ({
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
   const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
-  const initialResizeState = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const initialResizeState = useRef<{ x: number; y: number; width: number; height: number; initialPointerX: number; initialPointerY: number } | null>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
   // Throttled text update for real-time syncing (100ms delay for more responsive feel)
@@ -227,8 +227,9 @@ export const Text: React.FC<TextProps> = ({
     }
   };
 
-  const handleResizeStart = () => {
+  const handleResizeStart = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (renderOnlyIndicator) return;
+    e.cancelBubble = true; // Prevent drag propagation
     setIsResizing(true);
     onSelect(); // Auto-select on resize start
     
@@ -236,110 +237,127 @@ export const Text: React.FC<TextProps> = ({
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
     newZIndexRef.current = maxZIndex + 1;
     
+    // Get initial pointer position for delta-based resizing
+    const handle = e.target;
+    const stage = handle.getStage();
+    if (!stage) return;
+    
+    const initialPointerPos = stage.getPointerPosition();
+    if (!initialPointerPos) return;
+    
     // Store initial resize state for delta-based resizing
     initialResizeState.current = {
       x: currentX,
       y: currentY,
       width: displayWidth,
-      height: displayHeight
+      height: displayHeight,
+      initialPointerX: initialPointerPos.x,
+      initialPointerY: initialPointerPos.y
     };
     
     if (user?.email) {
       setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'resizing', getUserCursorColor(user.userId));
     }
+
+    // Handle mouse move and mouse up events
+    const handleMouseMove = () => {
+      if (!initialResizeState.current || !stage) return;
+      
+      const pointerPos = stage.getPointerPosition();
+      if (!pointerPos) return;
+      
+      // Calculate delta from initial pointer position (not from shape corner)
+      const deltaX = pointerPos.x - initialResizeState.current.initialPointerX;
+      const deltaY = pointerPos.y - initialResizeState.current.initialPointerY;
+      
+      // Calculate new dimensions based on deltas applied to initial dimensions
+      const newWidth = Math.max(20, initialResizeState.current.width + deltaX);
+      const newHeight = Math.max(20, initialResizeState.current.height + deltaY);
+      
+      // Update resize dimensions for visual feedback
+      setResizeDimensions({
+        width: newWidth,
+        height: newHeight
+      });
+
+      // Update handle position during drag
+      if (handleRef.current) {
+        handleRef.current.x(initialResizeState.current.x + newWidth);
+        handleRef.current.y(initialResizeState.current.y + newHeight);
+      }
+
+      // Update cursor to actual mouse position in canvas coordinates
+      if (updateOwnCursor && stage) {
+        const pointerPos = stage.getPointerPosition();
+        if (pointerPos) {
+          // Convert screen coordinates to canvas coordinates (account for pan/zoom)
+          const canvasX = (pointerPos.x - stage.x()) / stage.scaleX();
+          const canvasY = (pointerPos.y - stage.y()) / stage.scaleY();
+          updateOwnCursor(canvasX, canvasY);
+        }
+      }
+
+      // Stream live position (throttled to 16ms / 60 FPS)
+      if (user) {
+        throttledLivePositionUpdate.current(
+          text.id,
+          user.userId,
+          initialResizeState.current.x,
+          initialResizeState.current.y,
+          newWidth,
+          newHeight,
+          newZIndexRef.current !== null ? newZIndexRef.current : undefined
+        );
+      }
+      
+      forceUpdate({});
+    };
+
+    const handleMouseUp = async () => {
+      // Remove event listeners first
+      stage.off('mousemove', handleMouseMove);
+      stage.off('mouseup', handleMouseUp);
+      
+      if (!initialResizeState.current) return;
+      
+      const pointerPos = stage.getPointerPosition();
+      if (!pointerPos) return;
+      
+      // Calculate final dimensions using same delta logic as handleMouseMove
+      const deltaX = pointerPos.x - initialResizeState.current.initialPointerX;
+      const deltaY = pointerPos.y - initialResizeState.current.initialPointerY;
+      
+      const finalWidth = Math.max(20, initialResizeState.current.width + deltaX);
+      const finalHeight = Math.max(20, initialResizeState.current.height + deltaY);
+      
+      // Clear resize dimensions first
+      setResizeDimensions(null);
+      setIsResizing(false);
+      
+      // Wait for Firestore update to propagate before clearing active edit
+      // This ensures Browser 2 has the new text props from Firestore
+      // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
+      await updateRectangle(text.id, {
+        width: finalWidth,
+        height: finalHeight,
+        lastModifiedBy: user?.email || text.createdBy,
+      });
+      
+      // Clear remaining state
+      initialResizeState.current = null;
+      newZIndexRef.current = null;
+      
+      // Clear active edit
+      if (user?.email) {
+        clearActiveEdit(text.id);
+      }
+    };
+
+    // Add event listeners to stage
+    stage.on('mousemove', handleMouseMove);
+    stage.on('mouseup', handleMouseUp);
   };
 
-  const handleResizeMove = (e: Konva.KonvaEventObject<DragEvent>) => {
-    if (renderOnlyIndicator) return;
-    
-    const handle = e.target;
-    const stage = handle.getStage();
-    if (!stage || !initialResizeState.current) return;
-    
-    // Get current pointer position
-    const pointerPos = stage.getPointerPosition();
-    if (!pointerPos) return;
-    
-    // Calculate delta from initial resize position
-    const deltaX = pointerPos.x - (initialResizeState.current.x + initialResizeState.current.width);
-    const deltaY = pointerPos.y - (initialResizeState.current.y + initialResizeState.current.height);
-    
-    // Calculate new dimensions based on deltas
-    const newWidth = Math.max(20, initialResizeState.current.width + deltaX);
-    const newHeight = Math.max(20, initialResizeState.current.height + deltaY);
-    
-    // Update resize dimensions for visual feedback
-    setResizeDimensions({
-      width: newWidth,
-      height: newHeight
-    });
-
-    // Update handle position during drag
-    if (handleRef.current) {
-      handleRef.current.x(initialResizeState.current.x + newWidth);
-      handleRef.current.y(initialResizeState.current.y + newHeight);
-    }
-
-    // Update cursor position to resize handle position for other browsers
-    if (updateOwnCursor && stage) {
-      const handleX = initialResizeState.current.x + newWidth;
-      const handleY = initialResizeState.current.y + newHeight;
-      updateOwnCursor(handleX, handleY);
-    }
-
-    // Stream live position (throttled to 16ms / 60 FPS)
-    if (user) {
-      throttledLivePositionUpdate.current(
-        text.id,
-        user.userId,
-        initialResizeState.current.x,
-        initialResizeState.current.y,
-        newWidth,
-        newHeight,
-        newZIndexRef.current !== null ? newZIndexRef.current : undefined
-      );
-    }
-    
-    forceUpdate({});
-  };
-
-  const handleResizeEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
-    if (renderOnlyIndicator) return;
-    
-    if (!initialResizeState.current) return;
-    
-    const handle = e.target;
-    const stage = handle.getStage();
-    if (!stage) return;
-    
-    const pointerPos = stage.getPointerPosition();
-    if (!pointerPos) return;
-    
-    // Calculate final dimensions using same delta logic
-    const deltaX = pointerPos.x - (initialResizeState.current.x + initialResizeState.current.width);
-    const deltaY = pointerPos.y - (initialResizeState.current.y + initialResizeState.current.height);
-    
-    const finalWidth = Math.max(20, initialResizeState.current.width + deltaX);
-    const finalHeight = Math.max(20, initialResizeState.current.height + deltaY);
-    
-    // Update Firestore first
-    await updateRectangle(text.id, {
-      width: finalWidth,
-      height: finalHeight,
-      lastModifiedBy: user?.email || text.createdBy,
-    });
-    
-    // Clear states after Firestore updates
-    setIsResizing(false);
-    setResizeDimensions(null);
-    initialResizeState.current = null;
-    newZIndexRef.current = null;
-    
-    // Clear active edit
-    if (user?.email) {
-      clearActiveEdit(text.id);
-    }
-  };
 
   const handleDoubleClick = () => {
     if (renderOnlyIndicator) return;
@@ -491,7 +509,7 @@ export const Text: React.FC<TextProps> = ({
             width={displayWidth}
             height={displayHeight}
             fill={text.backgroundColor || '#FFFFFF'}
-            stroke="#000000"
+            stroke={text.borderColor || '#000000'}
             strokeWidth={1}
             opacity={text.opacity}
           />
@@ -542,26 +560,7 @@ export const Text: React.FC<TextProps> = ({
           fill="white"
           stroke="#1565C0"
           strokeWidth={2}
-          draggable={true}
-          onDragStart={handleResizeStart}
-          onDragMove={handleResizeMove}
-          onDragEnd={handleResizeEnd}
-          onMouseEnter={() => {
-            if (groupRef.current) {
-              const stage = groupRef.current.getStage();
-              if (stage) {
-                stage.container().style.cursor = 'nwse-resize';
-              }
-            }
-          }}
-          onMouseLeave={() => {
-            if (groupRef.current) {
-              const stage = groupRef.current.getStage();
-              if (stage) {
-                stage.container().style.cursor = 'default';
-              }
-            }
-          }}
+          onMouseDown={handleResizeStart}
         />
       )}
       
