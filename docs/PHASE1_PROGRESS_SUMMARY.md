@@ -398,12 +398,6 @@ Current measurements (from staging):
 4. **Phase 1 Testing** - Full test suite + manual testing
 5. **Phase 1 Merge** - staging → main → production
 
-**Estimated Effort**:
-- Line: ~2-3 hours (dual endpoints + resize logic)
-- Text: ~3-4 hours (inline editing + wrapping)
-- Rotation: ~2-3 hours (apply to all shapes + handle UI)
-- Testing: ~2-3 hours (unit + integration + manual)
-- **Total: ~10-15 hours** to complete Phase 1
 
 **Key Files to Carry Forward**:
 - SHAPE_IMPLEMENTATION_LESSONS.md (11 lessons + checklist)

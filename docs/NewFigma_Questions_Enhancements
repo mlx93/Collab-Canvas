@@ -1,0 +1,135 @@
+Clarifying Questions Before Phase 1 Implementation
+I have a few questions to ensure we implement Phase 1 correctly:
+1. Shape-Specific Questions
+Circle Shape (PR #10):
+When resizing a circle, should we show 4 corner handles (like rectangle) or 8 handles (N, NE, E, SE, S, SW, W, NW) for more flexibility?
+Should the circle resize handle maintain aspect ratio by default, or require Shift key for circular constraint?
+Triangle Shape (PR #11):
+Should the triangle always be equilateral (all sides equal), or allow free resize to create scalene triangles?
+Should it point up by default, or should we support rotation-agnostic creation?
+Line Shape (PR #12):
+For line creation, should we use:
+Option A: Click-drag (like drawing a line in Figma)
+Option B: Single click creates default 100px horizontal line at center
+Option C: Both (click-drag for custom, single click for default)
+Text Shape (PR #13):
+Should text auto-resize its bounding box to fit content, or have a fixed width with text wrapping?
+For font families, should we use system fonts (sans-serif, serif, monospace) or load web fonts (Roboto, Inter, etc.)?
+2. Compact Toolbar UI (PR #10)
+The task list shows we're creating a new CompactToolbar.tsx (48px width) to replace LeftToolbar.tsx (280px width).
+Question: Should we:
+Option A: Fully replace LeftToolbar and delete it after PR #10?
+Option B: Keep LeftToolbar as "deprecated" for backward compatibility (as the task list suggests)?
+My recommendation: Option A (clean slate) since we're on staging and haven't released this as a public API.
+3. Live Position Streaming for New Shapes
+Currently, livePositions.service.ts handles real-time position streaming for rectangles during drag/resize.
+Question: Should all new shapes (circle, triangle, line, text) use the exact same live position streaming logic, or do some shapes need special handling?
+For example:
+Line: Should we stream both (x, y) start point AND (x2, y2) end point?
+Text: Should we stream text content changes in real-time (as user types), or only position/formatting?
+4. Rotation Handle Placement (PR #14)
+The PRD specifies: "Rotation handle: Small circle 20px above selected shape"
+Question: For shapes with different geometries:
+Rectangle/Triangle: 20px above top-center (clear)
+Circle: 20px above top of bounding box (i.e., radius + 20px above center)?
+Line: 20px above midpoint?
+Text: 20px above top of text bounding box?
+Should the rotation handle distance be fixed (20px) or proportional to shape size (e.g., 10% of height)?
+5. Data Migration for Existing Rectangles
+When we add the rotation and opacity fields to BaseShape in PR #14, existing rectangles in Firestore won't have these fields.
+Question: Should we:
+Option A: Add default values in the code (e.g., rotation: shape.rotation ?? 0)
+Option B: Run a migration script to backfill existing shapes in Firestore
+Option C: Both (code defaults + optional migration script)
+My recommendation: Option A (code defaults) for simplicity, unless you have 1000+ shapes already.
+6. Testing Strategy
+The task list includes extensive testing checklists for each PR.
+Question: Should I:
+Option A: Implement all features first, then write all tests at the end of Phase 1?
+Option B: Implement and test each PR individually (PR #10 → test, PR #11 → test, etc.)?
+Option C: Implement all Phase 1 features, then write comprehensive tests before committing?
+My recommendation: Option C for speed, but Option B if you want to manually test each shape type as we go.
+7. Properties Panel Updates
+When a circle is selected, the properties panel should show radius instead of width/height. When a line is selected, it should show strokeWidth.
+Question: Should the properties panel:
+Option A: Show shape-specific properties (circle = radius, line = strokeWidth, etc.)
+Option B: Show a generic properties panel with only common fields (x, y, color, rotation)
+Option C: Show both common fields AND shape-specific fields (more comprehensive)
+My recommendation: Option C for best UX.
+8. Color Picker Button in Compact Toolbar
+The task list shows adding a color picker button (🎨) to the CompactToolbar.
+Question: Should this color picker:
+Option A: Set the default color for newly created shapes (before selection)?
+Option B: Apply color to currently selected shape(s) (if any)?
+Option C: Both (set default if nothing selected, apply to selection if selected)?
+My recommendation: Option C for flexibility.
+📋 Summary
+These are all the questions I have before starting Phase 1. Once you answer these (or tell me to use my best judgment on any), I'll start implementing:
+Phase 1 Mega-PR:
+PR #10: Circle + Compact Toolbar
+PR #11: Triangle
+PR #12: Line
+PR #13: Text
+PR #14: Universal Rotation
+This will give us 5 shape types and a much sleeker UI, setting a solid foundation for Phase 2. 🚀
+
+
+Answers:
+
+8 handles when resizing a circle.  let's require shift key for circular constraint.  Triangles are free to resize.  Point up by default though for the triangles.  Option C for line creation, click drag for custom and single click for deafult. Text - should have a fixed width with text wrapping.  Users can manually increase the width of the text box though.  system fonts are fine.  Let's go with option A for Compact Toolbar UI (fully replace left tool bar).  Where will the new create shape bar go (the bottom like in Figma)?  All shapes shoud use the exact same live streaming logic.  There may be special considerations for each shape though - we need to livestream both the start and end points of a line.  Text content changes should be live streamed as well, in addition to position and formatting.  Changes/Edits should all feel like they are occuring in real time, even if a 2nd user is in a different browser watching. Rotation handle placement: For shapes with different geometries:
+Rectangle/Triangle: 20px above top-center
+Circle: 20px above top of bounding box (i.e., radius + 20px above center)
+Line: 20px above midpoint
+Text: 20px above top of text bounding box  Also, the rotation handle should be proportional to shape size.  20px is just deafult for standard shape size.  I'm fine with whatever percentage we choose, like 10%.  For existing rectangles, let's add default values in the code for rotation and opacity.  For strategy, let go with a hybrid of Options A and C: implement all features first for Phase 1 (Option A), evaluate how we are doing (ask me), and then write all tests for phase 1 (after we get all features working in dev and compiling.  And Yes, the properties panel should show both  shape specific properties AND generic properties (Option C).  For the Color picker, Option C by setting default if nothing selected, apply to selection if selected. This likely shouldn't matter much because now a newly created shape automatically is being selected.
+
+
+Quick Clarification: Compact Toolbar Position
+You asked: "Where will the new create shape bar go (the bottom like in Figma)?"
+Looking at the task list and UI enhancements, I have the Compact Toolbar designed as a vertical left sidebar (48px wide) with shape icons stacked vertically:
+┌───┐
+│ ⬜ │ ← Rectangle
+│ ⚫ │ ← Circle  
+│ ▲ │ ← Triangle
+│ ─ │ ← Line
+│ T  │ ← Text
+├───┤
+│ 🎨 │ ← Color picker
+└───┘
+But you mentioned "the bottom like in Figma" - are you asking if we should put it at the bottom of the screen (horizontal toolbar) instead?
+Two Options:
+Option A: Vertical Left Sidebar (48px wide) - What I have designed in the task list
+Pros: Saves massive horizontal space (+232px canvas width), intuitive top-to-bottom flow
+Cons: Not exactly like Figma
+Option B: Horizontal Bottom Toolbar (full width, ~48px tall)
+Pros: More Figma-like, no left obstruction
+Cons: Reduces vertical canvas space, harder to reach on tall screens
+My Recommendation: Option A (Vertical Left) because:
+We gain 232px of horizontal canvas space
+Vertical sidebars are common in design tools (Figma, Sketch, Adobe XD all have left toolbars)
+Our properties panel is already on the right, so left toolbar creates nice symmetry
+Mobile/laptop screens benefit more from horizontal space than vertical
+However, if you prefer bottom horizontal like Figma's main toolbar, I can pivot the design!
+Which would you prefer? Or should I proceed with Option A (Vertical Left) as documented?
+
+Answer: Option A: Vertical Left Sidebar is good as designed.
+
+
+Phase 1 Implementation Plan Summary
+Based on your answers, here's what I'll build:
+Shape Specifications:
+Circle: 8 resize handles, Shift for circular constraint
+Triangle: Free resize, points up by default
+Line: Click-drag for custom OR single-click for default 100px horizontal
+Text: Fixed width with text wrapping, manually resizable width
+UI Changes:
+Compact Toolbar: Vertical left sidebar (48px), replaces LeftToolbar completely
+Color Picker: Sets default color (no selection) or applies to selected shape(s)
+Technical Details:
+Live Streaming: All shapes use same logic, special handling for line endpoints and text content
+Rotation Handles: Proportional to shape size (~10% of height), positioned per shape geometry
+Migration: Code defaults for rotation: 0 and opacity: 1 on existing rectangles
+Testing Strategy:
+Implement all Phase 1 features first
+Get everything working in dev
+Check with you
+Then write comprehensive tests
