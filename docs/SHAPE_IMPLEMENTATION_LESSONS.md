@@ -681,3 +681,76 @@ useEffect(() => {
 
 ✅ **Do use live z-index in Canvas sort** - This lets React's declarative rendering handle the layer order naturally.
 
+---
+
+## 13. Using the Correct Add Shape Function
+
+### ❌ Problem
+TypeScript error: `TS2554: Expected 0 arguments, but got 1` when calling `addRectangle()` with position/size parameters.
+
+### ✅ Solution
+The CanvasContext provides **two functions** for creating shapes:
+
+#### Simplified API (No Arguments)
+```typescript
+addRectangle: () => void;
+addCircle: () => void;
+addTriangle: () => void;
+```
+These auto-place shapes at the **viewport center** with built-in smart offset logic. Use these for:
+- Toolbar "Create" buttons that use default placement
+- Keyboard shortcuts (Cmd+R, Cmd+C, etc.)
+- Simple shape creation without custom positioning
+
+#### Full API (Custom Positioning)
+```typescript
+addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void;
+```
+Takes complete shape data for custom positioning. Use this for:
+- **LeftToolbar** with custom smart offset logic
+- Tests that need precise positioning
+- Any feature requiring specific x/y coordinates
+
+### Example: LeftToolbar.tsx
+
+```typescript
+// ✅ CORRECT - Use addRectangleFull for custom positioning
+export const LeftToolbar: React.FC = () => {
+  const { addRectangleFull, viewport, rectangles, stageSize } = useCanvas();
+  
+  const handleCreateRectangle = () => {
+    // ... custom positioning logic
+    const targetX = baseCenterX + offset;
+    const targetY = baseCenterY + offset;
+    
+    addRectangleFull({
+      x: targetX,
+      y: targetY,
+      width: 100,
+      height: 100,
+      color: selectedColor,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+};
+```
+
+```typescript
+// ❌ WRONG - Don't use addRectangle with arguments
+addRectangle({
+  x: targetX,
+  y: targetY,
+  // ... TypeScript error!
+});
+```
+
+### When to Use Which
+
+| Function | Arguments | Use Case |
+|----------|-----------|----------|
+| `addRectangle()` | None | Default placement at viewport center |
+| `addRectangleFull()` | Full shape data | Custom positioning with x/y coordinates |
+
+**Note:** The same pattern applies to `addCircle`/`addCircleFull` and `addTriangle`/`addTriangleFull` when those Full APIs exist.
+
