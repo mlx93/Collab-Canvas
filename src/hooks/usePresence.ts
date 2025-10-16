@@ -123,11 +123,13 @@ export function usePresence(): UsePresenceReturn {
       // Show toast notifications on connection changes (after initial load)
       if (connected && wasConnectedRef.current === false) {
         toast.success('Connected', {
+          id: 'connection-status', // Use fixed ID to prevent duplicates
           duration: 2000,
           position: 'bottom-center',
         });
       } else if (!connected && wasConnectedRef.current === true) {
         toast.error('Connection lost. Reconnecting...', {
+          id: 'connection-status', // Use fixed ID to prevent duplicates
           duration: Infinity, // Keep showing until reconnected
           position: 'bottom-center',
         });
