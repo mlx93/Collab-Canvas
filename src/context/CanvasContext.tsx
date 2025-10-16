@@ -1,6 +1,6 @@
 // Canvas Context with React Context API and Firestore integration
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { Rectangle, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
+import { Rectangle, RectangleShape, CircleShape, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
 import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
@@ -24,6 +24,7 @@ interface CanvasContextType {
   
   // Shape operations (simplified API for toolbar)
   addRectangle: () => void; // Simplified: creates rectangle at viewport center with smart offset
+  addCircle: () => void; // Simplified: creates circle at viewport center with smart offset
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
   updateRectangle: (id: string, updates: Partial<Shape>) => void;
   deleteRectangle: (id: string) => void;
@@ -70,24 +71,48 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         // find if the new shape matches and update selection to the real ID
         if (newSelectedId && newSelectedId.startsWith('temp-')) {
           const tempShape = prev.rectangles.find(r => r.id === newSelectedId);
-          if (tempShape && tempShape.type === 'rectangle') {
-            // Only handle rectangle matching for now (other shapes will be added later)
-            const matchingShape = shapes.find(s => {
-              if (s.type !== 'rectangle') return false;
-              
+          if (tempShape) {
+            let matchingShape: Shape | undefined;
+            
+            // Match based on shape type
+            for (const s of shapes) {
               // Convert Firestore Timestamp to Date if needed
               const createdAtTime = s.createdAt instanceof Date 
                 ? s.createdAt.getTime() 
                 : (s.createdAt as any).toDate().getTime();
               
-              // Match rectangles by position, size, color, and recent creation
-              return Math.abs(s.x - tempShape.x) < 1 &&
-                Math.abs(s.y - tempShape.y) < 1 &&
-                Math.abs(s.width - tempShape.width) < 1 &&
-                Math.abs(s.height - tempShape.height) < 1 &&
-                s.color === tempShape.color &&
-                Math.abs(createdAtTime - Date.now()) < 5000; // Created within last 5 seconds
-            });
+              // Must be same type and created recently
+              if (s.type !== tempShape.type) continue;
+              if (Math.abs(createdAtTime - Date.now()) >= 5000) continue;
+              
+              // Check position and color match
+              const positionMatches = Math.abs(s.x - tempShape.x) < 1 && 
+                                     Math.abs(s.y - tempShape.y) < 1;
+              const colorMatches = s.color === tempShape.color;
+              
+              if (!positionMatches || !colorMatches) continue;
+              
+              // Check shape-specific properties (use as any to bypass TypeScript narrowing issues)
+              let shapeSpecificMatch = false;
+              const sAny = s as any;
+              const tempAny = tempShape as any;
+              
+              if (sAny.type === 'rectangle') {
+                shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
+                                    Math.abs(sAny.height - tempAny.height) < 1;
+              }
+              
+              if (sAny.type === 'circle') {
+                shapeSpecificMatch = Math.abs(sAny.radius - tempAny.radius) < 1;
+              }
+              
+              // TODO: Add triangle, line, text matching here
+              
+              if (shapeSpecificMatch) {
+                matchingShape = s;
+                break;
+              }
+            }
             
             if (matchingShape) {
               newSelectedId = matchingShape.id;
@@ -211,6 +236,104 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     });
   };
 
+  // Simplified addCircle for toolbar (creates circle at viewport center with smart offset)
+  const addCircle = () => {
+    if (!user?.email) return;
+
+    // Calculate visible canvas center accounting for sidebar, properties panel, and zoom
+    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+
+    let targetX = baseCenterX;
+    let targetY = baseCenterY;
+
+    // Smart offset: check for overlap with any existing shape
+    const OVERLAP_THRESHOLD = 20; // px
+    const OFFSET_AMOUNT = 30; // px
+    const MAX_ATTEMPTS = 10;
+    let attempt = 0;
+    let foundNonOverlappingPosition = false;
+
+    const checkOverlap = (x: number, y: number) => {
+      return canvasState.rectangles.some(shape => {
+        const distanceX = Math.abs(shape.x - x);
+        const distanceY = Math.abs(shape.y - y);
+        return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
+      });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      const hasOverlap = checkOverlap(targetX, targetY);
+      if (!hasOverlap) {
+        foundNonOverlappingPosition = true;
+      } else {
+        targetX = baseCenterX + (OFFSET_AMOUNT * (attempt + 1));
+        targetY = baseCenterY + (OFFSET_AMOUNT * (attempt + 1));
+        attempt++;
+      }
+    }
+
+    // Create circle with default values
+    addCircleFull({
+      x: targetX,
+      y: targetY,
+      radius: 50, // Default radius for circles
+      color: DEFAULT_COLOR,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+
+  // Full addCircle API
+  const addCircleFull = async (circle: Omit<import('../types/canvas.types').CircleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
+    // Optimistic update: add to local state immediately
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    setCanvasState(prev => {
+      // Calculate highest z-index + 1 for new circle (higher = front)
+      const maxZIndex = prev.rectangles.length > 0 
+        ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
+        : 0;
+      
+      const newCircle: import('../types/canvas.types').CircleShape = {
+        ...circle,
+        type: 'circle',
+        id: tempId,
+        rotation: 0, // Default rotation
+        opacity: 1, // Default opacity
+        zIndex: maxZIndex + 1, // New circle goes to front
+        createdAt: new Date(),
+        lastModified: new Date()
+      };
+
+      return {
+        ...prev,
+        rectangles: [...prev.rectangles, newCircle],
+        selectedRectangleId: newCircle.id // Auto-select newly created circle
+      };
+    });
+
+    // Sync to Firestore in background
+    try {
+      // Add the required fields before persisting
+      const fullCircle = {
+        ...circle,
+        type: 'circle' as const,
+        rotation: 0,
+        opacity: 1
+      };
+      await canvasService.createRectangle(fullCircle as any); // TODO: Update service to accept Shape
+    } catch (error) {
+      console.error('Failed to create circle in Firestore:', error);
+      // Revert optimistic update on failure
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => r.id !== tempId),
+        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+      }));
+    }
+  };
+
   // Full addRectangle for backward compatibility and tests
   const addRectangleFull = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     // Optimistic update: add to local state immediately
@@ -311,7 +434,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     // Sync to Firestore in background
     try {
-      await canvasService.updateRectangle(id, updates as any); // TODO: Update service to accept Shape
+      // TODO (Phase 1 - Circle/Triangle/Line/Text): Refactor canvas.service.ts to accept Shape union type
+      // For now, using 'as any' cast since we only have rectangles and dev is working
+      await canvasService.updateRectangle(id, updates as any);
     } catch (error) {
       console.error('Failed to update rectangle in Firestore:', error);
       // The Firestore listener will eventually sync the correct state
@@ -456,6 +581,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     
     // Shape operations
     addRectangle,
+    addCircle,
     addRectangleFull,
     updateRectangle,
     deleteRectangle,

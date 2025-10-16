@@ -6,6 +6,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useCursors } from '../../hooks/useCursors';
 import { FPSCounter } from './FPSCounter';
 import { Rectangle } from './Rectangle';
+import Circle from './Circle';
 import { CursorOverlay } from '../Collaboration/CursorOverlay';
 import {
   CANVAS_WIDTH,
@@ -269,7 +270,19 @@ export const Canvas: React.FC = () => {
                   />
                 );
               }
-              // TODO: Add Circle, Triangle, Line, Text rendering here
+              if (shape.type === 'circle') {
+                return (
+                  <Circle
+                    key={shape.id}
+                    circle={shape}
+                    isSelected={selectedRectangleId === shape.id}
+                    onSelect={() => setSelectedRectangle(shape.id)}
+                    showIndicator={false}
+                    updateOwnCursor={updateOwnCursor}
+                  />
+                );
+              }
+              // TODO: Add Triangle, Line, Text rendering here
               return null;
             })}
         </Layer>
@@ -290,7 +303,19 @@ export const Canvas: React.FC = () => {
                 />
               );
             }
-            // TODO: Add other shape type indicators here
+            if (shape.type === 'circle') {
+              return (
+                <Circle
+                  key={`indicator-${shape.id}`}
+                  circle={shape}
+                  isSelected={false}
+                  onSelect={() => {}}
+                  showIndicator={true}
+                  renderOnlyIndicator={true}
+                />
+              );
+            }
+            // TODO: Add Triangle, Line, Text indicator rendering here
             return null;
           })}
         </Layer>

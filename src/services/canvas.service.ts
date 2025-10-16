@@ -258,13 +258,13 @@ export function subscribeToShapes(
 
       snapshot.forEach((doc) => {
         const data = doc.data();
-        shapes.push({
+        
+        // Build shape object with all possible fields (TypeScript will be happy with 'as any')
+        const shape: any = {
           id: doc.id,
           type: data.type || 'rectangle', // Default to rectangle for backward compatibility
           x: data.x,
           y: data.y,
-          width: data.width,
-          height: data.height,
           color: data.color,
           rotation: data.rotation ?? 0, // Default rotation for existing shapes
           opacity: data.opacity ?? 1, // Default opacity for existing shapes
@@ -275,7 +275,18 @@ export function subscribeToShapes(
           createdAt: data.createdAt,
           lastModifiedBy: data.lastModifiedBy,
           lastModified: data.lastModified,
-        });
+        };
+        
+        // Add shape-specific properties
+        if (data.type === 'rectangle' || !data.type) {
+          shape.width = data.width;
+          shape.height = data.height;
+        } else if (data.type === 'circle') {
+          shape.radius = data.radius;
+        }
+        // TODO: Add triangle, line, text properties
+        
+        shapes.push(shape);
       });
 
       // Sort by z-index ascending for rendering order

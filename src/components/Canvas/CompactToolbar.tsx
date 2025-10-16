@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useCanvas } from '../../hooks/useCanvas';
 
 export const CompactToolbar: React.FC = () => {
-  const { addRectangle } = useCanvas();
+  const { addRectangle, addCircle } = useCanvas();
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
   // Tool definitions
@@ -18,7 +18,17 @@ export const CompactToolbar: React.FC = () => {
         setTimeout(() => setActiveTool(null), 500);
       },
     },
-    // Circle, Triangle, Line, Text will be added in subsequent PRs
+    {
+      id: 'circle',
+      icon: '●',
+      label: 'Circle (C)',
+      action: () => {
+        addCircle();
+        setActiveTool('circle');
+        setTimeout(() => setActiveTool(null), 500);
+      },
+    },
+    // Triangle, Line, Text will be added in subsequent PRs
   ];
 
   return (
@@ -29,13 +39,17 @@ export const CompactToolbar: React.FC = () => {
           key={tool.id}
           onClick={tool.action}
           className={`
-            w-10 h-10 rounded flex items-center justify-center text-lg
+            w-10 h-10 rounded flex items-center justify-center text-xl
             hover:bg-gray-100 transition-colors relative group
             ${activeTool === tool.id ? 'bg-blue-100 ring-2 ring-blue-500' : ''}
           `}
           title={tool.label}
         >
-          {tool.icon}
+          {tool.id === 'circle' ? (
+            <div className="w-5 h-5 rounded-full bg-gray-600" />
+          ) : (
+            <span className="text-gray-600">{tool.icon}</span>
+          )}
           {/* Tooltip */}
           <span className="absolute left-14 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
             {tool.label}

@@ -26,7 +26,7 @@ export function usePresence(): UsePresenceReturn {
   const isFirstConnectionRef = useRef(true);
   const previousUserIdRef = useRef<string | null>(null);
 
-  console.log('[usePresence] Hook initialized, user:', user?.email, 'online users count:', onlineUsers.length);
+  // console.log('[usePresence] Hook initialized, user:', user?.email, 'online users count:', onlineUsers.length);
 
   // Set up presence on mount
   useEffect(() => {
