@@ -8,6 +8,8 @@ import { FPSCounter } from './FPSCounter';
 import { Rectangle } from './Rectangle';
 import Circle from './Circle';
 import Triangle from './Triangle';
+import Line from './Line';
+import Text from './Text';
 import { CursorOverlay } from '../Collaboration/CursorOverlay';
 import { subscribeToLivePositions, LivePosition } from '../../services/livePositions.service';
 import {
@@ -26,6 +28,23 @@ export const Canvas: React.FC = () => {
   const [isDragging, setIsDragging] = useState(false);
   const lastPosRef = useRef<{ x: number; y: number } | null>(null);
   const [livePositions, setLivePositions] = useState<Record<string, LivePosition>>({});
+  const [editingTextData, setEditingTextData] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    fontSize: number;
+    fontFamily: string;
+    fontStyle: string;
+    fontWeight: string;
+    textColor?: string;
+    backgroundColor?: string;
+    editText: string;
+    onChange: (text: string) => void;
+    onSubmit: () => void;
+    onCancel: () => void;
+  } | null>(null);
 
   // Update stage size on mount, window resize, AND container resize (e.g., properties panel open/close)
   useEffect(() => {
@@ -311,7 +330,39 @@ export const Canvas: React.FC = () => {
                   />
                 );
               }
-              // TODO: Add Line, Text rendering here
+        if (shape.type === 'line') {
+          return (
+            <Line
+              key={shape.id}
+              line={shape}
+              isSelected={selectedRectangleId === shape.id}
+              onSelect={() => setSelectedRectangle(shape.id)}
+              showIndicator={false}
+              updateOwnCursor={updateOwnCursor}
+            />
+          );
+        }
+
+        if (shape.type === 'text') {
+          return (
+            <Text
+              key={shape.id}
+              text={shape}
+              isSelected={selectedRectangleId === shape.id}
+              onSelect={() => setSelectedRectangle(shape.id)}
+              showIndicator={false}
+              updateOwnCursor={updateOwnCursor}
+              onEditingChange={(editing, data) => {
+                if (editing && data) {
+                  setEditingTextData(data);
+                } else {
+                  setEditingTextData(null);
+                }
+              }}
+            />
+          );
+        }
+              // TODO: Add Text rendering here
               return null;
             })}
         </Layer>
@@ -356,7 +407,32 @@ export const Canvas: React.FC = () => {
                 />
               );
             }
-            // TODO: Add Line, Text indicator rendering here
+        if (shape.type === 'line') {
+          return (
+            <Line
+              key={`indicator-${shape.id}`}
+              line={shape}
+              isSelected={false}
+              onSelect={() => {}}
+              showIndicator={true}
+              renderOnlyIndicator={true}
+            />
+          );
+        }
+
+        if (shape.type === 'text') {
+          return (
+            <Text
+              key={`indicator-${shape.id}`}
+              text={shape}
+              isSelected={false}
+              onSelect={() => {}}
+              showIndicator={true}
+              renderOnlyIndicator={true}
+            />
+          );
+        }
+            // TODO: Add Text indicator rendering here
             return null;
           })}
         </Layer>
@@ -374,6 +450,72 @@ export const Canvas: React.FC = () => {
       <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-3 py-1.5 rounded-md text-sm font-mono">
         {Math.round(viewport.scale * 100)}%
       </div>
+
+      {/* Text editing textarea - rendered outside Konva Stage */}
+      {editingTextData && (
+        <div
+          style={{
+            position: 'absolute',
+            left: editingTextData.x * viewport.scale + viewport.x,
+            top: editingTextData.y * viewport.scale + viewport.y,
+            width: editingTextData.width * viewport.scale,
+            height: editingTextData.height * viewport.scale,
+            zIndex: 1000,
+            pointerEvents: 'auto',
+          }}
+        >
+          <textarea
+            autoFocus
+            ref={(el) => {
+              if (el) {
+                setTimeout(() => {
+                  el.focus();
+                  // Place cursor at end of text
+                  el.selectionStart = el.value.length;
+                  el.selectionEnd = el.value.length;
+                }, 0);
+              }
+            }}
+            value={editingTextData.editText}
+            onChange={(e) => editingTextData.onChange(e.target.value)}
+            onBlur={() => {
+              // End editing mode but keep text selected
+              if (editingTextData) {
+                editingTextData.onSubmit();
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                editingTextData.onSubmit();
+              } else if (e.key === 'Escape') {
+                editingTextData.onCancel();
+              }
+            }}
+            placeholder="Type your text here..."
+            style={{
+              width: '100%',
+              height: '100%',
+              border: '2px solid #3b82f6',
+              borderRadius: '4px',
+              padding: '4px',
+              fontSize: `${editingTextData.fontSize}px`,
+              fontFamily: editingTextData.fontFamily,
+              fontStyle: editingTextData.fontStyle,
+              fontWeight: editingTextData.fontWeight,
+              color: editingTextData.textColor || '#000000',
+              backgroundColor: editingTextData.backgroundColor || '#FFFFFF',
+              resize: 'none',
+              outline: 'none',
+              lineHeight: 'normal', // Use browser default line height to match Konva
+              whiteSpace: 'pre-wrap', // Preserve line breaks and wrap text
+              wordWrap: 'break-word', // Break long words
+              overflow: 'hidden', // Hide overflow to match Konva text bounds
+              boxSizing: 'border-box', // Include padding in width/height calculation
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 };

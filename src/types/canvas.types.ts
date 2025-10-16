@@ -80,10 +80,13 @@ export interface TextShape extends BaseShape {
   type: 'text';
   text: string;
   width: number; // Bounding box width (for text wrapping)
+  height: number; // Bounding box height
   fontSize: number; // 12-72px
   fontFamily: string; // 'sans-serif' | 'serif' | 'monospace'
   fontWeight: string; // 'normal' | 'bold'
   fontStyle: string; // 'normal' | 'italic'
+  backgroundColor?: string; // Background color (default: white)
+  textColor?: string; // Text color (default: black)
 }
 
 /**

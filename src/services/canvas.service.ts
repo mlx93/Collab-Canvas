@@ -286,8 +286,21 @@ export function subscribeToShapes(
         } else if (data.type === 'triangle') {
           shape.width = data.width;
           shape.height = data.height;
+        } else if (data.type === 'line') {
+          shape.x2 = data.x2;
+          shape.y2 = data.y2;
+          shape.strokeWidth = data.strokeWidth;
+        } else if (data.type === 'text') {
+          shape.text = data.text;
+          shape.width = data.width;
+          shape.height = data.height;
+          shape.fontSize = data.fontSize;
+          shape.fontFamily = data.fontFamily;
+          shape.fontWeight = data.fontWeight;
+          shape.fontStyle = data.fontStyle;
+          shape.backgroundColor = data.backgroundColor;
+          shape.textColor = data.textColor;
         }
-        // TODO: Add line, text properties
         
         shapes.push(shape);
       });

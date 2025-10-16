@@ -1,0 +1,573 @@
+import React, { useRef, useState, useEffect } from 'react';
+import { Text as KonvaText, Rect as KonvaRect, Group, Circle } from 'react-konva';
+import Konva from 'konva';
+import { TextShape } from '../../types/canvas.types';
+import { useCanvas } from '../../hooks/useCanvas';
+import { useAuth } from '../../hooks/useAuth';
+import { 
+  setActiveEdit, 
+  clearActiveEdit, 
+  subscribeToActiveEdit, 
+  getUserCursorColor,
+  ActiveEdit
+} from '../../services/activeEdits.service';
+import {
+  setLivePosition,
+  subscribeToShapeLivePosition,
+  LivePosition
+} from '../../services/livePositions.service';
+import { throttle } from '../../utils/throttle';
+import { EditingIndicator } from '../Collaboration/EditingIndicator';
+
+interface TextProps {
+  text: TextShape;
+  isSelected: boolean;
+  onSelect: () => void;
+  showIndicator?: boolean;
+  renderOnlyIndicator?: boolean;
+  updateOwnCursor?: (x: number, y: number) => void;
+  onEditingChange?: (editing: boolean, textData?: { x: number; y: number; width: number; height: number; text: string; fontSize: number; fontFamily: string; fontStyle: string; fontWeight: string; textColor?: string; backgroundColor?: string; editText: string; onChange: (text: string) => void; onSubmit: () => void; onCancel: () => void }) => void;
+}
+
+export const Text: React.FC<TextProps> = ({
+  text,
+  isSelected,
+  onSelect,
+  showIndicator = false,
+  renderOnlyIndicator = false,
+  updateOwnCursor,
+  onEditingChange
+}) => {
+  const textRef = useRef<Konva.Text>(null);
+  const groupRef = useRef<Konva.Group>(null);
+  const handleRef = useRef<Konva.Circle>(null);
+  const { updateRectangle, rectangles, viewport } = useCanvas();
+  const { user } = useAuth();
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(text.text);
+  const [isResizing, setIsResizing] = useState(false);
+  const [, setIsDragging] = useState(false);
+  const [, forceUpdate] = useState({});
+  const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
+  const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
+  const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
+  const initialResizeState = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
+  
+  // Throttled text update for real-time syncing (100ms delay for more responsive feel)
+  const throttledTextUpdate = useRef(
+    throttle((textId: string, newText: string) => {
+      updateRectangle(textId, { 
+        text: newText, 
+        lastModifiedBy: user?.email || text.createdBy 
+      });
+    }, 100)
+  );
+
+  // Throttled live position update for smooth real-time streaming (16ms = 60 FPS)
+  const throttledLivePositionUpdate = useRef(
+    throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
+      setLivePosition(shapeId, userId, x, y, width, height, zIndex);
+    }, 16)
+  );
+
+  // Use live position if available, or resize dimensions if actively resizing
+  const currentPos = livePosition && livePosition.userId !== user?.userId
+    ? { 
+        x: livePosition.x, 
+        y: livePosition.y, 
+        width: livePosition.width, 
+        height: livePosition.height,
+        zIndex: livePosition.zIndex !== undefined ? livePosition.zIndex : text.zIndex
+      }
+    : resizeDimensions && isResizing
+    ? { 
+        x: text.x, 
+        y: text.y, 
+        width: resizeDimensions.width, 
+        height: resizeDimensions.height,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : text.zIndex
+      }
+    : { 
+        x: text.x, 
+        y: text.y, 
+        width: text.width, 
+        height: text.height,
+        zIndex: text.zIndex
+      };
+
+  const currentX = currentPos.x;
+  const currentY = currentPos.y;
+  
+  // Calculate display dimensions (use currentPos which handles live position and resize)
+  const displayWidth = currentPos.width;
+  const displayHeight = currentPos.height;
+
+  // Update resize handle position when selection changes or when resizing
+  useEffect(() => {
+    if (isSelected && handleRef.current && !renderOnlyIndicator) {
+      handleRef.current.x(currentX + displayWidth);
+      handleRef.current.y(currentY + displayHeight);
+    }
+  }, [isSelected, renderOnlyIndicator, currentX, currentY, displayWidth, displayHeight]);
+
+  // Handle active edit subscription
+  useEffect(() => {
+    if (!user?.email || renderOnlyIndicator) return;
+
+    const unsubscribe = subscribeToActiveEdit(text.id, (edit: ActiveEdit | null) => {
+      if (edit && edit.userId !== user.userId) {
+        setActiveEditState(edit);
+        if (edit.action === 'editing') {
+          setIsEditing(false);
+        }
+      } else {
+        setActiveEditState(null);
+      }
+    });
+
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text.id, user?.userId, renderOnlyIndicator]);
+
+  // Handle live position subscription
+  useEffect(() => {
+    if (!activeEdit || renderOnlyIndicator) {
+      setLivePositionState(null);
+      return;
+    }
+
+    const unsubscribe = subscribeToShapeLivePosition(text.id, (livePosition: LivePosition | null) => {
+      if (livePosition && livePosition.userId !== user?.userId) {
+        setLivePositionState(livePosition);
+      } else {
+        setLivePositionState(null);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      setLivePositionState(null);
+    };
+  }, [text.id, user?.userId, activeEdit, renderOnlyIndicator]);
+
+  const handleDragStart = () => {
+    if (renderOnlyIndicator) return;
+    setIsDragging(true);
+    onSelect(); // Auto-select on drag start
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
+    
+    if (user?.email) {
+      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'moving', getUserCursorColor(user.userId));
+    }
+  };
+
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (renderOnlyIndicator) return;
+    
+    const node = e.target;
+    const stage = node.getStage();
+    const newX = node.x();
+    const newY = node.y();
+    
+    // Update resize handle position during drag (bottom-right corner)
+    if (handleRef.current) {
+      handleRef.current.x(newX + displayWidth);
+      handleRef.current.y(newY + displayHeight);
+    }
+    
+    // Stream live position (throttled to 16ms / 60 FPS)
+    if (user) {
+      throttledLivePositionUpdate.current(
+        text.id,
+        user.userId,
+        newX,
+        newY,
+        displayWidth,
+        displayHeight,
+        newZIndexRef.current !== null ? newZIndexRef.current : undefined
+      );
+    }
+
+    // Update own cursor to actual mouse position in canvas coordinates
+    if (updateOwnCursor && stage) {
+      const pointerPos = stage.getPointerPosition();
+      if (pointerPos) {
+        // Convert screen coordinates to canvas coordinates (account for pan/zoom)
+        const canvasX = (pointerPos.x - stage.x()) / stage.scaleX();
+        const canvasY = (pointerPos.y - stage.y()) / stage.scaleY();
+        updateOwnCursor(canvasX, canvasY);
+      }
+    }
+    
+    // Force re-render to show live position updates
+    forceUpdate({});
+  };
+
+  const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (renderOnlyIndicator) return;
+    setIsDragging(false);
+    
+    const newX = e.target.x();
+    const newY = e.target.y();
+    
+    // Update Firestore
+    await updateRectangle(text.id, { x: newX, y: newY, lastModifiedBy: user?.email || text.createdBy });
+    
+    // Clear z-index ref
+    newZIndexRef.current = null;
+    
+    // Clear active edit
+    if (user?.email) {
+      clearActiveEdit(text.id);
+    }
+  };
+
+  const handleResizeStart = () => {
+    if (renderOnlyIndicator) return;
+    setIsResizing(true);
+    onSelect(); // Auto-select on resize start
+    
+    // Calculate new z-index (bring to front) - maxZIndex + 1
+    const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
+    newZIndexRef.current = maxZIndex + 1;
+    
+    // Store initial resize state for delta-based resizing
+    initialResizeState.current = {
+      x: currentX,
+      y: currentY,
+      width: displayWidth,
+      height: displayHeight
+    };
+    
+    if (user?.email) {
+      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'resizing', getUserCursorColor(user.userId));
+    }
+  };
+
+  const handleResizeMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (renderOnlyIndicator) return;
+    
+    const handle = e.target;
+    const stage = handle.getStage();
+    if (!stage || !initialResizeState.current) return;
+    
+    // Get current pointer position
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;
+    
+    // Calculate delta from initial resize position
+    const deltaX = pointerPos.x - (initialResizeState.current.x + initialResizeState.current.width);
+    const deltaY = pointerPos.y - (initialResizeState.current.y + initialResizeState.current.height);
+    
+    // Calculate new dimensions based on deltas
+    const newWidth = Math.max(20, initialResizeState.current.width + deltaX);
+    const newHeight = Math.max(20, initialResizeState.current.height + deltaY);
+    
+    // Update resize dimensions for visual feedback
+    setResizeDimensions({
+      width: newWidth,
+      height: newHeight
+    });
+
+    // Update handle position during drag
+    if (handleRef.current) {
+      handleRef.current.x(initialResizeState.current.x + newWidth);
+      handleRef.current.y(initialResizeState.current.y + newHeight);
+    }
+
+    // Update cursor position to resize handle position for other browsers
+    if (updateOwnCursor && stage) {
+      const handleX = initialResizeState.current.x + newWidth;
+      const handleY = initialResizeState.current.y + newHeight;
+      updateOwnCursor(handleX, handleY);
+    }
+
+    // Stream live position (throttled to 16ms / 60 FPS)
+    if (user) {
+      throttledLivePositionUpdate.current(
+        text.id,
+        user.userId,
+        initialResizeState.current.x,
+        initialResizeState.current.y,
+        newWidth,
+        newHeight,
+        newZIndexRef.current !== null ? newZIndexRef.current : undefined
+      );
+    }
+    
+    forceUpdate({});
+  };
+
+  const handleResizeEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (renderOnlyIndicator) return;
+    
+    if (!initialResizeState.current) return;
+    
+    const handle = e.target;
+    const stage = handle.getStage();
+    if (!stage) return;
+    
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;
+    
+    // Calculate final dimensions using same delta logic
+    const deltaX = pointerPos.x - (initialResizeState.current.x + initialResizeState.current.width);
+    const deltaY = pointerPos.y - (initialResizeState.current.y + initialResizeState.current.height);
+    
+    const finalWidth = Math.max(20, initialResizeState.current.width + deltaX);
+    const finalHeight = Math.max(20, initialResizeState.current.height + deltaY);
+    
+    // Update Firestore first
+    await updateRectangle(text.id, {
+      width: finalWidth,
+      height: finalHeight,
+      lastModifiedBy: user?.email || text.createdBy,
+    });
+    
+    // Clear states after Firestore updates
+    setIsResizing(false);
+    setResizeDimensions(null);
+    initialResizeState.current = null;
+    newZIndexRef.current = null;
+    
+    // Clear active edit
+    if (user?.email) {
+      clearActiveEdit(text.id);
+    }
+  };
+
+  const handleDoubleClick = () => {
+    if (renderOnlyIndicator) return;
+    
+    // Clear default text if present
+    const initialText = text.text === 'Double-click to edit' ? '' : text.text;
+    setEditText(initialText);
+    setIsEditing(true);
+    
+    if (user?.email) {
+      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'editing', getUserCursorColor(user.userId));
+    }
+    
+    // Notify parent that editing started - this will be updated via useEffect below
+    if (onEditingChange) {
+      onEditingChange(true, {
+        x: currentX,
+        y: currentY,
+        width: displayWidth,
+        height: displayHeight,
+        text: text.text,
+        fontSize: text.fontSize,
+        fontFamily: text.fontFamily,
+        fontStyle: text.fontStyle,
+        fontWeight: text.fontWeight,
+        textColor: text.textColor,
+        backgroundColor: text.backgroundColor,
+        editText: initialText,
+        onChange: handleTextChange,
+        onSubmit: handleTextSubmit,
+        onCancel: handleTextCancel
+      });
+    }
+  };
+
+  // Update parent when editText changes during editing
+  useEffect(() => {
+    if (isEditing && onEditingChange) {
+      onEditingChange(true, {
+        x: currentX,
+        y: currentY,
+        width: displayWidth,
+        height: displayHeight,
+        text: text.text,
+        fontSize: text.fontSize,
+        fontFamily: text.fontFamily,
+        fontStyle: text.fontStyle,
+        fontWeight: text.fontWeight,
+        textColor: text.textColor,
+        backgroundColor: text.backgroundColor,
+        editText: editText,
+        onChange: handleTextChange,
+        onSubmit: handleTextSubmit,
+        onCancel: handleTextCancel
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editText, isEditing]);
+
+  // Sync editText with text.text when text changes from PropertiesPanel
+  useEffect(() => {
+    if (!isEditing) {
+      setEditText(text.text);
+    }
+  }, [text.text, isEditing]);
+
+  // Handle real-time text updates during editing
+  const handleTextChange = (newText: string) => {
+    setEditText(newText);
+    
+    // Update Firestore with throttled updates for real-time sync
+    if (isEditing && user?.email) {
+      throttledTextUpdate.current(text.id, newText);
+    }
+  };
+
+  const handleTextSubmit = async () => {
+    if (renderOnlyIndicator) return;
+    setIsEditing(false);
+    
+    // If empty, revert to default text
+    const finalText = editText.trim() === '' ? 'Double-click to edit' : editText;
+    
+    // Update Firestore with final text (this will override any throttled updates)
+    await updateRectangle(text.id, { text: finalText, lastModifiedBy: user?.email || text.createdBy });
+    
+    // Clear active edit
+    if (user?.email) {
+      clearActiveEdit(text.id);
+    }
+    
+    // Notify parent that editing stopped
+    if (onEditingChange) {
+      onEditingChange(false);
+    }
+  };
+
+  const handleTextCancel = () => {
+    if (renderOnlyIndicator) return;
+    setIsEditing(false);
+    setEditText(text.text);
+    
+    // Clear active edit
+    if (user?.email) {
+      clearActiveEdit(text.id);
+    }
+    
+    // Notify parent that editing stopped
+    if (onEditingChange) {
+      onEditingChange(false);
+    }
+  };
+
+  if (renderOnlyIndicator) {
+    // Only show editing indicator if there's an active edit from another user
+    return activeEdit && showIndicator ? (
+      <EditingIndicator
+        activeEdit={activeEdit}
+        rectangleX={currentX}
+        rectangleY={currentY}
+        rectangleWidth={displayWidth}
+        scale={viewport.scale}
+      />
+    ) : null;
+  }
+
+  return (
+    <>
+      {/* Only show Konva elements when NOT editing */}
+      {!isEditing && (
+        <Group
+          ref={groupRef}
+          x={currentX}
+          y={currentY}
+          rotation={text.rotation}
+          draggable={true}
+          onClick={onSelect}
+          onTap={onSelect}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDblClick={handleDoubleClick}
+          onDblTap={handleDoubleClick}
+        >
+          {/* Background rectangle */}
+          <KonvaRect
+            x={0}
+            y={0}
+            width={displayWidth}
+            height={displayHeight}
+            fill={text.backgroundColor || '#FFFFFF'}
+            stroke="#000000"
+            strokeWidth={1}
+            opacity={text.opacity}
+          />
+          
+          {/* Selection border */}
+          {isSelected && (
+            <KonvaRect
+              x={0}
+              y={0}
+              width={displayWidth}
+              height={displayHeight}
+              stroke="#1565C0"
+              strokeWidth={4}
+              strokeScaleEnabled={false}
+              listening={false}
+            />
+          )}
+          
+          {/* Text */}
+          <KonvaText
+            ref={textRef}
+            x={0}
+            y={0}
+            width={displayWidth}
+            height={displayHeight}
+            text={text.text}
+            fontSize={text.fontSize}
+            fontFamily={text.fontFamily}
+            fontStyle={text.fontStyle}
+            fontWeight={text.fontWeight}
+            fill={text.text === 'Double-click to edit' ? '#9CA3AF' : (text.textColor || '#000000')}
+            padding={4}
+            wrap="word"
+            align="left"
+            verticalAlign="top"
+            opacity={text.opacity}
+          />
+        </Group>
+      )}
+      
+      {/* Resize handle (bottom-right corner) */}
+      {isSelected && !isEditing && (
+        <Circle
+          ref={handleRef}
+          x={currentX + displayWidth}
+          y={currentY + displayHeight}
+          radius={6}
+          fill="white"
+          stroke="#1565C0"
+          strokeWidth={2}
+          draggable={true}
+          onDragStart={handleResizeStart}
+          onDragMove={handleResizeMove}
+          onDragEnd={handleResizeEnd}
+          onMouseEnter={() => {
+            if (groupRef.current) {
+              const stage = groupRef.current.getStage();
+              if (stage) {
+                stage.container().style.cursor = 'nwse-resize';
+              }
+            }
+          }}
+          onMouseLeave={() => {
+            if (groupRef.current) {
+              const stage = groupRef.current.getStage();
+              if (stage) {
+                stage.container().style.cursor = 'default';
+              }
+            }
+          }}
+        />
+      )}
+      
+      {/* Textarea will be rendered by Canvas.tsx outside the Konva Stage */}
+    </>
+  );
+};
+
+export default Text;

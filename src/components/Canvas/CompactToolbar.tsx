@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useCanvas } from '../../hooks/useCanvas';
 
 export const CompactToolbar: React.FC = () => {
-  const { addRectangle, addCircle, addTriangle } = useCanvas();
+  const { addRectangle, addCircle, addTriangle, addLine, addText } = useCanvas();
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
   // Tool definitions
@@ -35,7 +35,24 @@ export const CompactToolbar: React.FC = () => {
         setTimeout(() => setActiveTool(null), 500);
       },
     },
-    // Line, Text will be added in subsequent PRs
+    {
+      id: 'line',
+      label: 'Line (L)',
+      action: () => {
+        addLine();
+        setActiveTool('line');
+        setTimeout(() => setActiveTool(null), 500);
+      },
+    },
+    {
+      id: 'text',
+      label: 'Text (T)',
+      action: () => {
+        addText();
+        setActiveTool('text');
+        setTimeout(() => setActiveTool(null), 500);
+      },
+    },
   ];
 
   return (
@@ -69,6 +86,16 @@ export const CompactToolbar: React.FC = () => {
               }}
             />
           )}
+        {tool.id === 'line' && (
+          <div 
+            className="w-7 h-0.5 bg-gray-600 rotate-45" 
+          />
+        )}
+        {tool.id === 'text' && (
+          <div className="w-6 h-6 flex items-center justify-center">
+            <span className="text-gray-600 font-bold text-lg">T</span>
+          </div>
+        )}
           {/* Tooltip */}
           <span className="absolute left-14 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
             {tool.label}

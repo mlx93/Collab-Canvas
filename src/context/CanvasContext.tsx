@@ -26,6 +26,8 @@ interface CanvasContextType {
   addRectangle: () => void; // Simplified: creates rectangle at viewport center with smart offset
   addCircle: () => void; // Simplified: creates circle at viewport center with smart offset
   addTriangle: () => void; // Simplified: creates triangle at viewport center with smart offset
+  addLine: () => void; // Simplified: creates line at viewport center with smart offset
+  addText: () => void; // Simplified: creates text at viewport center with smart offset
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
   updateRectangle: (id: string, updates: Partial<Shape>) => void;
   deleteRectangle: (id: string) => void;
@@ -112,7 +114,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
                                     Math.abs(sAny.height - tempAny.height) < 1;
               }
               
-              // TODO: Add line, text matching here
+              if (sAny.type === 'line') {
+                shapeSpecificMatch = Math.abs(sAny.x2 - tempAny.x2) < 1 &&
+                                    Math.abs(sAny.y2 - tempAny.y2) < 1 &&
+                                    Math.abs(sAny.strokeWidth - tempAny.strokeWidth) < 1;
+              }
+              
+        if (sAny.type === 'text') {
+          shapeSpecificMatch = sAny.text === tempAny.text &&
+                              Math.abs(sAny.width - tempAny.width) < 1 &&
+                              Math.abs((sAny.height || 30) - (tempAny.height || 30)) < 1 &&
+                              Math.abs(sAny.fontSize - tempAny.fontSize) < 1;
+        }
               
               if (shapeSpecificMatch) {
                 matchingShape = s;
@@ -433,6 +446,197 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   };
 
+  // Simplified addLine for toolbar (creates line at viewport center with smart offset)
+  const addLine = () => {
+    if (!user?.email) return;
+
+    // Calculate visible canvas center
+    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+
+    let targetX = baseCenterX;
+    let targetY = baseCenterY;
+
+    // Smart offset logic
+    const OVERLAP_THRESHOLD = 20;
+    const OFFSET_AMOUNT = 30;
+    const MAX_ATTEMPTS = 10;
+    let attempt = 0;
+    let foundNonOverlappingPosition = false;
+
+    const checkOverlap = (x: number, y: number) => {
+      return canvasState.rectangles.some(shape => {
+        const distanceX = Math.abs(shape.x - x);
+        const distanceY = Math.abs(shape.y - y);
+        return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
+      });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      if (!checkOverlap(targetX, targetY)) {
+        foundNonOverlappingPosition = true;
+      } else {
+        targetX = baseCenterX + (OFFSET_AMOUNT * (attempt + 1));
+        targetY = baseCenterY + (OFFSET_AMOUNT * (attempt + 1));
+        attempt++;
+      }
+    }
+
+    // Create line with default values (100px horizontal line)
+    addLineFull({
+      x: targetX,
+      y: targetY,
+      x2: targetX + 100, // 100px horizontal line
+      y2: targetY,
+      strokeWidth: 2, // Default stroke width
+      color: DEFAULT_COLOR,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+
+  const addText = () => {
+    if (!user?.email) return;
+
+    // Calculate visible canvas center
+    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+
+    let targetX = baseCenterX;
+    let targetY = baseCenterY;
+
+    // Smart offset logic
+    const OVERLAP_THRESHOLD = 20;
+    const OFFSET_AMOUNT = 30;
+    const MAX_ATTEMPTS = 10;
+    let attempt = 0;
+    let foundNonOverlappingPosition = false;
+
+    const checkOverlap = (x: number, y: number) => {
+      return canvasState.rectangles.some(shape => {
+        const distanceX = Math.abs(shape.x - x);
+        const distanceY = Math.abs(shape.y - y);
+        return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
+      });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      if (!checkOverlap(targetX, targetY)) {
+        foundNonOverlappingPosition = true;
+      } else {
+        targetX = baseCenterX + (OFFSET_AMOUNT * (attempt + 1));
+        targetY = baseCenterY + (OFFSET_AMOUNT * (attempt + 1));
+        attempt++;
+      }
+    }
+
+    // Create text with default values
+    addTextFull({
+      x: targetX,
+      y: targetY,
+      width: 200, // Default text width
+      height: 30, // Default text height
+      text: 'Double-click to edit',
+      fontSize: 16,
+      fontFamily: 'Arial',
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      color: DEFAULT_COLOR,
+      backgroundColor: '#FFFFFF',
+      textColor: '#000000',
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+
+  // Full addLine API
+  const addLineFull = async (line: Omit<import('../types/canvas.types').LineShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    setCanvasState(prev => {
+      const maxZIndex = prev.rectangles.length > 0 
+        ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
+        : 0;
+      
+      const newLine: import('../types/canvas.types').LineShape = {
+        ...line,
+        type: 'line',
+        id: tempId,
+        rotation: 0,
+        opacity: 1,
+        zIndex: maxZIndex + 1,
+        createdAt: new Date(),
+        lastModified: new Date()
+      };
+
+      return {
+        ...prev,
+        rectangles: [...prev.rectangles, newLine],
+        selectedRectangleId: newLine.id
+      };
+    });
+
+    try {
+      const fullLine = {
+        ...line,
+        type: 'line' as const,
+        rotation: 0,
+        opacity: 1
+      };
+      await canvasService.createRectangle(fullLine as any);
+    } catch (error) {
+      console.error('Failed to create line in Firestore:', error);
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => r.id !== tempId),
+        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+      }));
+    }
+  };
+
+  // Full addText API
+  const addTextFull = async (text: Omit<import('../types/canvas.types').TextShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    setCanvasState(prev => {
+      const maxZIndex = prev.rectangles.length > 0 
+        ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
+        : 0;
+      const newText: import('../types/canvas.types').TextShape = {
+        ...text,
+        type: 'text',
+        id: tempId,
+        rotation: 0,
+        opacity: 1,
+        zIndex: maxZIndex + 1,
+        createdAt: new Date(),
+        lastModified: new Date()
+      };
+      return {
+        ...prev,
+        rectangles: [...prev.rectangles, newText],
+        selectedRectangleId: newText.id
+      };
+    });
+
+    try {
+      const fullText = {
+        ...text,
+        type: 'text' as const,
+        rotation: 0,
+        opacity: 1
+      };
+      await canvasService.createRectangle(fullText as any); // TODO: Update service to accept Shape
+    } catch (error) {
+      console.error('Failed to create text in Firestore:', error);
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => r.id !== tempId),
+        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+      }));
+    }
+  };
+
   // Full addRectangle for backward compatibility and tests
   const addRectangleFull = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     // Optimistic update: add to local state immediately
@@ -682,6 +886,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     addRectangle,
     addCircle,
     addTriangle,
+    addLine,
+    addText,
     addRectangleFull,
     updateRectangle,
     deleteRectangle,

@@ -253,6 +253,153 @@ export const PropertiesPanel: React.FC = () => {
         </>
       )}
 
+      {/* Line-specific properties */}
+      {selectedRectangle.type === 'line' && (
+        <>
+          {/* Stroke Width */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Stroke Width
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={selectedRectangle.strokeWidth || 2}
+              onChange={(e) => {
+                const strokeWidth = Math.max(1, Math.min(20, parseInt(e.target.value) || 2));
+                updateRectangle(selectedRectangle.id, { strokeWidth });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        </>
+      )}
+
+      {/* Text-specific properties */}
+      {selectedRectangle.type === 'text' && (
+        <>
+          {/* Text Content */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Text Content
+            </label>
+            <textarea
+              value={selectedRectangle.text || ''}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { text: e.target.value });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows={3}
+            />
+          </div>
+
+          {/* Font Size */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Font Size
+            </label>
+            <input
+              type="number"
+              min="8"
+              max="72"
+              value={selectedRectangle.fontSize || 16}
+              onChange={(e) => {
+                const fontSize = Math.max(8, Math.min(72, parseInt(e.target.value) || 16));
+                updateRectangle(selectedRectangle.id, { fontSize });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Font Family */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Font Family
+            </label>
+            <select
+              value={selectedRectangle.fontFamily || 'Arial'}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { fontFamily: e.target.value });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="Arial">Arial</option>
+              <option value="Helvetica">Helvetica</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Verdana">Verdana</option>
+              <option value="Courier New">Courier New</option>
+            </select>
+          </div>
+
+          {/* Font Weight */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Font Weight
+            </label>
+            <select
+              value={selectedRectangle.fontWeight || 'normal'}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { fontWeight: e.target.value });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="normal">Normal</option>
+              <option value="bold">Bold</option>
+              <option value="lighter">Lighter</option>
+            </select>
+          </div>
+
+          {/* Font Style */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Font Style
+            </label>
+            <select
+              value={selectedRectangle.fontStyle || 'normal'}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { fontStyle: e.target.value });
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="normal">Normal</option>
+              <option value="italic">Italic</option>
+            </select>
+          </div>
+
+          {/* Text Color */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Text Color
+            </label>
+            <input
+              type="color"
+              value={selectedRectangle.textColor || '#000000'}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { textColor: e.target.value });
+              }}
+              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer"
+            />
+          </div>
+
+          {/* Background Color */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Background Color
+            </label>
+            <input
+              type="color"
+              value={selectedRectangle.backgroundColor || '#FFFFFF'}
+              onChange={(e) => {
+                updateRectangle(selectedRectangle.id, { backgroundColor: e.target.value });
+              }}
+              className="w-full h-10 border border-gray-300 rounded-md cursor-pointer"
+            />
+          </div>
+        </>
+      )}
+
       {/* X Position Display (Read-only) */}
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-2">

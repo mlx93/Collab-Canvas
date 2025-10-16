@@ -14,7 +14,7 @@ import { CANVAS_ID } from '../utils/constants';
 /**
  * Active edit action types
  */
-export type EditAction = 'moving' | 'resizing' | 'recoloring';
+export type EditAction = 'moving' | 'resizing' | 'recoloring' | 'editing';
 
 /**
  * Active edit data structure

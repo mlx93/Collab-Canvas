@@ -23,6 +23,8 @@ export interface LivePosition {
   width: number;
   height: number;
   zIndex?: number; // Z-index for instant layer updates (bring to front)
+  x2?: number; // Line end point X
+  y2?: number; // Line end point Y
   lastUpdate: number; // Timestamp
 }
 
@@ -45,6 +47,8 @@ function getLivePositionRef(shapeId: string) {
  * @param width - Current width
  * @param height - Current height
  * @param zIndex - Optional z-index for instant layer updates
+ * @param x2 - Optional line end point X
+ * @param y2 - Optional line end point Y
  */
 export async function setLivePosition(
   shapeId: string,
@@ -53,7 +57,9 @@ export async function setLivePosition(
   y: number,
   width: number,
   height: number,
-  zIndex?: number
+  zIndex?: number,
+  x2?: number,
+  y2?: number
 ): Promise<void> {
   const livePositionRef = getLivePositionRef(shapeId);
 
@@ -64,6 +70,8 @@ export async function setLivePosition(
     width,
     height,
     ...(zIndex !== undefined && { zIndex }),
+    ...(x2 !== undefined && { x2 }),
+    ...(y2 !== undefined && { y2 }),
     lastUpdate: Date.now(),
   };
 
