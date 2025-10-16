@@ -36,12 +36,12 @@ export function useCursors(): UseCursorsReturn {
       return;
     }
 
-    // Create throttled function for cursor updates (16ms = 60 FPS for smooth cursor movement)
+    // Create throttled function for cursor updates (8ms = 120 FPS for ultra-smooth cursor movement)
     throttledUpdate.current = throttle((x: number, y: number) => {
       const firstName = user.firstName || 'User';
       const lastName = user.lastName || '';
       updateCursorPosition(user.userId, user.email, firstName, lastName, x, y);
-    }, 16);
+    }, 8);
 
     // Cleanup: Remove cursor on unmount
     return () => {

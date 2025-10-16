@@ -12,29 +12,40 @@ export function throttle<T extends (...args: any[]) => void>(
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
   let timeoutId: NodeJS.Timeout | null = null;
+  let pendingArgs: Parameters<T> | null = null;
 
   return function throttled(...args: Parameters<T>): void {
     const now = Date.now();
     const timeSinceLastCall = now - lastCall;
 
-    // Clear any pending timeout
-    if (timeoutId !== null) {
-      clearTimeout(timeoutId);
-      timeoutId = null;
-    }
+    // Always store the most recent args
+    pendingArgs = args;
 
     if (timeSinceLastCall >= delay) {
       // Enough time has passed, execute immediately
       lastCall = now;
+      // Clear any pending timeout since we're executing now
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      pendingArgs = null;
       func(...args);
-    } else {
-      // Schedule execution for later (trailing edge)
+    } else if (timeoutId === null) {
+      // Only schedule if no timeout is already pending
+      // This prevents multiple timeouts from being queued
       const remainingTime = delay - timeSinceLastCall;
       timeoutId = setTimeout(() => {
         lastCall = Date.now();
-        func(...args);
+        // Use the most recent args, not the args from when timeout was scheduled
+        if (pendingArgs !== null) {
+          func(...pendingArgs);
+          pendingArgs = null;
+        }
         timeoutId = null;
       }, remainingTime);
     }
+    // If timeoutId is not null, we already have a pending execution
+    // The args will be updated for the next execution
   };
 }

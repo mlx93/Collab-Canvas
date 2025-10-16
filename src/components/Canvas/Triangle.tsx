@@ -51,11 +51,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const livePositionTimestampRef = useRef<number>(0);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS)
+  // Throttled function for live position updates (120 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 16)
+    }, 8)
   );
   
   // Subscribe to active edits for this shape

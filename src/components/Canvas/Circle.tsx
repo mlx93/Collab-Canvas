@@ -50,11 +50,11 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS)
+  // Throttled function for live position updates (120 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, radius: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
-    }, 16)
+    }, 8)
   );
   
   // Subscribe to active edits for this shape
@@ -231,7 +231,7 @@ const CircleComponent: React.FC<CircleProps> = ({
       handle.x(centerX + newRadius);
       handle.y(centerY);
       
-      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           circle.id,

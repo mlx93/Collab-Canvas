@@ -62,6 +62,9 @@ export function getCursorColorForUser(email: string): {
 // Cache colors per user to avoid recalculation
 const colorCache = new Map<string, { colorName: string; cursorColor: string }>();
 
+// Cache onDisconnect handlers to avoid creating multiple handlers per user
+const disconnectHandlers = new Map<string, any>();
+
 /**
  * Update cursor position in RTDB
  * Should be called on mousemove (throttled to 16ms for 60 FPS)
@@ -106,8 +109,12 @@ export async function updateCursorPosition(
     // Update position (don't await - fire and forget for speed)
     set(cursorRef, cursorData);
     
-    // Configure auto-cleanup on disconnect (don't await - not time sensitive)
-    onDisconnect(cursorRef).remove();
+    // Only set up onDisconnect handler once per user to avoid spam
+    if (!disconnectHandlers.has(userId)) {
+      const handler = onDisconnect(cursorRef);
+      handler.remove();
+      disconnectHandlers.set(userId, handler);
+    }
   } catch (error) {
     console.error('[cursor.service] Failed to update cursor position:', error);
     // Don't throw - collaboration features are non-critical
@@ -126,7 +133,11 @@ export async function removeCursor(userId: string): Promise<void> {
   try {
     await remove(cursorRef);
     // Cancel onDisconnect if manually removing
-    await onDisconnect(cursorRef).cancel();
+    const handler = disconnectHandlers.get(userId);
+    if (handler) {
+      await handler.cancel();
+      disconnectHandlers.delete(userId);
+    }
   } catch (error) {
     console.error('Failed to remove cursor:', error);
     // Don't throw - collaboration features are non-critical

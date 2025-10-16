@@ -50,11 +50,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS)
+  // Throttled function for live position updates (120 FPS for smoother dragging)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 16)
+    }, 8)
   );
   
   // Subscribe to active edits for this shape
@@ -184,7 +184,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       }
     }
     
-    // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
+    // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
     if (user) {
       throttledLivePositionUpdate.current(
         rectangle.id,
@@ -278,7 +278,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       handle.x(rect.x() + newWidth);
       handle.y(newY);
 
-      // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
+      // Stream live position (with z-index) to RTDB (throttled to 8ms / 120 FPS)
       if (user) {
         throttledLivePositionUpdate.current(
           rectangle.id,
