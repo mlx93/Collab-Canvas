@@ -1,6 +1,6 @@
 // Canvas Context with React Context API and Firestore integration
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { Rectangle, RectangleShape, CircleShape, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
+import { Rectangle, RectangleShape, CircleShape, TriangleShape, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
 import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
@@ -25,6 +25,7 @@ interface CanvasContextType {
   // Shape operations (simplified API for toolbar)
   addRectangle: () => void; // Simplified: creates rectangle at viewport center with smart offset
   addCircle: () => void; // Simplified: creates circle at viewport center with smart offset
+  addTriangle: () => void; // Simplified: creates triangle at viewport center with smart offset
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
   updateRectangle: (id: string, updates: Partial<Shape>) => void;
   deleteRectangle: (id: string) => void;
@@ -106,7 +107,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
                 shapeSpecificMatch = Math.abs(sAny.radius - tempAny.radius) < 1;
               }
               
-              // TODO: Add triangle, line, text matching here
+              if (sAny.type === 'triangle') {
+                shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
+                                    Math.abs(sAny.height - tempAny.height) < 1;
+              }
+              
+              // TODO: Add line, text matching here
               
               if (shapeSpecificMatch) {
                 matchingShape = s;
@@ -326,6 +332,99 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Failed to create circle in Firestore:', error);
       // Revert optimistic update on failure
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => r.id !== tempId),
+        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+      }));
+    }
+  };
+
+  // Simplified addTriangle for toolbar (creates triangle at viewport center with smart offset)
+  const addTriangle = () => {
+    if (!user?.email) return;
+
+    // Calculate visible canvas center
+    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+
+    let targetX = baseCenterX;
+    let targetY = baseCenterY;
+
+    // Smart offset logic
+    const OVERLAP_THRESHOLD = 20;
+    const OFFSET_AMOUNT = 30;
+    const MAX_ATTEMPTS = 10;
+    let attempt = 0;
+    let foundNonOverlappingPosition = false;
+
+    const checkOverlap = (x: number, y: number) => {
+      return canvasState.rectangles.some(shape => {
+        const distanceX = Math.abs(shape.x - x);
+        const distanceY = Math.abs(shape.y - y);
+        return distanceX < OVERLAP_THRESHOLD && distanceY < OVERLAP_THRESHOLD;
+      });
+    };
+
+    while (attempt < MAX_ATTEMPTS && !foundNonOverlappingPosition) {
+      if (!checkOverlap(targetX, targetY)) {
+        foundNonOverlappingPosition = true;
+      } else {
+        targetX = baseCenterX + (OFFSET_AMOUNT * (attempt + 1));
+        targetY = baseCenterY + (OFFSET_AMOUNT * (attempt + 1));
+        attempt++;
+      }
+    }
+
+    // Create triangle with default values
+    addTriangleFull({
+      x: targetX,
+      y: targetY,
+      width: 100,
+      height: 100,
+      color: DEFAULT_COLOR,
+      createdBy: user.email,
+      lastModifiedBy: user.email,
+    });
+  };
+
+  // Full addTriangle API
+  const addTriangleFull = async (triangle: Omit<TriangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    setCanvasState(prev => {
+      const maxZIndex = prev.rectangles.length > 0 
+        ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
+        : 0;
+      
+      const newTriangle: TriangleShape = {
+        ...triangle,
+        type: 'triangle',
+        id: tempId,
+        rotation: 0,
+        opacity: 1,
+        zIndex: maxZIndex + 1,
+        createdAt: new Date(),
+        lastModified: new Date()
+      };
+
+      return {
+        ...prev,
+        rectangles: [...prev.rectangles, newTriangle],
+        selectedRectangleId: newTriangle.id
+      };
+    });
+
+    try {
+      const fullTriangle = {
+        ...triangle,
+        type: 'triangle' as const,
+        rotation: 0,
+        opacity: 1
+      };
+      await canvasService.createRectangle(fullTriangle as any);
+    } catch (error) {
+      console.error('Failed to create triangle in Firestore:', error);
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
@@ -582,6 +681,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Shape operations
     addRectangle,
     addCircle,
+    addTriangle,
     addRectangleFull,
     updateRectangle,
     deleteRectangle,

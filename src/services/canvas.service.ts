@@ -283,8 +283,11 @@ export function subscribeToShapes(
           shape.height = data.height;
         } else if (data.type === 'circle') {
           shape.radius = data.radius;
+        } else if (data.type === 'triangle') {
+          shape.width = data.width;
+          shape.height = data.height;
         }
-        // TODO: Add triangle, line, text properties
+        // TODO: Add line, text properties
         
         shapes.push(shape);
       });

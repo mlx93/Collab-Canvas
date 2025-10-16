@@ -33,11 +33,17 @@ if (data.type === 'rectangle' || !data.type) {
   shape.height = data.height;
 } else if (data.type === 'circle') {
   shape.radius = data.radius;
+} else if (data.type === 'triangle') {
+  shape.width = data.width;
+  shape.height = data.height;
 }
-// TODO: Add triangle, line, text properties
+// TODO: Add line, text properties
 ```
 
 **Action for new shapes**: Add a new conditional block for each shape type's unique properties.
+
+### 🔴 CRITICAL: This is the #1 cause of shapes flickering and disappearing!
+If you add a new shape and it flickers away after creation, **CHECK THIS FIRST**. Without loading the shape-specific fields from Firestore, the shape will appear to "lose" its data when the subscription updates, causing it to disappear.
 
 ---
 
@@ -211,6 +217,101 @@ const handleDragMove = (e) => {
 
 ---
 
+## 7a. Cursor Position During Drag (Multi-user)
+
+### ❌ Problem (Triangle)
+When dragging a triangle, the cursor in other browsers appeared at the top-left corner of the shape instead of the center, making it look disconnected from where the user was actually dragging.
+
+### ✅ Solution
+Calculate the center of the shape and pass that to `updateOwnCursor`:
+
+```typescript
+const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+  const node = e.target;
+  const x = node.x();
+  const y = node.y();
+  
+  // Update own cursor position to CENTER of shape (not top-left)
+  if (updateOwnCursor) {
+    const centerX = x + triangle.width / 2;
+    const centerY = y + triangle.height / 2;
+    updateOwnCursor(centerX, centerY);
+  }
+  
+  // ... rest of drag logic
+};
+```
+
+**Key principle**: Always pass the visual center of the shape to `updateOwnCursor`, not the shape's anchor point (x, y).
+
+**Action for new shapes**:
+- **Rectangle**: Center = `(x + width/2, y + height/2)`
+- **Circle**: Center = `(x, y)` (circle's anchor is already its center)
+- **Triangle**: Center = `(x + width/2, y + height/2)` (approximate visual center)
+- **Line**: Center = `(x + (x2-x)/2, y + (y2-y)/2)` (midpoint)
+- **Text**: Center = `(x + width/2, y + height/2)` (bounding box center)
+
+---
+
+## 7b. Live Visual Feedback During Resize
+
+### ❌ Problem (Triangle)
+When resizing a triangle, only the resize handle moved - the triangle shape itself didn't update until the resize was complete. This made the handle appear "untethered" from the triangle.
+
+### ✅ Solution
+Add local state to track resize dimensions and use it for rendering during active resize:
+
+```typescript
+// Add state for resize dimensions
+const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
+
+// Update currentPos calculation to use resize dimensions when actively resizing
+const currentPos = livePosition && livePosition.userId !== user?.userId
+  ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
+  : resizeDimensions && isResizing
+  ? { x: triangle.x, y: triangle.y, width: resizeDimensions.width, height: resizeDimensions.height }
+  : { x: triangle.x, y: triangle.y, width: triangle.width, height: triangle.height };
+
+// In handleMouseMove during resize:
+const handleMouseMove = () => {
+  // ... calculate newWidth, newHeight ...
+  
+  // Update resize dimensions for visual feedback
+  setResizeDimensions({ width: newWidth, height: newHeight });
+  
+  // Update handle position
+  handle.x(anchorX + newWidth);
+  handle.y(anchorY + newHeight);
+  
+  // Stream to RTDB and force re-render
+  // ...
+};
+
+// In handleMouseUp:
+const handleMouseUp = async () => {
+  // Clear resize dimensions after resize completes
+  setResizeDimensions(null);
+  
+  // Update Firestore with final dimensions
+  await updateRectangle(triangle.id, {
+    width: finalWidth,
+    height: finalHeight,
+    lastModifiedBy: user?.email || triangle.createdBy,
+  });
+  
+  clearActiveEdit(triangle.id);
+  setIsResizing(false);
+};
+```
+
+**Key principle**: For shapes where resize changes visual geometry (triangles, lines, etc.), use local state to show intermediate resize states. For shapes where resize only changes size parameters (circles, rectangles), the Konva node itself can be updated directly.
+
+**Action for new shapes**: 
+- **Line**: Will need resize state for both endpoints
+- **Text**: May need resize state for width (if wrapping is dynamic)
+
+---
+
 ## 8. Toolbar Icon Styling
 
 ### ❌ Problem
@@ -270,12 +371,32 @@ if (s.type === 'circle') {
 interface ShapeProps {
   shape: ShapeType;           // Specific shape type
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: () => void;        // MUST be called in handleDragStart
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;  // For indicators layer
   updateOwnCursor?: (x: number, y: number) => void;
 }
 ```
+
+### ✅ Drag Start Handler Pattern
+**CRITICAL**: Always call `onSelect()` at the start of drag to ensure the shape is selected before any edits:
+
+```typescript
+const handleDragStart = () => {
+  if (!user?.userId || !user?.email) return;
+  setIsDragging(true);
+  
+  // SELECT THE SHAPE - User cannot edit unselected shapes
+  onSelect();
+  
+  // Set active edit state
+  const cursorColor = getUserCursorColor(user.email);
+  const firstName = user.firstName || user.email.split('@')[0];
+  setActiveEdit(shape.id, user.userId, user.email, firstName, 'moving', cursorColor);
+};
+```
+
+**Why this matters**: A user should never be able to drag/edit a shape without it being selected. This ensures the properties panel updates and the shape has visual selection feedback.
 
 ### ✅ Required State
 ```typescript
@@ -344,19 +465,25 @@ Conditionally render shape-specific properties:
 
 When implementing Triangle, Line, or Text:
 
-- [ ] Add shape-specific fields to Firestore loading in `canvas.service.ts`
+- [ ] Add shape-specific fields to Firestore loading in `canvas.service.ts` (**CRITICAL - #1 cause of flickering!**)
 - [ ] Add temp ID matching logic in `CanvasContext.tsx`
 - [ ] Pass `renderOnlyIndicator={true}` in indicators layer
 - [ ] Use exact border styling (`stroke='#1565C0'`, `strokeWidth={4}`, `strokeScaleEnabled={false}`)
+- [ ] **Call `onSelect()` in `handleDragStart` to auto-select shape when dragging starts**
 - [ ] Implement delta-based resizing (not absolute position)
 - [ ] Stream live position updates during ALL interactive operations
 - [ ] Update ALL visual handles during drag
-- [ ] Create CSS-styled toolbar icon
+- [ ] **Pass shape CENTER to `updateOwnCursor` (not top-left anchor)**
+- [ ] **Add `resizeDimensions` state for shapes with complex geometry (triangles, lines)**
+- [ ] Create CSS-styled toolbar icon (larger, grey color)
 - [ ] Handle TypeScript type narrowing with `as any` when needed
 - [ ] Follow the component structure pattern (props, state, refs, hooks)
 - [ ] Add shape-specific fields to `PropertiesPanel.tsx`
 - [ ] Test in multiple browsers for real-time collaboration
 - [ ] Test drag, resize, color change, z-index, delete
+- [ ] **Verify shape auto-selects when starting to drag**
+- [ ] **Verify resize handle stays attached during resize**
+- [ ] **Verify cursor appears centered when dragging in other browsers**
 
 ---
 

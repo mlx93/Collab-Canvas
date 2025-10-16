@@ -3,14 +3,13 @@ import React, { useState } from 'react';
 import { useCanvas } from '../../hooks/useCanvas';
 
 export const CompactToolbar: React.FC = () => {
-  const { addRectangle, addCircle } = useCanvas();
+  const { addRectangle, addCircle, addTriangle } = useCanvas();
   const [activeTool, setActiveTool] = useState<string | null>(null);
 
   // Tool definitions
   const tools = [
     {
       id: 'rectangle',
-      icon: '⬜',
       label: 'Rectangle (R)',
       action: () => {
         addRectangle();
@@ -20,7 +19,6 @@ export const CompactToolbar: React.FC = () => {
     },
     {
       id: 'circle',
-      icon: '●',
       label: 'Circle (C)',
       action: () => {
         addCircle();
@@ -28,7 +26,16 @@ export const CompactToolbar: React.FC = () => {
         setTimeout(() => setActiveTool(null), 500);
       },
     },
-    // Triangle, Line, Text will be added in subsequent PRs
+    {
+      id: 'triangle',
+      label: 'Triangle (T)',
+      action: () => {
+        addTriangle();
+        setActiveTool('triangle');
+        setTimeout(() => setActiveTool(null), 500);
+      },
+    },
+    // Line, Text will be added in subsequent PRs
   ];
 
   return (
@@ -39,16 +46,28 @@ export const CompactToolbar: React.FC = () => {
           key={tool.id}
           onClick={tool.action}
           className={`
-            w-10 h-10 rounded flex items-center justify-center text-xl
+            w-10 h-10 rounded flex items-center justify-center
             hover:bg-gray-100 transition-colors relative group
             ${activeTool === tool.id ? 'bg-blue-100 ring-2 ring-blue-500' : ''}
           `}
           title={tool.label}
         >
-          {tool.id === 'circle' ? (
-            <div className="w-5 h-5 rounded-full bg-gray-600" />
-          ) : (
-            <span className="text-gray-600">{tool.icon}</span>
+          {/* Shape icons - all CSS-styled and grey */}
+          {tool.id === 'rectangle' && (
+            <div className="w-6 h-6 bg-gray-600 rounded-sm" />
+          )}
+          {tool.id === 'circle' && (
+            <div className="w-6 h-6 rounded-full bg-gray-600" />
+          )}
+          {tool.id === 'triangle' && (
+            <div 
+              className="w-0 h-0" 
+              style={{
+                borderLeft: '12px solid transparent',
+                borderRight: '12px solid transparent',
+                borderBottom: '20px solid rgb(75, 85, 99)', // gray-600
+              }}
+            />
           )}
           {/* Tooltip */}
           <span className="absolute left-14 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">

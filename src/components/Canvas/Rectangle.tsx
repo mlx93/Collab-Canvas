@@ -165,6 +165,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragStart = () => {
     setIsDragging(true);
     
+    // Select the shape when starting to drag
+    onSelect();
+    
     // Set active edit state in RTDB
     if (user) {
       const cursorColor = getUserCursorColor(user.email);
