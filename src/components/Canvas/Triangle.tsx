@@ -42,7 +42,6 @@ const TriangleComponent: React.FC<TriangleProps> = ({
 }) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
-  const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
   const [, forceUpdate] = useState({});
@@ -157,7 +156,6 @@ const TriangleComponent: React.FC<TriangleProps> = ({
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
-    setIsDragging(true);
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(triangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
@@ -191,7 +189,6 @@ const TriangleComponent: React.FC<TriangleProps> = ({
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
-    setIsDragging(false);
     
     const node = e.target;
     const x = node.x();

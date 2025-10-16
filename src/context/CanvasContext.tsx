@@ -1,6 +1,6 @@
 // Canvas Context with React Context API and Firestore integration
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { Rectangle, RectangleShape, CircleShape, TriangleShape, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
+import { Rectangle, TriangleShape, Shape, CanvasState, Viewport, Tool } from '../types/canvas.types';
 import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';

@@ -43,7 +43,6 @@ const CircleComponent: React.FC<CircleProps> = ({
 }) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
-  const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
@@ -120,7 +119,6 @@ const CircleComponent: React.FC<CircleProps> = ({
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
-    setIsDragging(true);
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(circle.id, user.userId, user.email, firstName, 'moving', cursorColor);
@@ -153,14 +151,13 @@ const CircleComponent: React.FC<CircleProps> = ({
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
-    setIsDragging(false);
     
     const node = e.target;
     const x = node.x();
     const y = node.y();
     
     // Update shape in Firestore
-    await updateRectangle(circle.id, { x, y });
+    await updateRectangle(circle.id, { x, y, lastModifiedBy: user?.email || circle.createdBy });
     
     // Clear live position and active edit
     clearLivePosition(circle.id);
