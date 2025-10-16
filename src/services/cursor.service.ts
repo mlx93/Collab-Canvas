@@ -115,6 +115,7 @@ export async function updateCursorPosition(
       handler.remove();
       disconnectHandlers.set(userId, handler);
     }
+    // Don't call onDisconnect on every update - use cached handler
   } catch (error) {
     console.error('[cursor.service] Failed to update cursor position:', error);
     // Don't throw - collaboration features are non-critical

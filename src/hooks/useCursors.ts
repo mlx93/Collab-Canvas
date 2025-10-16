@@ -23,6 +23,7 @@ export function useCursors(): UseCursorsReturn {
   const [cursors, setCursors] = useState<Record<string, Cursor>>({});
   const throttledUpdate = useRef<((x: number, y: number) => void) | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Only log when userId actually changes
   if (userIdRef.current !== user?.userId) {
@@ -59,11 +60,23 @@ export function useCursors(): UseCursorsReturn {
     }
 
     const unsubscribe = subscribeToCursors((allCursors) => {
-      // Store all cursors (CursorOverlay will filter out own cursor)
-      setCursors(allCursors);
+      // Debounce cursor updates to prevent race conditions
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+      }
+      debounceTimeoutRef.current = setTimeout(() => {
+        setCursors(allCursors);
+        debounceTimeoutRef.current = null;
+      }, 1); // Minimal debounce to prevent race conditions
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+        debounceTimeoutRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 
