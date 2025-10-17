@@ -31,8 +31,8 @@ const CanvasLayout: React.FC = () => {
       canvas={
         <>
           <Canvas />
-          {/* AI Panel - Fixed at bottom */}
-          <div className="fixed bottom-4 left-16 right-4 z-10 pointer-events-none">
+          {/* AI Panel - Fixed at bottom with high z-index for accessibility */}
+          <div className="fixed bottom-4 left-16 right-4 z-50 pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
               <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4">
                 <AIPanel />

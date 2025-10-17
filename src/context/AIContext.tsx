@@ -10,6 +10,7 @@ import { AIPlan, AIOperation, CanvasSnapshot } from '../types/ai-tools';
 import { aiCanvasService, AIServiceError } from '../services/AICanvasService';
 import { executePlan, CanvasContextMethods } from '../utils/aiPlanExecutor';
 import { useCanvas } from './CanvasContext';
+import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
 
 /**
@@ -57,6 +58,7 @@ export function AIProvider({ children }: AIProviderProps) {
   } | null>(null);
 
   const canvasContext = useCanvas();
+  const { user } = useAuth();
 
   /**
    * Clear error state
@@ -134,17 +136,18 @@ export function AIProvider({ children }: AIProviderProps) {
         toast.success(`Created ${result.executionSummary.shapeIds.length} shapes`);
       } else {
         // Client-side execution for simple operations
-        // Get user info for metadata
-        const { user } = canvasContext as any;
-        const userId = user?.userId || 'ai-agent';
-        const userEmail = user?.email || 'ai@collabcanvas.com';
+        // Get authenticated user info for Firestore security rules
+        if (!user || !user.email) {
+          throw new Error('User not authenticated');
+        }
+        const userEmail = user.email;
         
         const contextMethods: CanvasContextMethods = {
           addRectangle: async (x, y, width, height, color) => {
             await canvasContext.addRectangleFull({ 
               x, y, width, height, color,
-              createdBy: userId,
-              lastModifiedBy: userId
+              createdBy: userEmail,
+              lastModifiedBy: userEmail
             });
             // Shape is auto-selected, get the selected ID
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -153,8 +156,8 @@ export function AIProvider({ children }: AIProviderProps) {
           addCircle: async (x, y, radius, color) => {
             await canvasContext.addCircleFull({ 
               x, y, radius, color,
-              createdBy: userId,
-              lastModifiedBy: userId
+              createdBy: userEmail,
+              lastModifiedBy: userEmail
             });
             await new Promise(resolve => setTimeout(resolve, 50));
             return canvasContext.selectedIds[0] || '';
@@ -162,8 +165,8 @@ export function AIProvider({ children }: AIProviderProps) {
           addTriangle: async (x, y, width, height, color) => {
             await canvasContext.addTriangleFull({ 
               x, y, width, height, color,
-              createdBy: userId,
-              lastModifiedBy: userId
+              createdBy: userEmail,
+              lastModifiedBy: userEmail
             });
             await new Promise(resolve => setTimeout(resolve, 50));
             return canvasContext.selectedIds[0] || '';
@@ -172,8 +175,8 @@ export function AIProvider({ children }: AIProviderProps) {
             await canvasContext.addLineFull({ 
               x: x1, y: y1, x2, y2, color,
               strokeWidth: 2,
-              createdBy: userId,
-              lastModifiedBy: userId
+              createdBy: userEmail,
+              lastModifiedBy: userEmail
             });
             await new Promise(resolve => setTimeout(resolve, 50));
             return canvasContext.selectedIds[0] || '';
@@ -189,8 +192,8 @@ export function AIProvider({ children }: AIProviderProps) {
               fontStyle: 'normal',
               textColor: color,
               backgroundColor: 'transparent',
-              createdBy: userId,
-              lastModifiedBy: userId
+              createdBy: userEmail,
+              lastModifiedBy: userEmail
             });
             await new Promise(resolve => setTimeout(resolve, 50));
             return canvasContext.selectedIds[0] || '';

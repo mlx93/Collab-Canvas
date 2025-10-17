@@ -46,6 +46,14 @@ export function AICommandInput({ className = '' }: AICommandInputProps) {
   };
 
   /**
+   * Explicitly handle paste events for compatibility with voice-to-text
+   */
+  const handlePaste = (e: React.ClipboardEvent) => {
+    // Allow default paste behavior
+    // This ensures compatibility with voice-to-text and other paste mechanisms
+  };
+
+  /**
    * Auto-focus on mount
    */
   useEffect(() => {
@@ -64,8 +72,11 @@ export function AICommandInput({ className = '' }: AICommandInputProps) {
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder="Ask AI to create or modify shapes..."
           disabled={isProcessing}
+          autoComplete="off"
+          spellCheck="true"
           className="w-full px-4 py-3 pr-12 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors"
         />
         
