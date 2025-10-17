@@ -371,8 +371,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   // Full addCircle API
   const addCircleFull = async (circle: Omit<import('../types/canvas.types').CircleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
-    // Optimistic update: add to local state immediately
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate Firestore ID upfront to avoid sync issues
+    const firestoreId = canvasService.generateShapeId();
     
     let newCircle!: import('../types/canvas.types').CircleShape;
     setCanvasState(prev => {
@@ -384,12 +384,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       newCircle = {
         ...circle,
         type: 'circle',
-        id: tempId,
-        rotation: 0, // Default rotation
-        opacity: 1, // Default opacity
-        visible: true, // Default visible
-        locked: false, // Default unlocked
-        zIndex: maxZIndex + 1, // New circle goes to front
+        id: firestoreId, // Use real Firestore ID from the start
+        rotation: 0,
+        opacity: 1,
+        visible: true,
+        locked: false,
+        zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
       };
@@ -401,40 +401,39 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
-    // Add undo tracking for create operation (capture immediately after local state update)
+    // Add undo tracking
     if (user) {
       pushUndo({
         type: 'create',
         timestamp: Date.now(),
         userId: user.userId,
-        shapeIds: [tempId],
+        shapeIds: [firestoreId],
         before: null,
         after: newCircle
       });
     }
 
-    // Broadcast selection to other users
+    // Broadcast selection
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
-      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [firestoreId], cursorColorData.cursorColor);
     }
 
-    // Sync to Firestore in background
+    // Sync to Firestore in background (using the same ID)
     try {
-      // Add the required fields before persisting
       const fullCircle = {
         ...circle,
         type: 'circle' as const,
         rotation: 0,
         opacity: 1
       };
-      await canvasService.createRectangle(fullCircle as any); // TODO: Update service to accept Shape
+      await canvasService.createRectangleWithId(firestoreId, fullCircle as any);
     } catch (error) {
       // Revert optimistic update on failure
       setCanvasState(prev => ({
         ...prev,
-        rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedIds: prev.selectedIds.filter(id => id !== tempId)
+        rectangles: prev.rectangles.filter(r => r.id !== firestoreId),
+        selectedIds: prev.selectedIds.filter(id => id !== firestoreId)
       }));
     }
   };
@@ -491,7 +490,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   // Full addTriangle API
   const addTriangleFull = async (triangle: Omit<TriangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate Firestore ID upfront to avoid sync issues
+    const firestoreId = canvasService.generateShapeId();
     
     let newTriangle!: TriangleShape;
     setCanvasState(prev => {
@@ -502,11 +502,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       newTriangle = {
         ...triangle,
         type: 'triangle',
-        id: tempId,
+        id: firestoreId,
         rotation: 0,
         opacity: 1,
-        visible: true, // Default visible
-        locked: false, // Default unlocked
+        visible: true,
+        locked: false,
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -519,24 +519,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
-    // Add undo tracking for create operation (capture immediately after local state update)
+    // Add undo tracking
     if (user) {
       pushUndo({
         type: 'create',
         timestamp: Date.now(),
         userId: user.userId,
-        shapeIds: [tempId],
+        shapeIds: [firestoreId],
         before: null,
         after: newTriangle
       });
     }
 
-    // Broadcast selection to other users
+    // Broadcast selection
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
-      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [firestoreId], cursorColorData.cursorColor);
     }
 
+    // Sync to Firestore in background (using the same ID)
     try {
       const fullTriangle = {
         ...triangle,
@@ -544,12 +545,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         rotation: 0,
         opacity: 1
       };
-      await canvasService.createRectangle(fullTriangle as any);
+      await canvasService.createRectangleWithId(firestoreId, fullTriangle as any);
     } catch (error) {
       setCanvasState(prev => ({
         ...prev,
-        rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedIds: prev.selectedIds.filter(id => id !== tempId)
+        rectangles: prev.rectangles.filter(r => r.id !== firestoreId),
+        selectedIds: prev.selectedIds.filter(id => id !== firestoreId)
       }));
     }
   };
@@ -664,7 +665,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
   // Full addLine API
   const addLineFull = async (line: Omit<import('../types/canvas.types').LineShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate Firestore ID upfront to avoid sync issues
+    const firestoreId = canvasService.generateShapeId();
     
     let newLine!: import('../types/canvas.types').LineShape;
     setCanvasState(prev => {
@@ -675,11 +677,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       newLine = {
         ...line,
         type: 'line',
-        id: tempId,
+        id: firestoreId,
         rotation: 0,
         opacity: 1,
-        visible: true, // Default visible
-        locked: false, // Default unlocked
+        visible: true,
+        locked: false,
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -692,24 +694,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
-    // Add undo tracking for create operation (capture immediately after local state update)
+    // Add undo tracking
     if (user) {
       pushUndo({
         type: 'create',
         timestamp: Date.now(),
         userId: user.userId,
-        shapeIds: [tempId],
+        shapeIds: [firestoreId],
         before: null,
         after: newLine
       });
     }
 
-    // Broadcast selection to other users
+    // Broadcast selection
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
-      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [firestoreId], cursorColorData.cursorColor);
     }
 
+    // Sync to Firestore in background (using the same ID)
     try {
       const fullLine = {
         ...line,
@@ -717,19 +720,20 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         rotation: 0,
         opacity: 1
       };
-      await canvasService.createRectangle(fullLine as any);
+      await canvasService.createRectangleWithId(firestoreId, fullLine as any);
     } catch (error) {
       setCanvasState(prev => ({
         ...prev,
-        rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedIds: prev.selectedIds.filter(id => id !== tempId)
+        rectangles: prev.rectangles.filter(r => r.id !== firestoreId),
+        selectedIds: prev.selectedIds.filter(id => id !== firestoreId)
       }));
     }
   };
 
   // Full addText API
   const addTextFull = async (text: Omit<import('../types/canvas.types').TextShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate Firestore ID upfront to avoid sync issues
+    const firestoreId = canvasService.generateShapeId();
     
     let newText!: import('../types/canvas.types').TextShape;
     setCanvasState(prev => {
@@ -739,11 +743,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       newText = {
         ...text,
         type: 'text',
-        id: tempId,
+        id: firestoreId,
         rotation: 0,
         opacity: 1,
-        visible: true, // Default visible
-        locked: false, // Default unlocked
+        visible: true,
+        locked: false,
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -755,24 +759,25 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
-    // Add undo tracking for create operation (capture immediately after local state update)
+    // Add undo tracking
     if (user) {
       pushUndo({
         type: 'create',
         timestamp: Date.now(),
         userId: user.userId,
-        shapeIds: [tempId],
+        shapeIds: [firestoreId],
         before: null,
         after: newText
       });
     }
 
-    // Broadcast selection to other users
+    // Broadcast selection
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
-      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [firestoreId], cursorColorData.cursorColor);
     }
 
+    // Sync to Firestore in background (using the same ID)
     try {
       const fullText = {
         ...text,
@@ -780,20 +785,20 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         rotation: 0,
         opacity: 1
       };
-      await canvasService.createRectangle(fullText as any); // TODO: Update service to accept Shape
+      await canvasService.createRectangleWithId(firestoreId, fullText as any);
     } catch (error) {
       setCanvasState(prev => ({
         ...prev,
-        rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedIds: prev.selectedIds.filter(id => id !== tempId)
+        rectangles: prev.rectangles.filter(r => r.id !== firestoreId),
+        selectedIds: prev.selectedIds.filter(id => id !== firestoreId)
       }));
     }
   };
 
   // Full addRectangle for backward compatibility and tests
   const addRectangleFull = async (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
-    // Optimistic update: add to local state immediately
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    // Generate Firestore ID upfront to avoid sync issues
+    const firestoreId = canvasService.generateShapeId();
     
     let newRectangle!: Rectangle;
     setCanvasState(prev => {
@@ -805,12 +810,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       newRectangle = {
         ...rectangle,
         type: 'rectangle',
-        id: tempId,
-        rotation: 0, // Default rotation
-        opacity: 1, // Default opacity
-        visible: true, // Default visible
-        locked: false, // Default unlocked
-        zIndex: maxZIndex + 1, // New rectangle goes to front
+        id: firestoreId, // Use real Firestore ID from the start
+        rotation: 0,
+        opacity: 1,
+        visible: true,
+        locked: false,
+        zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
       };
@@ -822,40 +827,39 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
-    // Add undo tracking for create operation (capture immediately after local state update)
+    // Add undo tracking
     if (user) {
       pushUndo({
         type: 'create',
         timestamp: Date.now(),
         userId: user.userId,
-        shapeIds: [tempId],
+        shapeIds: [firestoreId],
         before: null,
         after: newRectangle
       });
     }
 
-    // Broadcast selection to other users
+    // Broadcast selection
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
-      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [firestoreId], cursorColorData.cursorColor);
     }
 
-    // Sync to Firestore in background
+    // Sync to Firestore in background (using the same ID)
     try {
-      // Add the required fields before persisting
       const fullRectangle = {
         ...rectangle,
         type: 'rectangle' as const,
         rotation: 0,
         opacity: 1
       };
-      await canvasService.createRectangle(fullRectangle);
+      await canvasService.createRectangleWithId(firestoreId, fullRectangle);
     } catch (error) {
       // Revert optimistic update on failure
       setCanvasState(prev => ({
         ...prev,
-        rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedIds: prev.selectedIds.filter(id => id !== tempId)
+        rectangles: prev.rectangles.filter(r => r.id !== firestoreId),
+        selectedIds: prev.selectedIds.filter(id => id !== firestoreId)
       }));
     }
   };

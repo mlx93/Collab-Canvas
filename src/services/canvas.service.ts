@@ -66,12 +66,55 @@ function getShapeDoc(shapeId: string) {
 }
 
 /**
+ * Generate a Firestore document ID without creating the document
+ * This allows client-side to use the real ID immediately for optimistic updates
+ */
+export function generateShapeId(): string {
+  return doc(getShapesCollection()).id;
+}
+
+/**
+ * Create a new rectangle with a specific ID in Firestore
+ * Used when we've already generated the ID client-side
+ */
+export async function createRectangleWithId(
+  shapeId: string,
+  rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>
+): Promise<void> {
+  const shapeRef = getShapeDoc(shapeId);
+
+  // Query existing shapes to find maxZIndex
+  const shapesSnapshot = await retryOperation(
+    () => getDocs(query(getShapesCollection(), orderBy('zIndex', 'desc'), limit(1))),
+    'Query max z-index'
+  );
+  
+  const maxZIndex = shapesSnapshot.empty 
+    ? 0 
+    : shapesSnapshot.docs[0].data().zIndex;
+
+  const rectangleData = {
+    id: shapeId,
+    ...rectangle,
+    zIndex: maxZIndex + 1,
+    createdAt: Timestamp.now(),
+    lastModified: Timestamp.now(),
+    lastModifiedBy: rectangle.lastModifiedBy ?? rectangle.createdBy,
+  };
+
+  await retryOperation(
+    () => setDoc(shapeRef, rectangleData),
+    'Create rectangle with ID'
+  );
+}
+
+/**
  * Create a new rectangle in Firestore
  * NOTE: Queries Firestore for maxZIndex to ensure new rectangle appears at front
  */
 export async function createRectangle(
   rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'>
-): Promise<void> {
+): Promise<string> {
   const shapeId = doc(getShapesCollection()).id; // Generate unique ID
   const shapeRef = getShapeDoc(shapeId);
 
@@ -98,6 +141,8 @@ export async function createRectangle(
     () => setDoc(shapeRef, rectangleData),
     'Create rectangle'
   );
+  
+  return shapeId; // Return the Firestore ID
 }
 
 /**
