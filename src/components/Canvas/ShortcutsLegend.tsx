@@ -33,8 +33,8 @@ export const ShortcutsLegend: React.FC = () => {
     {
       category: 'View',
       items: [
-        { key: 'Shift++', description: 'Zoom In' },
-        { key: 'Shift+-', description: 'Zoom Out' },
+        { key: 'Shift +', description: 'Zoom In' },
+        { key: 'Shift -', description: 'Zoom Out' },
         { key: 'Drag Empty', description: 'Pan Canvas' },
       ]
     }
