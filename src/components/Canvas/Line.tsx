@@ -470,6 +470,11 @@ const Line: React.FC<LineProps> = ({
     );
   }
 
+  // Don't render if shape is hidden
+  if (line.visible === false) {
+    return null;
+  }
+
   return (
     <>
       <Group
@@ -519,7 +524,7 @@ const Line: React.FC<LineProps> = ({
           stroke="#1565C0"
           strokeWidth={2}
           draggable={!line.locked}
-          listening={line.visible !== false}
+          listening={line.visible === undefined || line.visible === true}
           onDragStart={handleStartResizeStart}
           onDragMove={handleStartResizeMove}
           onDragEnd={handleStartResizeEnd}
@@ -553,7 +558,7 @@ const Line: React.FC<LineProps> = ({
           stroke="#1565C0"
           strokeWidth={2}
           draggable={!line.locked}
-          listening={line.visible !== false}
+          listening={line.visible === undefined || line.visible === true}
           onDragStart={handleEndResizeStart}
           onDragMove={handleEndResizeMove}
           onDragEnd={handleEndResizeEnd}

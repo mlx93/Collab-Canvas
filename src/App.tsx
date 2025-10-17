@@ -14,6 +14,7 @@ import { Header } from './components/Layout/Header';
 import { Canvas } from './components/Canvas/Canvas';
 import { CompactToolbar } from './components/Canvas/CompactToolbar';
 import { PropertiesPanel } from './components/Canvas/PropertiesPanel';
+import { LayersPanel } from './components/Canvas/LayersPanel';
 import './App.css';
 
 // Inner component that has access to canvas context
@@ -23,10 +24,11 @@ const CanvasLayout: React.FC = () => {
 
   return (
     <MainLayout
-      header={<Header fps={fps} showFPS={process.env.NODE_ENV === 'development'} />}
+      header={<Header fps={fps} showFPS={false} />}
       toolbar={<CompactToolbar />}
       canvas={<Canvas />}
       properties={<PropertiesPanel />}
+      layers={<LayersPanel />}
       hasSelection={selectedIds.length > 0}
     />
   );

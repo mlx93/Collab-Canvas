@@ -10,7 +10,7 @@ export const LeftToolbar: React.FC = () => {
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // Create rectangle at center of current viewport
+  // Create rectangle at middle-left of current viewport
   const handleCreateRectangle = () => {
     if (!user) return;
 
@@ -18,10 +18,13 @@ export const LeftToolbar: React.FC = () => {
     // These are updated dynamically by the Canvas component on window resize
     const canvasVisibleWidth = stageSize.width;
     const canvasVisibleHeight = stageSize.height;
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
     
-    // Calculate center of visible canvas area in canvas coordinates
-    const baseCenterX = -viewport.x / viewport.scale + (canvasVisibleWidth / 2) / viewport.scale - 50;
-    const baseCenterY = -viewport.y / viewport.scale + (canvasVisibleHeight / 2) / viewport.scale - 50;
+    // Calculate middle-left of visible canvas area accounting for properties panel
+    // Position at 1/4 from left edge, vertically centered but slightly higher
+    const availableWidth = canvasVisibleWidth - propertiesPanelWidth;
+    const baseCenterX = -viewport.x / viewport.scale + (availableWidth / 4) / viewport.scale;
+    const baseCenterY = -viewport.y / viewport.scale + (canvasVisibleHeight / 2.5) / viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;

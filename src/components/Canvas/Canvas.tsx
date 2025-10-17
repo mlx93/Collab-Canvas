@@ -5,7 +5,7 @@ import Konva from 'konva';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useCursors } from '../../hooks/useCursors';
 import { useAuth } from '../../hooks/useAuth';
-import { useUndo } from '../../context/UndoContext';
+// import { useUndo } from '../../context/UndoContext'; // No longer needed - using CanvasContext undo/redo
 import { FPSCounter } from './FPSCounter';
 import { Rectangle } from './Rectangle';
 import Circle from './Circle';
@@ -30,7 +30,7 @@ export const Canvas: React.FC = () => {
   const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateShape, copyShapes, pasteShapes, duplicateShapes, updateCursorPosition, deleteSelected } = useCanvas();
   const { cursors, updateOwnCursor } = useCursors();
   const { user } = useAuth();
-  const { undo, redo } = useUndo();
+  const { undoAction, redoAction } = useCanvas();
   const stageRef = useRef<Konva.Stage>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -227,11 +227,11 @@ export const Canvas: React.FC = () => {
             break;
           case 'u':
             e.preventDefault();
-            undo();
+            undoAction();
             break;
           case 'r':
             e.preventDefault();
-            redo();
+            redoAction();
             break;
           case 'escape':
             e.preventDefault();
@@ -265,7 +265,7 @@ export const Canvas: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectAll, deselectAll, copyShapes, pasteShapes, duplicateShapes, deleteSelected, undo, redo]);
+  }, [selectAll, deselectAll, copyShapes, pasteShapes, duplicateShapes, deleteSelected, undoAction, redoAction]);
 
   // Move selected shapes with arrow keys
   const moveSelectedShapes = useCallback((dx: number, dy: number) => {
@@ -673,7 +673,8 @@ export const Canvas: React.FC = () => {
   return (
     <div className="absolute inset-0" style={{ display: 'flex', flexDirection: 'column' }}>
       {/* FPS Counter (dev mode) */}
-      <FPSCounter show={process.env.NODE_ENV === 'development'} />
+      {/* FPS Counter disabled - cleaner UI */}
+      {/* <FPSCounter show={process.env.NODE_ENV === 'development'} /> */}
 
       {/* Konva Stage */}
       <Stage

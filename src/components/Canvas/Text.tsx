@@ -593,6 +593,11 @@ export const Text: React.FC<TextProps> = ({
     ) : null;
   }
 
+  // Don't render if shape is hidden
+  if (text.visible === false) {
+    return null;
+  }
+
   return (
     <>
       {/* Only show Konva elements when NOT editing */}
@@ -602,7 +607,7 @@ export const Text: React.FC<TextProps> = ({
           x={currentX}
           y={currentY}
           rotation={text.rotation}
-          draggable={!isEditing && (!multiDragPosition || isDragging)}
+          draggable={!text.locked && !isEditing && (!multiDragPosition || isDragging)}
           onClick={(e) => onSelect(e)}
           onTap={(e) => onSelect(e)}
           onDragStart={handleDragStart}

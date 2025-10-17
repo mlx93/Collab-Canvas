@@ -429,6 +429,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     ) : null;
   }
 
+  // Don't render if shape is hidden
+  if (rectangle.visible === false) {
+    return null;
+  }
+
   // Otherwise, render the full rectangle (without indicator if showIndicator is false)
   return (
     <Group>
@@ -445,7 +450,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         stroke={isSelected ? '#1565C0' : undefined} // Dark blue outline when selected
         strokeWidth={isSelected ? 4 : 0} // Thicker stroke for visibility
         strokeScaleEnabled={false} // Keep stroke width constant when zooming
-        draggable={!livePosition && (!multiDragPosition || isDragging)} // Disable dragging if showing live position from another user OR if this is a follower in multi-drag
+        draggable={!rectangle.locked && !livePosition && (!multiDragPosition || isDragging)} // Disable dragging if locked, showing live position, or follower in multi-drag
         onClick={(e) => onSelect(e)}
         onTap={(e) => onSelect(e)}
         onDragStart={handleDragStart}
@@ -459,8 +464,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         perfectDrawEnabled={false} // Better performance
       />
 
-      {/* Resize Handle - Only visible when selected (top-right corner) */}
-      {isSelected && (
+      {/* Resize Handle - Only visible when selected and not locked (top-right corner) */}
+      {isSelected && !rectangle.locked && (
         <>
           <Circle
             ref={handleRef}

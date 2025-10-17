@@ -400,6 +400,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     stage.on('mouseup', handleMouseUp);
   };
 
+  // Don't render if shape is hidden
+  if (triangle.visible === false) {
+    return null;
+  }
+
   return (
     <>
       {/* Main triangle */}

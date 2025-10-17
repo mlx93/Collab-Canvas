@@ -368,6 +368,11 @@ const CircleComponent: React.FC<CircleProps> = ({
     stage.on('mouseup', handleMouseUp);
   };
 
+  // Don't render if shape is hidden
+  if (circle.visible === false) {
+    return null;
+  }
+
   return (
     <>
       {/* Main circle */}

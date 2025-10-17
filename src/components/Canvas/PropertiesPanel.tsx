@@ -1,9 +1,10 @@
 // Properties Panel component - Shows properties of selected rectangle
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { PREDEFINED_COLORS } from '../../utils/constants';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
 import { setActiveEdit, clearActiveEdit, getUserCursorColor } from '../../services/activeEdits.service';
+import { CompactColorPicker } from './CompactColorPicker';
 
 // Enhanced color palette with translucent options
 const TEXT_COLOR_PALETTE = {
@@ -27,10 +28,14 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
 export const PropertiesPanel: React.FC = () => {
   const { rectangles, selectedIds, updateShape, deleteSelected, setZIndex, bringToFront, sendToBack } = useCanvas();
   const { user } = useAuth();
-  const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
+  // const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false); // Removed - using floating color picker instead
   const [isTextColorDropdownOpen, setIsTextColorDropdownOpen] = useState(false);
   const [isBackgroundColorDropdownOpen, setIsBackgroundColorDropdownOpen] = useState(false);
   const [isBorderColorDropdownOpen, setIsBorderColorDropdownOpen] = useState(false);
+  const [showFloatingColorPicker, setShowFloatingColorPicker] = useState(false);
+  const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+  const colorPickerRef = useRef<HTMLButtonElement>(null);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Refs for click-outside detection
   const textColorRef = React.useRef<HTMLDivElement>(null);
@@ -70,8 +75,13 @@ export const PropertiesPanel: React.FC = () => {
     return entry ? entry[0].charAt(0).toUpperCase() + entry[0].slice(1) : 'Custom';
   };
 
-  // Handle color change
-  const handleColorChange = (newColor: string) => {
+  // Handle color change (legacy - kept for text color dropdowns)
+  // const handleColorChange = (newColor: string) => {
+  //   // Removed - using enhanced color picker instead
+  // };
+
+  // Handle enhanced color picker change (with opacity)
+  const handleEnhancedColorChange = (newColor: string, newOpacity: number) => {
     if (!selectedRectangle) return;
     
     // Set active edit for recoloring
@@ -82,9 +92,9 @@ export const PropertiesPanel: React.FC = () => {
     
     updateShape(selectedRectangle.id, {
       color: newColor,
+      opacity: newOpacity,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
-    setIsColorDropdownOpen(false);
     
     // Clear active edit after a short delay (color change is instant)
     setTimeout(() => {
@@ -92,6 +102,18 @@ export const PropertiesPanel: React.FC = () => {
         clearActiveEdit(selectedRectangle.id);
       }
     }, 500);
+  };
+
+  // Handle color picker positioning
+  const handleColorPickerToggle = () => {
+    if (colorPickerRef.current) {
+      const rect = colorPickerRef.current.getBoundingClientRect();
+      setColorPickerPosition({
+        x: rect.left + rect.width + 10, // Position to the right of the button
+        y: rect.top - 200 // Position higher up near the icon
+      });
+    }
+    setShowFloatingColorPicker(!showFloatingColorPicker);
   };
 
   // Handle text color change
@@ -212,7 +234,21 @@ export const PropertiesPanel: React.FC = () => {
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div className="mb-4">
-          <h3 className="text-sm font-semibold text-gray-700">Properties</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Properties</h3>
+            <button
+              onClick={() => {
+                // Toggle layers panel - this will be connected to MainLayout state
+                const event = new CustomEvent('toggleLayers');
+                window.dispatchEvent(event);
+              }}
+              className="text-gray-600 hover:text-gray-900 text-sm font-medium flex items-center gap-1"
+              title="Toggle Layers Panel"
+            >
+              <span>Layers</span>
+              <span id="layers-arrow">→</span>
+            </button>
+          </div>
           {isMultiSelection && (
             <p className="text-xs text-blue-600 mt-1">
               {selectedIds.length} shapes selected (showing first)
@@ -220,7 +256,7 @@ export const PropertiesPanel: React.FC = () => {
           )}
         </div>
 
-      {/* Color Picker - Only show for non-text shapes */}
+      {/* Enhanced Color Picker - Only show for non-text shapes */}
       {selectedRectangle.type !== 'text' && (
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-2">
@@ -228,34 +264,24 @@ export const PropertiesPanel: React.FC = () => {
           </label>
           <div className="relative">
             <button
-              onClick={() => setIsColorDropdownOpen(!isColorDropdownOpen)}
-              className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center px-3 space-x-2"
-              style={{ backgroundColor: selectedRectangle.color }}
+              ref={colorPickerRef}
+              onClick={handleColorPickerToggle}
+              onMouseEnter={() => {
+                if (!showFloatingColorPicker) {
+                  handleColorPickerToggle();
+                }
+              }}
+              className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center justify-between px-3 cursor-pointer"
+              style={{ 
+                backgroundColor: selectedRectangle.color,
+                opacity: selectedRectangle.opacity || 1
+              }}
             >
               <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
                 {getColorName(selectedRectangle.color)}
               </span>
+              <span className="text-xs">🎨</span>
             </button>
-
-            {/* Color Dropdown */}
-            {isColorDropdownOpen && (
-              <div className="absolute top-12 left-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3 grid grid-cols-5 gap-2">
-                {Object.entries(PREDEFINED_COLORS).map(([name, hex]) => (
-                  <button
-                    key={name}
-                    onClick={() => handleColorChange(hex)}
-                    className="w-10 h-10 rounded-md border-2 transition-all hover:scale-110"
-                    style={{
-                      backgroundColor: hex,
-                      borderColor: selectedRectangle.color === hex ? '#1565C0' : '#D1D5DB',
-                    }}
-                    title={name.charAt(0).toUpperCase() + name.slice(1)}
-                  >
-                    <span className="sr-only">{name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -709,6 +735,17 @@ export const PropertiesPanel: React.FC = () => {
           Press Delete or Backspace key to delete
         </p>
       </div>
+
+      {/* Compact Color Picker Modal */}
+      {showFloatingColorPicker && (
+        <CompactColorPicker
+          onClose={() => setShowFloatingColorPicker(false)}
+          initialColor={selectedRectangle?.color || '#000000'}
+          initialOpacity={selectedRectangle?.opacity || 1}
+          onColorChange={handleEnhancedColorChange}
+          position={colorPickerPosition}
+        />
+      )}
     </div>
   );
 };

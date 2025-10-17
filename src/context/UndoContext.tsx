@@ -24,6 +24,8 @@ interface UndoContextType {
   canUndo: boolean;
   canRedo: boolean;
   clearHistory: () => void;
+  setUndoStack: React.Dispatch<React.SetStateAction<UndoAction[]>>;
+  setRedoStack: React.Dispatch<React.SetStateAction<UndoAction[]>>;
 }
 
 export const UndoContext = createContext<UndoContextType | undefined>(undefined);
@@ -100,10 +102,29 @@ export function UndoProvider({ children }: { children: ReactNode }) {
         
         case 'delete':
           // Redo delete = delete the shapes that are currently visible (recreated by undo)
-          // We need to delete by shape IDs since the shapes were recreated
+          // We need to delete by the current shape IDs since the shapes were recreated with new IDs
+          // The action.before contains the original shapes, but we need to find their current IDs
+          // For now, we'll use a simpler approach: store the recreated shape IDs in the action
           if (action.shapeIds && action.shapeIds.length > 0) {
+            // If we have current shape IDs (stored during undo), use those
             for (const shapeId of action.shapeIds) {
               await canvasService.deleteRectangle(shapeId);
+            }
+          } else if (action.before && Array.isArray(action.before)) {
+            // Fallback: try to delete by original IDs (this might not work if shapes were recreated)
+            for (const shape of action.before) {
+              try {
+                await canvasService.deleteRectangle(shape.id);
+              } catch (error) {
+                console.warn(`Could not delete shape ${shape.id} during redo - it may have been recreated with a new ID`);
+              }
+            }
+          } else if (action.before && !Array.isArray(action.before)) {
+            // Single shape case
+            try {
+              await canvasService.deleteRectangle(action.before.id);
+            } catch (error) {
+              console.warn(`Could not delete shape ${action.before.id} during redo - it may have been recreated with a new ID`);
             }
           }
           break;
@@ -163,7 +184,9 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       redo,
       canUndo: undoStack.length > 0,
       canRedo: redoStack.length > 0,
-      clearHistory
+      clearHistory,
+      setUndoStack,
+      setRedoStack
     }}>
       {children}
     </UndoContext.Provider>

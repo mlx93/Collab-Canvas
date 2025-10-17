@@ -23,6 +23,8 @@ interface CanvasContextType {
   error: string | null;
   stageSize: { width: number; height: number };
   cursorPosition: { x: number; y: number } | null;
+  defaultColor: string; // NEW: Default color for new shapes
+  defaultOpacity: number; // NEW: Default opacity for new shapes
   
   // Viewport operations
   setViewport: (viewport: Viewport) => void;
@@ -58,6 +60,10 @@ interface CanvasContextType {
   // Delete operations
   deleteSelected: () => void;
   
+  // Undo/Redo operations
+  undoAction: () => void;
+  redoAction: () => void;
+  
   // Tool operations
   setTool: (tool: Tool) => void;
   
@@ -65,6 +71,9 @@ interface CanvasContextType {
   clearError: () => void;
   setStageSize: (size: { width: number; height: number }) => void;
   updateCursorPosition: (x: number, y: number) => void;
+  
+  // Default color operations
+  setDefaultColor: (color: string, opacity: number) => void;
 }
 
 export const CanvasContext = createContext<CanvasContextType | undefined>(undefined);
@@ -75,7 +84,7 @@ interface CanvasProviderProps {
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const { user } = useAuth();
-  const { pushUndo } = useUndo();
+  const { pushUndo, undoStack, redoStack, setUndoStack, setRedoStack } = useUndo();
   const [canvasState, setCanvasState] = useState<CanvasState>({
     rectangles: [],
     viewport: { x: 0, y: 0, scale: 1 },
@@ -86,6 +95,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     stageSize: { width: 800, height: 600 }, // Default size, will be updated by Canvas component
     cursorPosition: null // Initialize cursor position as null
   });
+  
+  // Default color state for new shapes
+  const [defaultColor, setDefaultColorState] = useState<string>(DEFAULT_COLOR);
+  const [defaultOpacity, setDefaultOpacityState] = useState<number>(1);
 
   // Subscribe to Firestore real-time updates
   useEffect(() => {
@@ -237,15 +250,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addRectangle = () => {
     if (!user) return;
 
-    // Calculate center of viewport accounting for properties panel (288px = w-72)
+    // Calculate middle-left of viewport accounting for properties panel (288px = w-72)
     const canvasVisibleWidth = canvasState.stageSize.width;
     const canvasVisibleHeight = canvasState.stageSize.height;
     const propertiesPanelWidth = 288; // w-72 in Tailwind
     
-    // Center in available canvas space (accounting for properties panel)
+    // Position at middle-left: 1/4 from left edge, vertically centered but slightly higher
     const availableWidth = canvasVisibleWidth - propertiesPanelWidth;
-    const baseCenterX = -canvasState.viewport.x / canvasState.viewport.scale + (availableWidth / 2) / canvasState.viewport.scale - 50;
-    const baseCenterY = -canvasState.viewport.y / canvasState.viewport.scale + (canvasVisibleHeight / 2) / canvasState.viewport.scale - 50;
+    const baseCenterX = -canvasState.viewport.x / canvasState.viewport.scale + (availableWidth / 4) / canvasState.viewport.scale;
+    const baseCenterY = -canvasState.viewport.y / canvasState.viewport.scale + (canvasVisibleHeight / 2.5) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;
@@ -283,21 +296,21 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       y: targetY,
       width: 100,
       height: 100,
-      color: DEFAULT_COLOR,
+      color: defaultColor,
       createdBy: user.email,
       lastModifiedBy: user.email,
     });
   };
 
-  // Simplified addCircle for toolbar (creates circle at viewport center with smart offset)
+  // Simplified addCircle for toolbar (creates circle at viewport middle-left with smart offset)
   const addCircle = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    // Calculate visible canvas middle-left accounting for properties panel (288px = w-72)
     const propertiesPanelWidth = 288; // w-72 in Tailwind
     const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
-    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
-    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 4)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2.5)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;
@@ -333,7 +346,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       x: targetX,
       y: targetY,
       radius: 50, // Default radius for circles
-      color: DEFAULT_COLOR,
+      color: defaultColor,
       createdBy: user.email,
       lastModifiedBy: user.email,
     });
@@ -344,13 +357,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Optimistic update: add to local state immediately
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    let newCircle!: import('../types/canvas.types').CircleShape;
     setCanvasState(prev => {
       // Calculate highest z-index + 1 for new circle (higher = front)
       const maxZIndex = prev.rectangles.length > 0 
         ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
         : 0;
       
-      const newCircle: import('../types/canvas.types').CircleShape = {
+      newCircle = {
         ...circle,
         type: 'circle',
         id: tempId,
@@ -367,6 +381,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newCircle.id] // Auto-select newly created circle
       };
     });
+
+    // Add undo tracking for create operation (capture immediately after local state update)
+    if (user) {
+      pushUndo({
+        type: 'create',
+        timestamp: Date.now(),
+        userId: user.userId,
+        shapeIds: [tempId],
+        before: null,
+        after: newCircle
+      });
+    }
 
     // Broadcast selection to other users
     if (user) {
@@ -399,11 +425,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addTriangle = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    // Calculate visible canvas middle-left accounting for properties panel (288px = w-72)
     const propertiesPanelWidth = 288; // w-72 in Tailwind
     const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
-    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
-    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 4)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2.5)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;
@@ -439,7 +465,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       y: targetY,
       width: 100,
       height: 100,
-      color: DEFAULT_COLOR,
+      color: defaultColor,
       createdBy: user.email,
       lastModifiedBy: user.email,
     });
@@ -449,12 +475,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addTriangleFull = async (triangle: Omit<TriangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    let newTriangle!: TriangleShape;
     setCanvasState(prev => {
       const maxZIndex = prev.rectangles.length > 0 
         ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
         : 0;
       
-      const newTriangle: TriangleShape = {
+      newTriangle = {
         ...triangle,
         type: 'triangle',
         id: tempId,
@@ -471,6 +498,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newTriangle.id]
       };
     });
+
+    // Add undo tracking for create operation (capture immediately after local state update)
+    if (user) {
+      pushUndo({
+        type: 'create',
+        timestamp: Date.now(),
+        userId: user.userId,
+        shapeIds: [tempId],
+        before: null,
+        after: newTriangle
+      });
+    }
 
     // Broadcast selection to other users
     if (user) {
@@ -500,9 +539,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addLine = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center
-    const baseCenterX = (-canvasState.viewport.x + (canvasState.stageSize.width / 2)) / canvasState.viewport.scale;
-    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+    // Calculate visible canvas middle-left accounting for properties panel (288px = w-72)
+    const propertiesPanelWidth = 288; // w-72 in Tailwind
+    const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 4)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2.5)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;
@@ -539,7 +580,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       x2: targetX + 100, // 100px horizontal line
       y2: targetY,
       strokeWidth: 2, // Default stroke width
-      color: DEFAULT_COLOR,
+      color: defaultColor,
       createdBy: user.email,
       lastModifiedBy: user.email,
     });
@@ -548,11 +589,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addText = () => {
     if (!user?.email) return;
 
-    // Calculate visible canvas center accounting for properties panel (288px = w-72)
+    // Calculate visible canvas middle-left accounting for properties panel (288px = w-72)
     const propertiesPanelWidth = 288; // w-72 in Tailwind
     const availableWidth = canvasState.stageSize.width - propertiesPanelWidth;
-    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 2)) / canvasState.viewport.scale;
-    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2)) / canvasState.viewport.scale;
+    const baseCenterX = (-canvasState.viewport.x + (availableWidth / 4)) / canvasState.viewport.scale;
+    const baseCenterY = (-canvasState.viewport.y + (canvasState.stageSize.height / 2.5)) / canvasState.viewport.scale;
 
     let targetX = baseCenterX;
     let targetY = baseCenterY;
@@ -593,7 +634,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       fontFamily: 'Arial',
       fontWeight: 'normal',
       fontStyle: 'normal',
-      color: DEFAULT_COLOR,
+      color: defaultColor,
       backgroundColor: 'transparent', // Default to translucent background
       textColor: '#000000',
       borderColor: 'transparent', // Default to translucent border
@@ -606,12 +647,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addLineFull = async (line: Omit<import('../types/canvas.types').LineShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    let newLine!: import('../types/canvas.types').LineShape;
     setCanvasState(prev => {
       const maxZIndex = prev.rectangles.length > 0 
         ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
         : 0;
       
-      const newLine: import('../types/canvas.types').LineShape = {
+      newLine = {
         ...line,
         type: 'line',
         id: tempId,
@@ -628,6 +670,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newLine.id]
       };
     });
+
+    // Add undo tracking for create operation (capture immediately after local state update)
+    if (user) {
+      pushUndo({
+        type: 'create',
+        timestamp: Date.now(),
+        userId: user.userId,
+        shapeIds: [tempId],
+        before: null,
+        after: newLine
+      });
+    }
 
     // Broadcast selection to other users
     if (user) {
@@ -657,11 +711,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const addTextFull = async (text: Omit<import('../types/canvas.types').TextShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    let newText!: import('../types/canvas.types').TextShape;
     setCanvasState(prev => {
       const maxZIndex = prev.rectangles.length > 0 
         ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
         : 0;
-      const newText: import('../types/canvas.types').TextShape = {
+      newText = {
         ...text,
         type: 'text',
         id: tempId,
@@ -677,6 +732,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newText.id]
       };
     });
+
+    // Add undo tracking for create operation (capture immediately after local state update)
+    if (user) {
+      pushUndo({
+        type: 'create',
+        timestamp: Date.now(),
+        userId: user.userId,
+        shapeIds: [tempId],
+        before: null,
+        after: newText
+      });
+    }
 
     // Broadcast selection to other users
     if (user) {
@@ -707,13 +774,14 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Optimistic update: add to local state immediately
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    let newRectangle!: Rectangle;
     setCanvasState(prev => {
       // Calculate highest z-index + 1 for new rectangle (higher = front)
       const maxZIndex = prev.rectangles.length > 0 
         ? Math.max(...prev.rectangles.map(r => r.zIndex)) 
         : 0;
       
-      const newRectangle: Rectangle = {
+      newRectangle = {
         ...rectangle,
         type: 'rectangle',
         id: tempId,
@@ -731,6 +799,18 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
+    // Add undo tracking for create operation (capture immediately after local state update)
+    if (user) {
+      pushUndo({
+        type: 'create',
+        timestamp: Date.now(),
+        userId: user.userId,
+        shapeIds: [tempId],
+        before: null,
+        after: newRectangle
+      });
+    }
+
     // Broadcast selection to other users
     if (user) {
       const cursorColorData = getCursorColorForUser(user.email);
@@ -747,21 +827,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         opacity: 1
       };
       await canvasService.createRectangle(fullRectangle);
-      
-      // Add undo tracking for create operation
-      if (user) {
-        const createdShape = canvasState.rectangles.find(r => r.id === tempId);
-        if (createdShape) {
-          pushUndo({
-            type: 'create',
-            timestamp: Date.now(),
-            userId: user.userId,
-            shapeIds: [tempId],
-            before: null,
-            after: createdShape
-          });
-        }
-      }
     } catch (error) {
       console.error('Failed to create rectangle in Firestore:', error);
       // Revert optimistic update on failure
@@ -1144,6 +1209,247 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   };
 
+  // Undo/Redo functions that work with current canvas state
+  const undoAction = async () => {
+    if (undoStack.length === 0) return;
+    
+    const action = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    
+    // Create a modified action for redo that includes the current shape IDs
+    const redoAction = { ...action };
+    
+    try {
+      switch (action.type) {
+        case 'create':
+          // Undo create = delete the created shapes
+          if (action.after && Array.isArray(action.after)) {
+            const currentShapeIds: string[] = [];
+            for (const shape of action.after) {
+              // Find the current shape by matching properties since ID might have changed
+              const currentShape = canvasState.rectangles.find(s => 
+                s.type === shape.type && 
+                s.x === shape.x && 
+                s.y === shape.y && 
+                s.color === shape.color &&
+                ((s.type === 'rectangle' && (s as any).width === (shape as any).width && (s as any).height === (shape as any).height) ||
+                 (s.type === 'circle' && (s as any).radius === (shape as any).radius) ||
+                 (s.type === 'line' && (s as any).x2 === (shape as any).x2 && (s as any).y2 === (shape as any).y2) ||
+                 (s.type === 'text' && (s as any).text === (shape as any).text) ||
+                 (s.type === 'triangle' && (s as any).width === (shape as any).width && (s as any).height === (shape as any).height))
+              );
+              
+              if (currentShape) {
+                currentShapeIds.push(currentShape.id);
+                await deleteRectangle(currentShape.id);
+              }
+            }
+            // Store current shape IDs for redo
+            redoAction.shapeIds = currentShapeIds;
+          } else if (action.after && !Array.isArray(action.after)) {
+            const shape = action.after;
+            // Find the current shape by matching properties
+            const currentShape = canvasState.rectangles.find(s => 
+              s.type === shape.type && 
+              s.x === shape.x && 
+              s.y === shape.y && 
+              s.color === shape.color &&
+              ((s.type === 'rectangle' && (s as any).width === (shape as any).width && (s as any).height === (shape as any).height) ||
+               (s.type === 'circle' && (s as any).radius === (shape as any).radius) ||
+               (s.type === 'line' && (s as any).x2 === (shape as any).x2 && (s as any).y2 === (shape as any).y2) ||
+               (s.type === 'text' && (s as any).text === (shape as any).text) ||
+               (s.type === 'triangle' && (s as any).width === (shape as any).width && (s as any).height === (shape as any).height))
+            );
+            
+            if (currentShape) {
+              redoAction.shapeIds = [currentShape.id];
+              await deleteRectangle(currentShape.id);
+            }
+          }
+          break;
+        
+        case 'delete':
+          // Undo delete = recreate the deleted shapes
+          if (action.before && Array.isArray(action.before)) {
+            for (const shape of action.before) {
+              // Recreate the shape with the same properties
+              if (shape.type === 'rectangle') {
+                await addRectangleFull(shape as any);
+              } else if (shape.type === 'circle') {
+                await addCircleFull(shape as any);
+              } else if (shape.type === 'triangle') {
+                await addTriangleFull(shape as any);
+              } else if (shape.type === 'line') {
+                await addLineFull(shape as any);
+              } else if (shape.type === 'text') {
+                await addTextFull(shape as any);
+              }
+            }
+          } else if (action.before && !Array.isArray(action.before)) {
+            const shape = action.before;
+            if (shape.type === 'rectangle') {
+              await addRectangleFull(shape as any);
+            } else if (shape.type === 'circle') {
+              await addCircleFull(shape as any);
+            } else if (shape.type === 'triangle') {
+              await addTriangleFull(shape as any);
+            } else if (shape.type === 'line') {
+              await addLineFull(shape as any);
+            } else if (shape.type === 'text') {
+              await addTextFull(shape as any);
+            }
+          }
+          // For redo, we'll find the recreated shapes by matching properties
+          // This is more reliable than trying to track IDs through the creation process
+          break;
+        
+        case 'modify':
+        case 'move':
+        case 'reorder':
+          // Restore previous state
+          if (action.before && !Array.isArray(action.before)) {
+            await updateShape(action.before.id, action.before as any, false); // Don't track undo for this update
+          }
+          break;
+      }
+      
+      // Add the modified action to redo stack
+      setRedoStack(prev => [...prev, redoAction]);
+      
+      toast.success(`Undid ${action.type} operation`);
+    } catch (error) {
+      console.error('Failed to undo action:', error);
+      toast.error('Failed to undo action');
+      // Still add to redo stack even if there was an error
+      setRedoStack(prev => [...prev, redoAction]);
+    }
+  };
+
+  const redoAction = async () => {
+    if (redoStack.length === 0) return;
+    
+    const action = redoStack[redoStack.length - 1];
+    setRedoStack(prev => prev.slice(0, -1));
+    setUndoStack(prev => [...prev, action]);
+    
+    try {
+      switch (action.type) {
+        case 'create':
+          // Redo create = recreate the shapes
+          if (action.after && Array.isArray(action.after)) {
+            for (const shape of action.after) {
+              if (shape.type === 'rectangle') {
+                await addRectangleFull(shape as any);
+              } else if (shape.type === 'circle') {
+                await addCircleFull(shape as any);
+              } else if (shape.type === 'triangle') {
+                await addTriangleFull(shape as any);
+              } else if (shape.type === 'line') {
+                await addLineFull(shape as any);
+              } else if (shape.type === 'text') {
+                await addTextFull(shape as any);
+              }
+            }
+          } else if (action.after && !Array.isArray(action.after)) {
+            const shape = action.after;
+            if (shape.type === 'rectangle') {
+              await addRectangleFull(shape as any);
+            } else if (shape.type === 'circle') {
+              await addCircleFull(shape as any);
+            } else if (shape.type === 'triangle') {
+              await addTriangleFull(shape as any);
+            } else if (shape.type === 'line') {
+              await addLineFull(shape as any);
+            } else if (shape.type === 'text') {
+              await addTextFull(shape as any);
+            }
+          }
+          break;
+        
+        case 'delete':
+          // Redo delete = delete the shapes that were recreated during undo
+          // Find shapes by matching properties since they were recreated with new IDs
+          if (action.before && Array.isArray(action.before)) {
+            for (const originalShape of action.before) {
+              // Find the current shape that matches the original shape's properties
+              const currentShape = canvasState.rectangles.find(shape => {
+                if (shape.type !== originalShape.type || 
+                    shape.x !== originalShape.x || 
+                    shape.y !== originalShape.y || 
+                    shape.color !== originalShape.color) {
+                  return false;
+                }
+                
+                // Type-specific matching
+                if (originalShape.type === 'rectangle' && shape.type === 'rectangle') {
+                  return shape.width === originalShape.width && shape.height === originalShape.height;
+                } else if (originalShape.type === 'circle' && shape.type === 'circle') {
+                  return shape.radius === originalShape.radius;
+                } else if (originalShape.type === 'line' && shape.type === 'line') {
+                  return shape.x2 === originalShape.x2 && shape.y2 === originalShape.y2;
+                } else if (originalShape.type === 'text' && shape.type === 'text') {
+                  return shape.text === originalShape.text;
+                } else if (originalShape.type === 'triangle' && shape.type === 'triangle') {
+                  return shape.width === originalShape.width && shape.height === originalShape.height;
+                }
+                
+                return true;
+              });
+              
+              if (currentShape) {
+                await deleteRectangle(currentShape.id);
+              }
+            }
+          } else if (action.before && !Array.isArray(action.before)) {
+            // Single shape case
+            const originalShape = action.before;
+            const currentShape = canvasState.rectangles.find(shape => {
+              if (shape.type !== originalShape.type || 
+                  shape.x !== originalShape.x || 
+                  shape.y !== originalShape.y || 
+                  shape.color !== originalShape.color) {
+                return false;
+              }
+              
+              // Type-specific matching
+              if (originalShape.type === 'rectangle' && shape.type === 'rectangle') {
+                return shape.width === originalShape.width && shape.height === originalShape.height;
+              } else if (originalShape.type === 'circle' && shape.type === 'circle') {
+                return shape.radius === originalShape.radius;
+              } else if (originalShape.type === 'line' && shape.type === 'line') {
+                return shape.x2 === originalShape.x2 && shape.y2 === originalShape.y2;
+              } else if (originalShape.type === 'text' && shape.type === 'text') {
+                return shape.text === originalShape.text;
+              } else if (originalShape.type === 'triangle' && shape.type === 'triangle') {
+                return shape.width === originalShape.width && shape.height === originalShape.height;
+              }
+              
+              return true;
+            });
+            
+            if (currentShape) {
+              await deleteRectangle(currentShape.id);
+            }
+          }
+          break;
+        
+        case 'modify':
+        case 'move':
+        case 'reorder':
+          // Redo modify/move/reorder = apply the after state
+          if (action.after && !Array.isArray(action.after)) {
+            await updateShape(action.after.id, action.after as any, false); // Don't track undo for this update
+          }
+          break;
+      }
+      
+      toast.success(`Redid ${action.type} operation`);
+    } catch (error) {
+      console.error('Failed to redo action:', error);
+      toast.error('Failed to redo action');
+    }
+  };
+
   // Z-index operations
   const bringToFront = async (id: string) => {
     const targetRect = canvasState.rectangles.find((rect: Shape) => rect.id === id);
@@ -1261,6 +1567,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     error: canvasState.error,
     stageSize: canvasState.stageSize,
     cursorPosition: canvasState.cursorPosition,
+    defaultColor,
+    defaultOpacity,
     
     // Viewport operations
     setViewport,
@@ -1295,16 +1603,26 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     pasteShapes,
     duplicateShapes,
     
-    // Delete operations
-    deleteSelected,
+  // Delete operations
+  deleteSelected,
+  
+  // Undo/Redo operations
+  undoAction,
+  redoAction,
+  
+  // Tool operations
+  setTool,
     
-    // Tool operations
-    setTool,
-    
-    // Utility
-    clearError,
-    setStageSize,
-    updateCursorPosition
+  // Utility
+  clearError,
+  setStageSize,
+  updateCursorPosition,
+  
+  // Default color operations
+  setDefaultColor: (color: string, opacity: number) => {
+    setDefaultColorState(color);
+    setDefaultOpacityState(opacity);
+  }
   };
 
   return <CanvasContext.Provider value={value}>{children}</CanvasContext.Provider>;
