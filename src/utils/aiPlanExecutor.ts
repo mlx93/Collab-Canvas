@@ -92,6 +92,7 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
     'blue': /#(3b82f6|2563eb|1d4ed8|1e40af|1e3a8a|60a5fa|93c5fd)/i,
     'green': /#(10b981|059669|047857|065f46|064e3b|34d399|6ee7b7)/i,
     'yellow': /#(f59e0b|d97706|b45309|92400e|78350f|fbbf24|fcd34d)/i,
+    'orange': /#(f97316|ea580c|c2410c|9a3412|7c2d12|fb923c|fdba74)/i,
     'purple': /#(8b5cf6|7c3aed|6d28d9|5b21b6|4c1d95|a78bfa|c4b5fd)/i,
     'pink': /#(ec4899|db2777|be185d|9d174d|831843|f472b6|f9a8d4)/i,
     'gray': /#(6b7280|4b5563|374151|1f2937|111827|9ca3af|d1d5db)/i,

@@ -243,6 +243,65 @@ CRITICAL: Shape Identification Rules
 - If user says "the selected [shape]" or "selected shapes", ONLY use shapes from selectedIds
 - Example: "move the selected circle 100 pixels right" → find circle in selectedIds, move it
 
+**Quantity and Spatial Selection:**
+When user wants to act on a SUBSET of matching shapes (e.g., "delete 2 of 4 orange circles"):
+
+1. **Filter by criteria first** (color, type, size):
+   - "orange circles" → filter shapes where type=circle AND color matches orange hex codes
+   - Collect all matching shape IDs
+
+2. **Apply spatial filters if mentioned**:
+   - "on the left" → filter shapes where x < viewport.centerX
+   - "on the right" → filter shapes where x > viewport.centerX
+   - "at the top" → filter shapes where y < viewport.centerY
+   - "at the bottom" → filter shapes where y > viewport.centerY
+   - "in the center" → filter shapes near viewport center
+
+3. **Apply size filters if mentioned**:
+   - "the smaller ones" → sort by area/radius, take smaller half
+   - "the larger rectangles" → sort by area, take larger ones
+   - "the smallest circle" → take one with minimum radius
+
+4. **Apply quantity selection**:
+   - If user says "2 of 4 orange circles" and you have 4 matches:
+     * If spatial context provided ("on the left"), use those 2
+     * If no context, randomly select 2 from the matches
+     * Use the IDs of the selected shapes in your operation
+
+5. **Examples**:
+   - "Delete 2 of the 4 orange circles" → Filter orange circles, randomly pick 2 IDs
+   - "Delete the 2 orange circles on the left" → Filter orange circles, filter x < centerX, use those 2 IDs
+   - "Move the smaller red rectangles to the center" → Filter red rectangles, sort by area, take smaller half
+   - "Delete the largest blue circle" → Filter blue circles, find one with max radius, use its ID
+
+**Color Changes:**
+- User can change colors using updateStyle operation
+- Example: "Change the one red circle to be orange"
+  * Find red circle (filter by color=#ef4444 and type=circle)
+  * Use updateStyle with its ID and color=#f97316 (orange)
+- When user says color names, use the hex codes from the color reference above
+- Support "change to", "make it", "turn to" as change indicators
+
+**Z-Index and Layering:**
+- Use bringToFront and sendToBack operations for layering
+- Examples:
+  * "Bring the blue rectangle to the front" → bringToFront with rectangle's ID
+  * "Send all circles to the back" → sendToBack for each circle ID
+  * "Put the title text on top" → bringToFront with text ID
+- Z-index determines visual stacking order (higher = front)
+
+**Multiple Shape Creation - Auto-Spacing:**
+When creating multiple shapes at once (e.g., "Create 5 blue circles"):
+1. Calculate horizontal spacing to avoid overlap:
+   - Default spacing: 150px between shape centers
+   - Start position: viewport.centerX - (count * spacing / 2)
+   - Position each: startX + (index * spacing)
+2. Use same Y position (viewport.centerY) for all
+3. Examples:
+   - "Create 5 circles" → Place at x: [centerX-300, centerX-150, centerX, centerX+150, centerX+300]
+   - "Add 3 rectangles" → Space 150px apart horizontally
+   - "Make 4 squares" → Evenly distribute across viewport center
+
 **Shape Identification for Operations:**
 When you need to manipulate shapes (move, resize, rotate, delete, style):
 1. **ALWAYS use the ID field (UUID) in your operation parameters**, NOT the Name field
@@ -300,6 +359,16 @@ Canvas details:
 - Viewport shows a portion of the canvas (user's current view)
 - Colors use hex format (#RRGGBB)
 - Z-index determines layering (higher = front)
+
+Common color hex codes for reference:
+- Red: #ef4444, #dc2626, #b91c1c, #f87171
+- Blue: #3b82f6, #2563eb, #1d4ed8, #60a5fa
+- Green: #10b981, #059669, #047857, #34d399
+- Yellow: #f59e0b, #d97706, #fbbf24, #fcd34d
+- Orange: #f97316, #ea580c, #fb923c, #fdba74
+- Purple: #8b5cf6, #7c3aed, #a78bfa
+- Pink: #ec4899, #db2777, #f472b6
+- Gray: #6b7280, #4b5563, #9ca3af
 
 When creating complex layouts:
 - Login forms: Create container, labels, inputs, and button with proper spacing
