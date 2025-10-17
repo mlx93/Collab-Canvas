@@ -24,13 +24,15 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.createdBy == request.auth.token.email
         && request.resource.data.zIndex is number
-        && request.resource.data.zIndex >= 1;
+        && request.resource.data.zIndex >= -100000000
+        && request.resource.data.zIndex <= 100000000;
       
       // Allow users to update shapes
       allow update: if request.auth != null
         && request.resource.data.lastModifiedBy == request.auth.token.email
         && request.resource.data.zIndex is number
-        && request.resource.data.zIndex >= 1;
+        && request.resource.data.zIndex >= -100000000
+        && request.resource.data.zIndex <= 100000000;
       
       // Allow users to delete shapes
       allow delete: if request.auth != null;

@@ -147,11 +147,29 @@ export async function updateRectangle(
   );
 }
 
+// Simple mutex to prevent concurrent z-index updates
+let zIndexUpdateInProgress = false;
+
 /**
  * Manually set z-index with push-down recalculation
  */
 export async function updateZIndex(shapeId: string, newZIndex: number): Promise<void> {
-  await retryOperation(async () => {
+  // Check authentication
+  if (!auth.currentUser?.email) {
+    throw new Error('User must be authenticated to update z-index');
+  }
+  
+  // Prevent concurrent z-index updates
+  if (zIndexUpdateInProgress) {
+    // Wait a bit and retry
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return updateZIndex(shapeId, newZIndex);
+  }
+  
+  zIndexUpdateInProgress = true;
+  
+  try {
+    await retryOperation(async () => {
     // Get all shapes to recalculate z-indices
     const shapesQuery = query(getShapesCollection());
     const snapshot = await getDocs(shapesQuery);
@@ -187,7 +205,7 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
     batch.update(getShapeDoc(shapeId), {
       zIndex: TEMP_HIGH_VALUE,
       lastModified: Timestamp.now(),
-      lastModifiedBy: auth.currentUser?.email ?? targetShape.lastModifiedBy ?? targetShape.createdBy,
+      lastModifiedBy: auth.currentUser!.email,
     });
 
     // Phase 2: shift other shapes to make room
@@ -213,7 +231,7 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
         batch.update(getShapeDoc(shape.id), {
           zIndex: updatedZIndex,
           lastModified: Timestamp.now(),
-          lastModifiedBy: auth.currentUser?.email ?? shape.lastModifiedBy ?? shape.createdBy,
+          lastModifiedBy: auth.currentUser!.email,
         });
       }
     });
@@ -222,11 +240,14 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
     batch.update(getShapeDoc(shapeId), {
       zIndex: newZIndex,
       lastModified: Timestamp.now(),
-      lastModifiedBy: auth.currentUser?.email ?? targetShape.lastModifiedBy ?? targetShape.createdBy,
+      lastModifiedBy: auth.currentUser!.email,
     });
 
     await batch.commit();
   }, 'Update z-index');
+  } finally {
+    zIndexUpdateInProgress = false;
+  }
 }
 
 /**

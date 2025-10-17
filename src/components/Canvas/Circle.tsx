@@ -20,13 +20,17 @@ import {
 import { throttle } from '../../utils/throttle';
 import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
-interface CircleProps {
+export interface CircleProps {
   circle: CircleShape;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e?: any) => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
   updateOwnCursor?: (x: number, y: number) => void;
+  onMultiDragStart?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragEnd?: () => void;
+  multiDragPosition?: { x: number; y: number };
 }
 
 const MIN_RADIUS = 10;
@@ -38,11 +42,16 @@ const CircleComponent: React.FC<CircleProps> = ({
   onSelect, 
   showIndicator = true,
   renderOnlyIndicator = false,
-  updateOwnCursor
+  updateOwnCursor,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragEnd,
+  multiDragPosition
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -56,6 +65,14 @@ const CircleComponent: React.FC<CircleProps> = ({
       setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
     }, 16)
   );
+
+  // Force node position update when multiDragPosition changes (for multi-select dragging)
+  useEffect(() => {
+    if (multiDragPosition && !isDragging && circleRef.current) {
+      circleRef.current.position({ x: multiDragPosition.x, y: multiDragPosition.y });
+      circleRef.current.getLayer()?.batchDraw();
+    }
+  }, [multiDragPosition, isDragging]);
   
   // Subscribe to active edits for this shape
   useEffect(() => {
@@ -112,13 +129,16 @@ const CircleComponent: React.FC<CircleProps> = ({
     );
   }
 
-  // Use live position if available (another user is editing), otherwise use circle's stored position
+  // Use live position if available, or multi-drag position, otherwise use circle's stored position
   const currentPos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, radius: livePosition.width } // width represents radius for circles
+    : multiDragPosition && !isDragging
+    ? { x: multiDragPosition.x, y: multiDragPosition.y, radius: circle.radius }
     : { x: circle.x, y: circle.y, radius: circle.radius };
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
+    setIsDragging(true);
     
     // Calculate new z-index (bring to front) - maxZIndex + 1
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
@@ -127,7 +147,16 @@ const CircleComponent: React.FC<CircleProps> = ({
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(circle.id, user.userId, user.email, firstName, 'moving', cursorColor);
-    onSelect();
+    
+    // Only select the shape if it's not already selected (preserves multi-selection)
+    if (!isSelected) {
+      onSelect();
+    }
+    
+    // Start multi-drag if this shape is part of a multi-selection
+    if (onMultiDragStart) {
+      onMultiDragStart(circle.id, circle.x, circle.y);
+    }
   };
 
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -156,12 +185,21 @@ const CircleComponent: React.FC<CircleProps> = ({
       }
     }
     
-    // Stream live position (with z-index) to other users
-    throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
+    // Update multi-drag if this shape is part of a multi-selection
+    if (onMultiDragUpdate) {
+      onMultiDragUpdate(circle.id, x, y);
+    }
+    
+    // Stream individual live position for leader shape during multi-drag
+    // Follower shapes are handled by the multi-drag system
+    if (!multiDragPosition || isDragging) {
+      throttledLivePositionUpdate.current(circle.id, user.userId, x, y, circle.radius, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
+    }
   };
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
+    setIsDragging(false);
     
     const node = e.target;
     const x = node.x();
@@ -173,6 +211,11 @@ const CircleComponent: React.FC<CircleProps> = ({
     // Clear z-index ref
     newZIndexRef.current = null;
     
+    // End multi-drag if this shape was part of a multi-selection
+    if (onMultiDragEnd) {
+      onMultiDragEnd();
+    }
+    
     // Clear active edit (no need to clear live position - it expires naturally)
     clearActiveEdit(circle.id);
   };
@@ -181,7 +224,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   // Handle shape selection
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
-    onSelect();
+    onSelect(e);
   };
 
   // Handle resize via right-edge handle
@@ -279,7 +322,7 @@ const CircleComponent: React.FC<CircleProps> = ({
         fill={circle.color}
         opacity={circle.opacity ?? 1}
         rotation={circle.rotation ?? 0}
-        draggable={!livePosition && !circle.locked && !isResizing}
+        draggable={!livePosition && !circle.locked && !isResizing && (!multiDragPosition || isDragging)}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}

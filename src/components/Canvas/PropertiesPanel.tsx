@@ -25,7 +25,7 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
 };
 
 export const PropertiesPanel: React.FC = () => {
-  const { rectangles, selectedRectangleId, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex } = useCanvas();
+  const { rectangles, selectedIds, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex, bringToFront, sendToBack } = useCanvas();
   const { user } = useAuth();
   const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
   const [isTextColorDropdownOpen, setIsTextColorDropdownOpen] = useState(false);
@@ -44,8 +44,10 @@ export const PropertiesPanel: React.FC = () => {
   const [zIndexInput, setZIndexInput] = useState<string>(''); // Local state for z-index input
   const [fontSizeInput, setFontSizeInput] = useState<string>(''); // Local state for font size input
 
-  // Get selected rectangle
-  const selectedRectangle = rectangles.find(r => r.id === selectedRectangleId);
+  // Get selected shapes
+  const selectedShapes = rectangles.filter(r => selectedIds.includes(r.id));
+  const selectedRectangle = selectedShapes[0]; // Show properties for first selected shape
+  const isMultiSelection = selectedIds.length > 1;
 
   // Sync zIndexInput with selectedRectangle.zIndex when it changes
   React.useEffect(() => {
@@ -127,10 +129,10 @@ export const PropertiesPanel: React.FC = () => {
     const value = e.target.value;
     setZIndexInput(value); // Allow any input temporarily
 
-    // Only update context if valid positive integer
+    // Only update context if valid integer within range
     if (!selectedRectangle) return;
     const newZIndex = parseInt(value, 10);
-    if (!isNaN(newZIndex) && newZIndex >= 1) {
+    if (!isNaN(newZIndex) && newZIndex >= -100000000 && newZIndex <= 100000000) {
       setZIndex(selectedRectangle.id, newZIndex);
     }
   };
@@ -138,7 +140,11 @@ export const PropertiesPanel: React.FC = () => {
   // Handle z-index blur - reset to actual value if invalid
   const handleZIndexBlur = () => {
     if (selectedRectangle) {
-      setZIndexInput(selectedRectangle.zIndex.toString());
+      const currentValue = parseInt(zIndexInput, 10);
+      if (isNaN(currentValue) || currentValue < -100000000 || currentValue > 100000000) {
+        // Reset to actual value if invalid
+        setZIndexInput(selectedRectangle.zIndex.toString());
+      }
     }
   };
 
@@ -193,12 +199,12 @@ export const PropertiesPanel: React.FC = () => {
   }, [selectedRectangle, deleteRectangle, setSelectedRectangle]);
 
   // If nothing selected, show empty state
-  if (!selectedRectangle) {
+  if (selectedIds.length === 0) {
     return (
       <div className="p-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-2">Properties</h3>
         <p className="text-xs text-gray-500">
-          Select a rectangle to view properties
+          Select a shape to view properties
         </p>
       </div>
     );
@@ -207,7 +213,14 @@ export const PropertiesPanel: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4">Properties</h3>
+        <div className="mb-4">
+          <h3 className="text-sm font-semibold text-gray-700">Properties</h3>
+          {isMultiSelection && (
+            <p className="text-xs text-blue-600 mt-1">
+              {selectedIds.length} shapes selected (showing first)
+            </p>
+          )}
+        </div>
 
       {/* Color Picker - Only show for non-text shapes */}
       {selectedRectangle.type !== 'text' && (
@@ -552,26 +565,6 @@ export const PropertiesPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Z-Index Input (Editable) */}
-          <div>
-            <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
-              Z-Index (Layer Order)
-            </label>
-            <input
-              id="zindex"
-              type="text"
-              value={zIndexInput}
-              onChange={handleZIndexChange}
-              onBlur={handleZIndexBlur}
-              placeholder="Enter layer number"
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck="false"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <p className="text-xs text-gray-500 mt-1">1 = back, higher = front</p>
-          </div>
 
           {/* Font Size */}
           <div>
@@ -658,6 +651,50 @@ export const PropertiesPanel: React.FC = () => {
           readOnly
           className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
         />
+      </div>
+
+      {/* Z-Index Input (Editable) - Available for all shapes */}
+      <div>
+        <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
+          Z-Index (Layer Order)
+        </label>
+        <input
+          id="zindex"
+          type="text"
+          value={zIndexInput}
+          onChange={handleZIndexChange}
+          onBlur={handleZIndexBlur}
+          placeholder="Enter layer number (-100M to 100M)"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <p className="text-xs text-gray-500 mt-1">Lower = back, higher = front (-100M to 100M)</p>
+      </div>
+
+      {/* Z-Index Control Buttons - Available for all shapes */}
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-2">
+          Layer Controls
+        </label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => selectedRectangle && bringToFront(selectedRectangle.id)}
+            className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-md transition-colors"
+            title="Bring to front"
+          >
+            ↑ Front
+          </button>
+          <button
+            onClick={() => selectedRectangle && sendToBack(selectedRectangle.id)}
+            className="flex-1 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-md transition-colors"
+            title="Send to back"
+          >
+            ↓ Back
+          </button>
+        </div>
       </div>
 
       </div>

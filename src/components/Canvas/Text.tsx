@@ -19,13 +19,17 @@ import {
 import { throttle } from '../../utils/throttle';
 import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
-interface TextProps {
+export interface TextProps {
   text: TextShape;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e?: any) => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
   updateOwnCursor?: (x: number, y: number) => void;
+  onMultiDragStart?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragEnd?: () => void;
+  multiDragPosition?: { x: number; y: number };
   onEditingChange?: (editing: boolean, textData?: { x: number; y: number; width: number; height: number; text: string; fontSize: number; fontFamily: string; fontStyle: string; fontWeight: string; textColor?: string; backgroundColor?: string; editText: string; onChange: (text: string) => void; onSubmit: () => void; onCancel: () => void }) => void;
 }
 
@@ -36,6 +40,10 @@ export const Text: React.FC<TextProps> = ({
   showIndicator = false,
   renderOnlyIndicator = false,
   updateOwnCursor,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragEnd,
+  multiDragPosition,
   onEditingChange
 }) => {
   const textRef = useRef<Konva.Text>(null);
@@ -47,7 +55,7 @@ export const Text: React.FC<TextProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(text.text);
   const [isResizing, setIsResizing] = useState(false);
-  const [, setIsDragging] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -72,7 +80,15 @@ export const Text: React.FC<TextProps> = ({
     }, 16)
   );
 
-  // Use live position if available, or resize dimensions if actively resizing
+  // Force node position update when multiDragPosition changes (for multi-select dragging)
+  useEffect(() => {
+    if (multiDragPosition && !isDragging && groupRef.current) {
+      groupRef.current.position({ x: multiDragPosition.x, y: multiDragPosition.y });
+      groupRef.current.getLayer()?.batchDraw();
+    }
+  }, [multiDragPosition, isDragging]);
+
+  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
   const currentPos = livePosition && livePosition.userId !== user?.userId
     ? { 
         x: livePosition.x, 
@@ -80,6 +96,14 @@ export const Text: React.FC<TextProps> = ({
         width: livePosition.width, 
         height: livePosition.height,
         zIndex: livePosition.zIndex !== undefined ? livePosition.zIndex : text.zIndex
+      }
+    : multiDragPosition && !isDragging
+    ? {
+        x: multiDragPosition.x,
+        y: multiDragPosition.y,
+        width: text.width,
+        height: text.height,
+        zIndex: text.zIndex
       }
     : resizeDimensions && isResizing
     ? { 
@@ -155,7 +179,11 @@ export const Text: React.FC<TextProps> = ({
   const handleDragStart = () => {
     if (renderOnlyIndicator) return;
     setIsDragging(true);
-    onSelect(); // Auto-select on drag start
+    
+    // Only select the shape if it's not already selected (preserves multi-selection)
+    if (!isSelected) {
+      onSelect();
+    }
     
     // Calculate new z-index (bring to front) - maxZIndex + 1
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
@@ -163,6 +191,11 @@ export const Text: React.FC<TextProps> = ({
     
     if (user?.email) {
       setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'moving', getUserCursorColor(user.userId));
+    }
+    
+    // Start multi-drag if this shape is part of a multi-selection
+    if (onMultiDragStart) {
+      onMultiDragStart(text.id, text.x, text.y);
     }
   };
 
@@ -180,8 +213,14 @@ export const Text: React.FC<TextProps> = ({
       handleRef.current.y(newY + displayHeight);
     }
     
-    // Stream live position (throttled to 16ms / 60 FPS)
-    if (user) {
+    // Update multi-drag if this shape is part of a multi-selection
+    if (onMultiDragUpdate) {
+      onMultiDragUpdate(text.id, newX, newY);
+    }
+    
+    // Stream individual live position for leader shape during multi-drag
+    // Follower shapes are handled by the multi-drag system
+    if (user && (!multiDragPosition || isDragging)) {
       throttledLivePositionUpdate.current(
         text.id,
         user.userId,
@@ -220,6 +259,11 @@ export const Text: React.FC<TextProps> = ({
     
     // Clear z-index ref
     newZIndexRef.current = null;
+    
+    // End multi-drag if this shape was part of a multi-selection
+    if (onMultiDragEnd) {
+      onMultiDragEnd();
+    }
     
     // Clear active edit
     if (user?.email) {
@@ -493,9 +537,9 @@ export const Text: React.FC<TextProps> = ({
           x={currentX}
           y={currentY}
           rotation={text.rotation}
-          draggable={true}
-          onClick={onSelect}
-          onTap={onSelect}
+          draggable={!isEditing && (!multiDragPosition || isDragging)}
+          onClick={(e) => onSelect(e)}
+          onTap={(e) => onSelect(e)}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}

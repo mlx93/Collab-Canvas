@@ -271,7 +271,7 @@ describe('useCanvas hook', () => {
         result.current.setSelectedRectangle(rectId);
       });
 
-      expect(result.current.selectedRectangleId).toBe(rectId);
+      expect(result.current.selectedIds).toContain(rectId);
     });
   });
 
@@ -292,7 +292,7 @@ describe('useCanvas hook', () => {
         });
       });
 
-      const rect1Id = result.current.selectedRectangleId!;
+      const rect1Id = result.current.selectedIds[0]!;
 
       act(() => {
         result.current.addRectangleFull({
@@ -368,7 +368,7 @@ describe('useCanvas hook', () => {
         });
       });
 
-      const rect3Id = result.current.selectedRectangleId!;
+      const rect3Id = result.current.selectedIds[0]!;
 
       // Send last rectangle (z-index 3, at front) to back
       // minZIndex is 1, so minZIndex - 1 = 0, but Math.max(1, 0) = 1

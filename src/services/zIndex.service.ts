@@ -42,7 +42,7 @@ export const autoUpdateZIndex = (shapes: Shape[], shapeId: string): Shape[] => {
  * 
  * @param shapes - All rectangles in the canvas
  * @param shapeId - ID of the shape to update
- * @param newZIndex - New z-index to set (positive integer)
+ * @param newZIndex - New z-index to set (-100M to 100M)
  * @returns Updated rectangles array with recalculated z-indices
  * 
  * Example: Setting shape C from z-index 3 to 5 (moving forward):
@@ -52,7 +52,8 @@ export const autoUpdateZIndex = (shapes: Shape[], shapeId: string): Shape[] => {
  * Phase 3: C → 5: [A:1, B:2, D:3, E:4, C:5]
  */
 export const manualSetZIndex = (shapes: Shape[], shapeId: string, newZIndex: number): Shape[] => {
-  if (newZIndex < 1) return shapes; // Z-index must be positive
+  // Allow full range from -100 million to 100 million
+  if (newZIndex < -100000000 || newZIndex > 100000000) return shapes;
 
   const shapeIndex = shapes.findIndex(s => s.id === shapeId);
   if (shapeIndex === -1) return shapes; // Shape not found
@@ -64,7 +65,8 @@ export const manualSetZIndex = (shapes: Shape[], shapeId: string, newZIndex: num
   if (oldZIndex === newZIndex) return shapes;
 
   // Find max z-index for temporary high value
-  const maxZIndex = Math.max(...shapes.map(s => s.zIndex));
+  const zIndices = shapes.map(s => s.zIndex);
+  const maxZIndex = zIndices.length > 0 ? Math.max(...zIndices) : 0;
   const TEMP_HIGH_VALUE = maxZIndex + 1000; // Guaranteed to be out of the way
 
   // PHASE 1: Move target shape to temporary high value

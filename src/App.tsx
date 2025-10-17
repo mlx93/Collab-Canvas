@@ -18,7 +18,7 @@ import './App.css';
 // Inner component that has access to canvas context
 const CanvasLayout: React.FC = () => {
   const fps = useFPS({ sampleSize: 60 });
-  const { selectedRectangleId } = useCanvas();
+  const { selectedIds } = useCanvas();
 
   return (
     <MainLayout
@@ -26,7 +26,7 @@ const CanvasLayout: React.FC = () => {
       toolbar={<CompactToolbar />}
       canvas={<Canvas />}
       properties={<PropertiesPanel />}
-      hasSelection={!!selectedRectangleId}
+      hasSelection={selectedIds.length > 0}
     />
   );
 };

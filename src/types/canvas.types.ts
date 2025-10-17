@@ -122,7 +122,7 @@ export type Tool = 'select' | 'rectangle' | 'circle' | 'triangle' | 'line' | 'te
 export interface CanvasState {
   rectangles: Shape[]; // Legacy name, but now stores all shape types
   viewport: Viewport;
-  selectedRectangleId: string | null; // Legacy name, but selects any shape
+  selectedIds: string[]; // NEW: Array of selected shape IDs
   currentTool: Tool;
   loading: boolean;
   error: string | null;

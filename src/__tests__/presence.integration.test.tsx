@@ -23,6 +23,7 @@ describe('Presence System Integration', () => {
     email: 'user1@example.com',
     firstName: 'John',
     lastName: 'Doe',
+    createdAt: new Date(),
   };
 
   const mockAuthContextValue = {
@@ -31,9 +32,10 @@ describe('Presence System Integration', () => {
     error: null,
     signUp: jest.fn(),
     signIn: jest.fn(),
+    signInWithGoogle: jest.fn(),
     signOut: jest.fn(),
+    updateProfile: jest.fn(),
     clearError: jest.fn(),
-    updateUserProfile: jest.fn(),
   };
 
   beforeEach(() => {

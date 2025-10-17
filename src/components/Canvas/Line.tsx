@@ -19,13 +19,17 @@ import {
 } from '../../services/livePositions.service';
 import { throttle } from '../../utils/throttle';
 
-interface LineProps {
+export interface LineProps {
   line: LineShape;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e?: any) => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
   updateOwnCursor?: (x: number, y: number) => void;
+  onMultiDragStart?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragEnd?: () => void;
+  multiDragPosition?: { x: number; y: number; x2?: number; y2?: number };
 }
 
 const Line: React.FC<LineProps> = ({ 
@@ -34,7 +38,11 @@ const Line: React.FC<LineProps> = ({
   onSelect, 
   showIndicator = true,
   renderOnlyIndicator = false,
-  updateOwnCursor
+  updateOwnCursor,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragEnd,
+  multiDragPosition
 }) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
@@ -44,6 +52,7 @@ const Line: React.FC<LineProps> = ({
   const endHandleRef = useRef<Konva.Circle>(null);
   
   // State for interactive operations
+  const [isDragging, setIsDragging] = useState(false);
   const [isResizingStart, setIsResizingStart] = useState(false);
   const [isResizingEnd, setIsResizingEnd] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ x?: number; y?: number; x2?: number; y2?: number } | null>(null);
@@ -59,6 +68,10 @@ const Line: React.FC<LineProps> = ({
       setLivePosition(shapeId, userId, x, y, width, height, undefined, x2, y2);
     }, 16)
   );
+
+  // Force group position update when multiDragPosition changes (for multi-select dragging)
+  // Note: For lines, we don't move the group position since the line is drawn relative to group
+  // Instead, the line points will be recalculated based on currentPos which includes multiDragPosition
 
   // Subscribe to active edits for this line
   useEffect(() => {
@@ -112,9 +125,11 @@ const Line: React.FC<LineProps> = ({
     };
   }, [line.id, user?.userId, activeEdit]);
 
-  // Use live position if available, or resize dimensions if actively resizing
+  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
   const currentPos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, x2: livePosition.x2 || line.x2, y2: livePosition.y2 || line.y2 }
+    : multiDragPosition && !isDragging
+    ? { x: multiDragPosition.x, y: multiDragPosition.y, x2: multiDragPosition.x2 ?? line.x2, y2: multiDragPosition.y2 ?? line.y2 }
     : resizeDimensions && isResizingStart
     ? { x: resizeDimensions.x ?? line.x, y: resizeDimensions.y ?? line.y, x2: line.x2, y2: line.y2 }
     : resizeDimensions && isResizingEnd
@@ -128,14 +143,22 @@ const Line: React.FC<LineProps> = ({
   // Handle drag start
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
+    setIsDragging(true);
     
-    // SELECT THE LINE - User cannot edit unselected shapes
-    onSelect();
+    // Only select the shape if it's not already selected (preserves multi-selection)
+    if (!isSelected) {
+      onSelect();
+    }
     
     // Set active edit state
     const cursorColor = getUserCursorColor(user.userId);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(line.id, user.userId, user.email, firstName, 'moving', cursorColor);
+    
+    // Start multi-drag if this shape is part of a multi-selection
+    if (onMultiDragStart) {
+      onMultiDragStart(line.id, line.x, line.y);
+    }
   };
 
   // Handle drag move
@@ -166,16 +189,25 @@ const Line: React.FC<LineProps> = ({
         endHandleRef.current.y(line.y2 + deltaY);
       }
       
-      throttledLivePositionUpdate.current(
-        line.id,
-        user.userId,
-        line.x + deltaX,
-        line.y + deltaY,
-        Math.abs(line.x2 - line.x), // width
-        Math.abs(line.y2 - line.y), // height
-        line.x2 + deltaX, // x2
-        line.y2 + deltaY  // y2
-      );
+      // Update multi-drag if this shape is part of a multi-selection
+      if (onMultiDragUpdate) {
+        onMultiDragUpdate(line.id, line.x + deltaX, line.y + deltaY);
+      }
+      
+      // Stream individual live position for leader shape during multi-drag
+      // Follower shapes are handled by the multi-drag system
+      if (!multiDragPosition || isDragging) {
+        throttledLivePositionUpdate.current(
+          line.id,
+          user.userId,
+          line.x + deltaX,
+          line.y + deltaY,
+          Math.abs(line.x2 - line.x), // width
+          Math.abs(line.y2 - line.y), // height
+          line.x2 + deltaX, // x2
+          line.y2 + deltaY  // y2
+        );
+      }
     }
     
     forceUpdate({});
@@ -183,6 +215,7 @@ const Line: React.FC<LineProps> = ({
 
   // Handle drag end
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
+    setIsDragging(false);
     const group = groupRef.current;
     if (!group) return;
     
@@ -214,6 +247,11 @@ const Line: React.FC<LineProps> = ({
       y2: newY2,
       lastModifiedBy: user?.email || line.createdBy,
     });
+    
+    // End multi-drag if this shape was part of a multi-selection
+    if (onMultiDragEnd) {
+      onMultiDragEnd();
+    }
     
     clearActiveEdit(line.id);
   };
@@ -363,12 +401,12 @@ const Line: React.FC<LineProps> = ({
         ref={groupRef}
         x={0}
         y={0}
-        draggable={!line.locked && !isResizingStart && !isResizingEnd}
+        draggable={!line.locked && !isResizingStart && !isResizingEnd && (!multiDragPosition || isDragging)}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
-        onClick={onSelect}
-        onTap={onSelect}
+        onClick={(e) => onSelect(e)}
+        onTap={(e) => onSelect(e)}
       >
         {/* Selection outline (thicker, behind) */}
         {isSelected && (

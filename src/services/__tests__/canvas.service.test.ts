@@ -6,7 +6,7 @@ import {
   deleteRectangle,
   subscribeToShapes,
 } from '../canvas.service';
-import { Rectangle } from '../../types/canvas.types';
+import { RectangleShape } from '../../types/canvas.types';
 import { CANVAS_ID } from '../../utils/constants';
 
 // Mock Firestore
@@ -70,12 +70,15 @@ describe('canvas.service', () => {
       (firestore.doc as jest.Mock).mockReturnValue(mockDoc);
       (firestore.collection as jest.Mock).mockReturnValue({});
 
-      const rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+      const rectangle: Omit<RectangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+        type: 'rectangle',
         x: 100,
         y: 100,
         width: 100,
         height: 100,
         color: '#2196F3',
+        rotation: 0,
+        opacity: 1,
         createdBy: 'test@example.com',
         lastModifiedBy: 'test@example.com',
       };
@@ -108,12 +111,15 @@ describe('canvas.service', () => {
       (firestore.collection as jest.Mock).mockImplementation(mockCollection);
       (firestore.doc as jest.Mock).mockReturnValue({ id: 'test-id' });
 
-      const rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+      const rectangle: Omit<RectangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+        type: 'rectangle',
         x: 100,
         y: 100,
         width: 100,
         height: 100,
         color: '#2196F3',
+        rotation: 0,
+        opacity: 1,
         createdBy: 'test@example.com',
         lastModifiedBy: 'test@example.com',
       };
@@ -139,12 +145,15 @@ describe('canvas.service', () => {
       (firestore.doc as jest.Mock).mockReturnValue({ id: 'test-id' });
       (firestore.collection as jest.Mock).mockReturnValue({});
 
-      const rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+      const rectangle: Omit<RectangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+        type: 'rectangle',
         x: 100,
         y: 100,
         width: 100,
         height: 100,
         color: '#2196F3',
+        rotation: 0,
+        opacity: 1,
         createdBy: 'test@example.com',
         lastModifiedBy: 'test@example.com',
       };
@@ -164,12 +173,15 @@ describe('canvas.service', () => {
       (firestore.doc as jest.Mock).mockReturnValue({ id: 'test-id' });
       (firestore.collection as jest.Mock).mockReturnValue({});
 
-      const rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+      const rectangle: Omit<RectangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified'> = {
+        type: 'rectangle',
         x: 100,
         y: 100,
         width: 100,
         height: 100,
         color: '#2196F3',
+        rotation: 0,
+        opacity: 1,
         createdBy: 'test@example.com',
         lastModifiedBy: 'test@example.com',
       };
@@ -286,7 +298,7 @@ describe('canvas.service', () => {
       (firestore.onSnapshot as jest.Mock).mockImplementation((query, callback) => {
         // Simulate Firestore snapshot
         callback({
-          forEach: (fn: Function) => {
+          forEach: (fn: (value: any, index: number, array: any[]) => void) => {
             const shapes = [
               {
                 id: 'shape-1',

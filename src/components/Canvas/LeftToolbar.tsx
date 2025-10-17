@@ -139,6 +139,25 @@ export const LeftToolbar: React.FC = () => {
       <div className="text-xs text-gray-600 text-center w-full px-1">
         {getColorName(selectedColor)}
       </div>
+
+      {/* Keyboard Shortcuts Legend */}
+      <div className="mt-6 pt-4 border-t border-gray-200 w-full">
+        <h4 className="text-xs font-semibold text-gray-700 mb-2 text-center">Shortcuts</h4>
+        <div className="space-y-1 text-xs text-gray-600">
+          <div className="flex justify-between items-center">
+            <span>Select All:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">⌘A</kbd>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Deselect:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Esc</kbd>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Multi-Select:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">⇧+Click</kbd>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

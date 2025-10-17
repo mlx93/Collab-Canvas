@@ -158,7 +158,7 @@ describe('Rectangle Operations', () => {
         });
       });
 
-      expect(canvasContext.selectedRectangleId).toBe(canvasContext.rectangles[0].id);
+      expect(canvasContext.selectedIds).toContain(canvasContext.rectangles[0].id);
     });
 
     it('should use predefined colors only', () => {
@@ -304,13 +304,13 @@ describe('Rectangle Operations', () => {
       });
 
       const rectId = canvasContext.rectangles[0].id;
-      expect(canvasContext.selectedRectangleId).toBe(rectId);
+      expect(canvasContext.selectedIds).toContain(rectId);
 
       act(() => {
         canvasContext.deleteRectangle(rectId);
       });
 
-      expect(canvasContext.selectedRectangleId).toBeNull();
+      expect(canvasContext.selectedIds).toHaveLength(0);
     });
 
     it('should not deselect if deleted rectangle was not selected', () => {
@@ -341,15 +341,15 @@ describe('Rectangle Operations', () => {
       });
 
       // rect2 is the most recently added, so it's selected and at front (z-index 1)
-      const rect2Id = canvasContext.selectedRectangleId;
-      expect(rect2Id).toBeTruthy();
+      const rect2Id = canvasContext.selectedIds[0];
+      expect(canvasContext.selectedIds.length).toBeGreaterThan(0);
       expect(rect2Id).not.toBe(rect1Id);
 
       act(() => {
         canvasContext.deleteRectangle(rect1Id);
       });
 
-      expect(canvasContext.selectedRectangleId).toBe(rect2Id);
+      expect(canvasContext.selectedIds).toContain(rect2Id);
     });
   });
 
@@ -373,7 +373,7 @@ describe('Rectangle Operations', () => {
         canvasContext.setSelectedRectangle(rectId);
       });
 
-      expect(canvasContext.selectedRectangleId).toBe(rectId);
+      expect(canvasContext.selectedIds).toContain(rectId);
     });
 
     it('should only allow one rectangle selected at a time', () => {
@@ -408,12 +408,12 @@ describe('Rectangle Operations', () => {
       act(() => {
         canvasContext.setSelectedRectangle(rect1Id);
       });
-      expect(canvasContext.selectedRectangleId).toBe(rect1Id);
+      expect(canvasContext.selectedIds).toContain(rect1Id);
 
       act(() => {
         canvasContext.setSelectedRectangle(rect2Id);
       });
-      expect(canvasContext.selectedRectangleId).toBe(rect2Id);
+      expect(canvasContext.selectedIds).toContain(rect2Id);
     });
 
     it('should deselect all when setting to null', () => {
@@ -430,13 +430,13 @@ describe('Rectangle Operations', () => {
       });
 
       const rectId = canvasContext.rectangles[0].id;
-      expect(canvasContext.selectedRectangleId).toBe(rectId);
+      expect(canvasContext.selectedIds).toContain(rectId);
 
       act(() => {
         canvasContext.setSelectedRectangle(null);
       });
 
-      expect(canvasContext.selectedRectangleId).toBeNull();
+      expect(canvasContext.selectedIds).toHaveLength(0);
     });
   });
 
@@ -458,7 +458,7 @@ describe('Rectangle Operations', () => {
           lastModifiedBy: 'test-user',
         });
       });
-      rect1Id = canvasContext.selectedRectangleId!;
+      rect1Id = canvasContext.selectedIds[0];
 
       // Add rect2 and capture its ID
       act(() => {
@@ -472,7 +472,7 @@ describe('Rectangle Operations', () => {
           lastModifiedBy: 'test-user',
         });
       });
-      rect2Id = canvasContext.selectedRectangleId!;
+      rect2Id = canvasContext.selectedIds[0];
 
       // Add rect3 and capture its ID
       act(() => {
@@ -486,7 +486,7 @@ describe('Rectangle Operations', () => {
           lastModifiedBy: 'test-user',
         });
       });
-      rect3Id = canvasContext.selectedRectangleId!;
+      rect3Id = canvasContext.selectedIds[0];
     });
 
     it('should manually set z-index with push-down recalculation', () => {

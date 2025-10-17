@@ -24,19 +24,27 @@ import { EditingIndicator } from '../Collaboration/EditingIndicator';
 interface RectangleProps {
   rectangle: RectangleShape;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e?: any) => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
   updateOwnCursor?: (x: number, y: number) => void;
+  onMultiDragStart?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragEnd?: () => void;
+  multiDragPosition?: { x: number; y: number };
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ 
   rectangle, 
   isSelected, 
   onSelect, 
-  showIndicator = true,
-  renderOnlyIndicator = false,
-  updateOwnCursor
+  showIndicator = true, 
+  renderOnlyIndicator = false, 
+  updateOwnCursor,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragEnd,
+  multiDragPosition
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
@@ -56,6 +64,14 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
     }, 16)
   );
+
+  // Force node position update when multiDragPosition changes (for multi-select dragging)
+  useEffect(() => {
+    if (multiDragPosition && !isDragging && shapeRef.current) {
+      shapeRef.current.position({ x: multiDragPosition.x, y: multiDragPosition.y });
+      shapeRef.current.getLayer()?.batchDraw(); // Redraw the layer
+    }
+  }, [multiDragPosition, isDragging, rectangle.id]);
   
   // Subscribe to active edits for this shape
   useEffect(() => {
@@ -115,7 +131,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     };
   }, [rectangle.id, user?.userId, activeEdit]);
   
-  // Use live position if available, or resize dimensions if actively resizing
+  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
   const currentPos = livePosition && livePosition.userId !== user?.userId
     ? { 
         x: livePosition.x, 
@@ -123,6 +139,14 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         width: livePosition.width, 
         height: livePosition.height,
         zIndex: livePosition.zIndex !== undefined ? livePosition.zIndex : rectangle.zIndex 
+      }
+    : multiDragPosition && !isDragging
+    ? {
+        x: multiDragPosition.x,
+        y: multiDragPosition.y,
+        width: rectangle.width,
+        height: rectangle.height,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : rectangle.zIndex
       }
     : resizeDimensions && isResizing
     ? { 
@@ -142,24 +166,31 @@ const RectangleComponent: React.FC<RectangleProps> = ({
 
   // Handle drag start
   const handleDragStart = () => {
+    if (!user?.userId || !user?.email) return;
     setIsDragging(true);
-    
-    // Select the shape when starting to drag
-    onSelect();
     
     // Calculate new z-index (bring to front) - maxZIndex + 1
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
     newZIndexRef.current = maxZIndex + 1;
     
-    // Set active edit state in RTDB
-    if (user) {
-      const cursorColor = getUserCursorColor(user.email);
-      setActiveEdit(rectangle.id, user.userId, user.email, user.firstName, 'moving', cursorColor);
+    const cursorColor = getUserCursorColor(user.email);
+    const firstName = user.firstName || user.email.split('@')[0];
+    setActiveEdit(rectangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
+    
+    // Only select the shape if it's not already selected (preserves multi-selection)
+    if (!isSelected) {
+      onSelect();
+    }
+    
+    // Start multi-drag if this shape is part of a multi-selection
+    if (onMultiDragStart) {
+      onMultiDragStart(rectangle.id, rectangle.x, rectangle.y);
     }
   };
 
   // Handle drag move - stream live position to RTDB (100 FPS) + update cursor position
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!user?.userId) return;
     const node = e.target;
     const stage = node.getStage();
     const x = node.x();
@@ -184,8 +215,14 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       }
     }
     
-    // Stream live position (with z-index) to RTDB (throttled to 16ms / 60 FPS)
-    if (user) {
+    // Update multi-drag if this shape is part of a multi-selection
+    if (onMultiDragUpdate) {
+      onMultiDragUpdate(rectangle.id, x, y);
+    }
+    
+    // Stream individual live position for leader shape during multi-drag
+    // Follower shapes are handled by the multi-drag system
+    if (!multiDragPosition || isDragging) {
       throttledLivePositionUpdate.current(
         rectangle.id,
         user.userId,
@@ -200,22 +237,25 @@ const RectangleComponent: React.FC<RectangleProps> = ({
 
   // Handle drag end - update position in context
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (!user?.userId) return;
     setIsDragging(false);
-    const node = e.target;
     
-    // Wait for Firestore update to propagate before clearing active edit
-    // This ensures Browser 2 has the new rectangle props from Firestore
-    // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
-    await updateRectangle(rectangle.id, {
-      x: node.x(),
-      y: node.y(),
-      lastModifiedBy: user?.email || rectangle.createdBy,
-    });
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    
+    // Update shape in Firestore
+    await updateRectangle(rectangle.id, { x, y, lastModifiedBy: user?.email || rectangle.createdBy });
     
     // Clear z-index ref
     newZIndexRef.current = null;
     
-    // Clear active edit state after Firestore propagates
+    // End multi-drag if this shape was part of a multi-selection
+    if (onMultiDragEnd) {
+      onMultiDragEnd();
+    }
+    
+    // Clear active edit (no need to clear live position - it expires naturally)
     clearActiveEdit(rectangle.id);
   };
 
@@ -357,9 +397,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         stroke={isSelected ? '#1565C0' : undefined} // Dark blue outline when selected
         strokeWidth={isSelected ? 4 : 0} // Thicker stroke for visibility
         strokeScaleEnabled={false} // Keep stroke width constant when zooming
-        draggable={!livePosition} // Disable dragging if showing live position from another user
-        onClick={onSelect}
-        onTap={onSelect}
+        draggable={!livePosition && (!multiDragPosition || isDragging)} // Disable dragging if showing live position from another user OR if this is a follower in multi-drag
+        onClick={(e) => onSelect(e)}
+        onTap={(e) => onSelect(e)}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
@@ -409,6 +449,10 @@ export const Rectangle = React.memo(RectangleComponent, (prevProps, nextProps) =
   // Check if selection state changed
   const selectionChanged = prevProps.isSelected !== nextProps.isSelected;
   
+  // Check if multiDragPosition changed (for multi-select dragging)
+  const multiDragChanged = prevProps.multiDragPosition?.x !== nextProps.multiDragPosition?.x ||
+    prevProps.multiDragPosition?.y !== nextProps.multiDragPosition?.y;
+  
   // Only re-render if something actually changed
-  return !rectChanged && !selectionChanged;
+  return !rectChanged && !selectionChanged && !multiDragChanged;
 });

@@ -6,7 +6,7 @@ import {
   updateCursorPosition,
   removeCursor,
   subscribeToCursors,
-  getUserCursorColor,
+  getCursorColorForUser,
 } from '../cursor.service';
 import { ref, set, remove, onValue, onDisconnect } from 'firebase/database';
 import { rtdb } from '../firebase';
@@ -34,11 +34,11 @@ describe('cursor.service', () => {
     } as any);
   });
 
-  describe('getUserCursorColor', () => {
+  describe('getCursorColorForUser', () => {
     it('should return consistent color for same email', () => {
       const email = 'test@example.com';
-      const result1 = getUserCursorColor(email);
-      const result2 = getUserCursorColor(email);
+      const result1 = getCursorColorForUser(email);
+      const result2 = getCursorColorForUser(email);
 
       expect(result1).toEqual(result2);
       expect(result1.colorName).toBeDefined();
@@ -48,7 +48,7 @@ describe('cursor.service', () => {
 
     it('should return color name (not email)', () => {
       const email = 'user@example.com';
-      const result = getUserCursorColor(email);
+      const result = getCursorColorForUser(email);
 
       expect(result.colorName).not.toContain('@');
       expect(result.colorName).not.toContain('user');
@@ -58,7 +58,7 @@ describe('cursor.service', () => {
 
     it('should return hex color code', () => {
       const email = 'user@example.com';
-      const result = getUserCursorColor(email);
+      const result = getCursorColorForUser(email);
 
       expect(result.cursorColor).toMatch(/^#[0-9A-F]{6}$/i);
       expect(result.cursorColor.length).toBe(7); // # + 6 hex digits
@@ -75,7 +75,7 @@ describe('cursor.service', () => {
       ];
 
       testEmails.forEach((email) => {
-        const result = getUserCursorColor(email);
+        const result = getCursorColorForUser(email);
         colors.add(result.cursorColor);
       });
 
@@ -98,7 +98,7 @@ describe('cursor.service', () => {
         return Promise.resolve();
       });
 
-      await updateCursorPosition(userId, email, x, y);
+      await updateCursorPosition(userId, email, 'John', 'Doe', x, y);
 
       // Verify ref is called with correct path (canvas ID: default-canvas)
       expect(ref).toHaveBeenCalledWith(rtdb, `cursors/default-canvas/${userId}`);
@@ -124,7 +124,7 @@ describe('cursor.service', () => {
       const x = 100;
       const y = 200;
 
-      await updateCursorPosition(userId, email, x, y);
+      await updateCursorPosition(userId, email, 'John', 'Doe', x, y);
 
       expect(onDisconnect).toHaveBeenCalledWith(mockRef);
       expect(mockOnDisconnect).toHaveBeenCalled();

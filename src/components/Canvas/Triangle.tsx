@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Line as KonvaLine, Circle as KonvaCircle } from 'react-konva';
+import { Circle as KonvaCircle, Shape as KonvaShape } from 'react-konva';
 import Konva from 'konva';
 import { TriangleShape } from '../../types/canvas.types';
 import { useCanvas } from '../../hooks/useCanvas';
@@ -19,13 +19,17 @@ import {
 import { throttle } from '../../utils/throttle';
 import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
-interface TriangleProps {
+export interface TriangleProps {
   triangle: TriangleShape;
   isSelected: boolean;
-  onSelect: () => void;
+  onSelect: (e?: any) => void;
   showIndicator?: boolean;
   renderOnlyIndicator?: boolean;
   updateOwnCursor?: (x: number, y: number) => void;
+  onMultiDragStart?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
+  onMultiDragEnd?: () => void;
+  multiDragPosition?: { x: number; y: number };
 }
 
 const MIN_SIZE = 20;
@@ -37,16 +41,21 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   onSelect, 
   showIndicator = true,
   renderOnlyIndicator = false,
-  updateOwnCursor
+  updateOwnCursor,
+  onMultiDragStart,
+  onMultiDragUpdate,
+  onMultiDragEnd,
+  multiDragPosition
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
+  const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
-  const triangleRef = useRef<Konva.Line>(null);
+  const triangleRef = useRef<Konva.Shape>(null);
   const handleRef = useRef<Konva.Circle>(null);
   const livePositionTimestampRef = useRef<number>(0);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
@@ -57,6 +66,14 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
     }, 16)
   );
+
+  // Force node position update when multiDragPosition changes (for multi-select dragging)
+  useEffect(() => {
+    if (multiDragPosition && !isDragging && triangleRef.current) {
+      triangleRef.current.position({ x: multiDragPosition.x, y: multiDragPosition.y });
+      triangleRef.current.getLayer()?.batchDraw();
+    }
+  }, [multiDragPosition, isDragging]);
   
   // Subscribe to active edits for this shape
   useEffect(() => {
@@ -140,9 +157,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     );
   }
 
-  // Use live position if available, or resize dimensions if actively resizing
+  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
   const currentPos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
+    : multiDragPosition && !isDragging
+    ? { x: multiDragPosition.x, y: multiDragPosition.y, width: triangle.width, height: triangle.height }
     : resizeDimensions && isResizing
     ? { x: triangle.x, y: triangle.y, width: resizeDimensions.width, height: resizeDimensions.height }
     : { x: triangle.x, y: triangle.y, width: triangle.width, height: triangle.height };
@@ -156,6 +175,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
+    setIsDragging(true);
     
     // Calculate new z-index (bring to front) - maxZIndex + 1
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
@@ -164,7 +184,16 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
     setActiveEdit(triangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
-    onSelect();
+    
+    // Only select the shape if it's not already selected (preserves multi-selection)
+    if (!isSelected) {
+      onSelect();
+    }
+    
+    // Start multi-drag if this shape is part of a multi-selection
+    if (onMultiDragStart) {
+      onMultiDragStart(triangle.id, triangle.x, triangle.y);
+    }
   };
 
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -193,12 +222,21 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       }
     }
     
-    // Stream live position (with z-index) to other users
-    throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
+    // Update multi-drag if this shape is part of a multi-selection
+    if (onMultiDragUpdate) {
+      onMultiDragUpdate(triangle.id, x, y);
+    }
+    
+    // Stream individual live position for leader shape during multi-drag
+    // Follower shapes are handled by the multi-drag system
+    if (!multiDragPosition || isDragging) {
+      throttledLivePositionUpdate.current(triangle.id, user.userId, x, y, triangle.width, triangle.height, newZIndexRef.current !== null ? newZIndexRef.current : undefined);
+    }
   };
 
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
+    setIsDragging(false);
     
     const node = e.target;
     const x = node.x();
@@ -209,13 +247,18 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     // Clear z-index ref
     newZIndexRef.current = null;
     
+    // End multi-drag if this shape was part of a multi-selection
+    if (onMultiDragEnd) {
+      onMultiDragEnd();
+    }
+    
     // Clear active edit (no need to clear live position - it expires naturally)
     clearActiveEdit(triangle.id);
   };
 
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     e.cancelBubble = true;
-    onSelect();
+    onSelect(e);
   };
 
   // Handle resize via bottom-right corner handle
@@ -321,16 +364,14 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   return (
     <>
       {/* Main triangle */}
-      <KonvaLine
+      <KonvaShape
         ref={triangleRef}
         x={currentPos.x}
         y={currentPos.y}
-        points={points}
         fill={triangle.color}
         opacity={triangle.opacity ?? 1}
         rotation={triangle.rotation ?? 0}
-        closed={true}
-        draggable={!livePosition && !triangle.locked && !isResizing}
+        draggable={!livePosition && !triangle.locked && !isResizing && (!multiDragPosition || isDragging)}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
@@ -340,6 +381,18 @@ const TriangleComponent: React.FC<TriangleProps> = ({
         strokeWidth={isSelected ? 4 : 0}
         strokeScaleEnabled={false}
         perfectDrawEnabled={false}
+        lineJoin="round"
+        lineCap="round"
+        shadowForStrokeEnabled={false}
+        hitStrokeWidth={0}
+        sceneFunc={(context, shape) => {
+          context.beginPath();
+          context.moveTo(points[0], points[1]);
+          context.lineTo(points[2], points[3]);
+          context.lineTo(points[4], points[5]);
+          context.closePath();
+          context.fillStrokeShape(shape);
+        }}
       />
       
       {/* Resize handle (bottom-right corner) */}

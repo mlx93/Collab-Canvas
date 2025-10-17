@@ -116,25 +116,37 @@ describe('Canvas Interactions Integration', () => {
 
   it('should display FPS counter in development mode', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'development',
+      configurable: true
+    });
 
     renderCanvas();
 
     expect(screen.getByText('FPS:')).toBeInTheDocument();
     expect(screen.getByText('60')).toBeInTheDocument();
 
-    process.env.NODE_ENV = originalEnv;
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: originalEnv,
+      configurable: true
+    });
   });
 
   it('should hide FPS counter in production mode', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: 'production',
+      configurable: true
+    });
 
     renderCanvas();
 
     expect(screen.queryByText('FPS:')).not.toBeInTheDocument();
 
-    process.env.NODE_ENV = originalEnv;
+    Object.defineProperty(process.env, 'NODE_ENV', {
+      value: originalEnv,
+      configurable: true
+    });
   });
 
   it('should display zoom percentage indicator', () => {

@@ -1,6 +1,7 @@
 // Compact vertical toolbar with icon-based shape creation
 import React, { useState } from 'react';
 import { useCanvas } from '../../hooks/useCanvas';
+import { ShortcutsLegend } from './ShortcutsLegend';
 
 export const CompactToolbar: React.FC = () => {
   const { addRectangle, addCircle, addTriangle, addLine, addText } = useCanvas();
@@ -118,6 +119,12 @@ export const CompactToolbar: React.FC = () => {
           Color Picker (Coming in Phase 4)
         </span>
       </button>
+
+      {/* Divider */}
+      <div className="w-8 h-px bg-gray-300 my-1" />
+
+      {/* Keyboard Shortcuts Legend */}
+      <ShortcutsLegend />
     </div>
   );
 };

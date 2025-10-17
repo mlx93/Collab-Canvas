@@ -5,13 +5,15 @@ import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
 import * as canvasService from '../services/canvas.service';
+import { updateZIndex } from '../services/canvas.service';
 import { setSelection, clearSelection } from '../services/selection.service';
+import { clearActiveEdit } from '../services/activeEdits.service';
 
 interface CanvasContextType {
   // State
   rectangles: Shape[]; // Now stores all shape types
   viewport: Viewport;
-  selectedRectangleId: string | null;
+  selectedIds: string[]; // NEW: Array of selected shape IDs
   currentTool: Tool;
   loading: boolean;
   error: string | null;
@@ -31,7 +33,12 @@ interface CanvasContextType {
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
   updateRectangle: (id: string, updates: Partial<Shape>) => void;
   deleteRectangle: (id: string) => void;
-  setSelectedRectangle: (id: string | null) => void;
+  setSelectedRectangle: (id: string | null) => void; // Legacy method for backward compatibility
+  selectShape: (id: string) => void; // NEW: Add shape to selection
+  deselectShape: (id: string) => void; // NEW: Remove shape from selection
+  selectAll: () => void; // NEW: Select all shapes
+  deselectAll: () => void; // NEW: Clear all selections
+  toggleSelection: (id: string) => void; // NEW: Toggle shape selection
   
   // Z-index operations
   bringToFront: (id: string) => void;
@@ -57,7 +64,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const [canvasState, setCanvasState] = useState<CanvasState>({
     rectangles: [],
     viewport: { x: 0, y: 0, scale: 1 },
-    selectedRectangleId: null,
+    selectedIds: [], // NEW: Array of selected shape IDs
     currentTool: 'select',
     loading: true, // Start with loading true while fetching from Firestore
     error: null,
@@ -68,73 +75,81 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   useEffect(() => {
     const unsubscribe = canvasService.subscribeToShapes((shapes) => {
       setCanvasState(prev => {
-        let newSelectedId = prev.selectedRectangleId;
+        let newSelectedIds = [...prev.selectedIds];
         
-        // If we have a temp ID selected and a new real shape came in, 
-        // find if the new shape matches and update selection to the real ID
-        if (newSelectedId && newSelectedId.startsWith('temp-')) {
-          const tempShape = prev.rectangles.find(r => r.id === newSelectedId);
-          if (tempShape) {
-            let matchingShape: Shape | undefined;
-            
-            // Match based on shape type
-            for (const s of shapes) {
-              // Convert Firestore Timestamp to Date if needed
-              const createdAtTime = s.createdAt instanceof Date 
-                ? s.createdAt.getTime() 
-                : (s.createdAt as any).toDate().getTime();
+        // If we have temp IDs selected and new real shapes came in, 
+        // find if the new shapes match and update selection to the real IDs
+        const tempIds = newSelectedIds.filter(id => id.startsWith('temp-'));
+        if (tempIds.length > 0) {
+          // Process each temp ID
+          for (const tempId of tempIds) {
+            const tempShape = prev.rectangles.find(r => r.id === tempId);
+            if (tempShape) {
+              let matchingShape: Shape | undefined;
               
-              // Must be same type and created recently
-              if (s.type !== tempShape.type) continue;
-              if (Math.abs(createdAtTime - Date.now()) >= 5000) continue;
-              
-              // Check position and color match
-              const positionMatches = Math.abs(s.x - tempShape.x) < 1 && 
-                                     Math.abs(s.y - tempShape.y) < 1;
-              const colorMatches = s.color === tempShape.color;
-              
-              if (!positionMatches || !colorMatches) continue;
-              
-              // Check shape-specific properties (use as any to bypass TypeScript narrowing issues)
-              let shapeSpecificMatch = false;
-              const sAny = s as any;
-              const tempAny = tempShape as any;
-              
-              if (sAny.type === 'rectangle') {
-                shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
-                                    Math.abs(sAny.height - tempAny.height) < 1;
+              // Match based on shape type
+              for (const s of shapes) {
+                // Convert Firestore Timestamp to Date if needed
+                const createdAtTime = s.createdAt instanceof Date 
+                  ? s.createdAt.getTime() 
+                  : (s.createdAt as any).toDate().getTime();
+                
+                // Must be same type and created recently
+                if (s.type !== tempShape.type) continue;
+                if (Math.abs(createdAtTime - Date.now()) >= 5000) continue;
+                
+                // Check position and color match
+                const positionMatches = Math.abs(s.x - tempShape.x) < 1 && 
+                                       Math.abs(s.y - tempShape.y) < 1;
+                const colorMatches = s.color === tempShape.color;
+                
+                if (!positionMatches || !colorMatches) continue;
+                
+                // Check shape-specific properties (use as any to bypass TypeScript narrowing issues)
+                let shapeSpecificMatch = false;
+                const sAny = s as any;
+                const tempAny = tempShape as any;
+                
+                if (sAny.type === 'rectangle') {
+                  shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
+                                      Math.abs(sAny.height - tempAny.height) < 1;
+                }
+                
+                if (sAny.type === 'circle') {
+                  shapeSpecificMatch = Math.abs(sAny.radius - tempAny.radius) < 1;
+                }
+                
+                if (sAny.type === 'triangle') {
+                  shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
+                                      Math.abs(sAny.height - tempAny.height) < 1;
+                }
+                
+                if (sAny.type === 'line') {
+                  shapeSpecificMatch = Math.abs(sAny.x2 - tempAny.x2) < 1 &&
+                                      Math.abs(sAny.y2 - tempAny.y2) < 1 &&
+                                      Math.abs(sAny.strokeWidth - tempAny.strokeWidth) < 1;
+                }
+                
+                if (sAny.type === 'text') {
+                  shapeSpecificMatch = sAny.text === tempAny.text &&
+                                      Math.abs(sAny.width - tempAny.width) < 1 &&
+                                      Math.abs((sAny.height || 30) - (tempAny.height || 30)) < 1 &&
+                                      Math.abs(sAny.fontSize - tempAny.fontSize) < 1;
+                }
+                
+                if (shapeSpecificMatch) {
+                  matchingShape = s;
+                  break;
+                }
               }
               
-              if (sAny.type === 'circle') {
-                shapeSpecificMatch = Math.abs(sAny.radius - tempAny.radius) < 1;
+              if (matchingShape) {
+                // Replace temp ID with real ID
+                const tempIndex = newSelectedIds.indexOf(tempId);
+                if (tempIndex !== -1) {
+                  newSelectedIds[tempIndex] = matchingShape.id;
+                }
               }
-              
-              if (sAny.type === 'triangle') {
-                shapeSpecificMatch = Math.abs(sAny.width - tempAny.width) < 1 &&
-                                    Math.abs(sAny.height - tempAny.height) < 1;
-              }
-              
-              if (sAny.type === 'line') {
-                shapeSpecificMatch = Math.abs(sAny.x2 - tempAny.x2) < 1 &&
-                                    Math.abs(sAny.y2 - tempAny.y2) < 1 &&
-                                    Math.abs(sAny.strokeWidth - tempAny.strokeWidth) < 1;
-              }
-              
-        if (sAny.type === 'text') {
-          shapeSpecificMatch = sAny.text === tempAny.text &&
-                              Math.abs(sAny.width - tempAny.width) < 1 &&
-                              Math.abs((sAny.height || 30) - (tempAny.height || 30)) < 1 &&
-                              Math.abs(sAny.fontSize - tempAny.fontSize) < 1;
-        }
-              
-              if (shapeSpecificMatch) {
-                matchingShape = s;
-                break;
-              }
-            }
-            
-            if (matchingShape) {
-              newSelectedId = matchingShape.id;
             }
           }
         }
@@ -142,7 +157,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         return {
           ...prev,
           rectangles: shapes,
-          selectedRectangleId: newSelectedId,
+          selectedIds: newSelectedIds,
           loading: false
         };
       });
@@ -333,7 +348,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return {
         ...prev,
         rectangles: [...prev.rectangles, newCircle],
-        selectedRectangleId: newCircle.id // Auto-select newly created circle
+        selectedIds: [newCircle.id] // Auto-select newly created circle
       };
     });
 
@@ -353,7 +368,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+        selectedIds: prev.selectedIds.filter(id => id !== tempId)
       }));
     }
   };
@@ -431,7 +446,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return {
         ...prev,
         rectangles: [...prev.rectangles, newTriangle],
-        selectedRectangleId: newTriangle.id
+        selectedIds: [newTriangle.id]
       };
     });
 
@@ -448,7 +463,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+        selectedIds: prev.selectedIds.filter(id => id !== tempId)
       }));
     }
   };
@@ -582,7 +597,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return {
         ...prev,
         rectangles: [...prev.rectangles, newLine],
-        selectedRectangleId: newLine.id
+        selectedIds: [newLine.id]
       };
     });
 
@@ -599,7 +614,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+        selectedIds: prev.selectedIds.filter(id => id !== tempId)
       }));
     }
   };
@@ -625,7 +640,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return {
         ...prev,
         rectangles: [...prev.rectangles, newText],
-        selectedRectangleId: newText.id
+        selectedIds: [newText.id]
       };
     });
 
@@ -642,7 +657,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+        selectedIds: prev.selectedIds.filter(id => id !== tempId)
       }));
     }
   };
@@ -672,7 +687,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return {
         ...prev,
         rectangles: [...prev.rectangles, newRectangle],
-        selectedRectangleId: newRectangle.id // Auto-select newly created rectangle
+        selectedIds: [newRectangle.id] // Auto-select newly created rectangle
       };
     });
 
@@ -692,7 +707,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
-        selectedRectangleId: prev.selectedRectangleId === tempId ? null : prev.selectedRectangleId
+        selectedIds: prev.selectedIds.filter(id => id !== tempId)
       }));
     }
   };
@@ -724,12 +739,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           : rect
       );
 
-      // Auto-move to front when editing position, size, or color
-      const isEditAction = updates.x !== undefined || updates.y !== undefined || 
+      // Auto-move to front when editing position, size, or color (but NOT when zIndex is explicitly set)
+      const isEditAction = (updates.x !== undefined || updates.y !== undefined || 
                            ('width' in updates && updates.width !== undefined) || 
                            ('height' in updates && updates.height !== undefined) || 
                            ('radius' in updates && updates.radius !== undefined) ||
-                           updates.color !== undefined;
+                           updates.color !== undefined) && updates.zIndex === undefined;
       
       if (isEditAction) {
         return {
@@ -761,7 +776,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     setCanvasState(prev => ({
       ...prev,
       rectangles: prev.rectangles.filter(rect => rect.id !== id),
-      selectedRectangleId: prev.selectedRectangleId === id ? null : prev.selectedRectangleId
+      selectedIds: prev.selectedIds.filter(selectedId => selectedId !== id)
     }));
 
     // Sync to Firestore in background
@@ -774,7 +789,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   };
 
   const setSelectedRectangle = (id: string | null) => {
-    setCanvasState(prev => ({ ...prev, selectedRectangleId: id }));
+    // Legacy method: convert single selection to array format
+    const selectedIds = id ? [id] : [];
+    setCanvasState(prev => ({ ...prev, selectedIds }));
     
     // Sync selection state to RTDB (ephemeral)
     if (user) {
@@ -786,43 +803,128 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   };
 
-  // Z-index operations
-  const bringToFront = (id: string) => {
+  // NEW: Multi-selection methods
+  const selectShape = (id: string) => {
     setCanvasState(prev => {
-      const targetRect = prev.rectangles.find(rect => rect.id === id);
-      if (!targetRect) return prev;
+      if (prev.selectedIds.includes(id)) return prev; // Already selected
+      return { ...prev, selectedIds: [...prev.selectedIds, id] };
+    });
+    
+    // Sync selection state to RTDB (ephemeral)
+    if (user) {
+      setSelection(user.userId, id);
+    }
+  };
 
-      const maxZIndex = Math.max(...prev.rectangles.map(r => r.zIndex), 0);
-      if (targetRect.zIndex === maxZIndex) return prev; // Already at front
+  const deselectShape = (id: string) => {
+    setCanvasState(prev => ({
+      ...prev,
+      selectedIds: prev.selectedIds.filter(selectedId => selectedId !== id)
+    }));
+    
+    // Sync selection state to RTDB (ephemeral)
+    if (user) {
+      clearSelection(user.userId);
+    }
+  };
 
-      // Simply set to maxZIndex + 1 (higher = front)
-      const updatedRectangles = prev.rectangles.map(rect =>
-        rect.id === id 
-          ? { ...rect, zIndex: maxZIndex + 1 }
-          : rect
-      );
+  const selectAll = () => {
+    setCanvasState(prev => ({
+      ...prev,
+      selectedIds: prev.rectangles.map(shape => shape.id)
+    }));
+    
+    // Sync selection state to RTDB (ephemeral)
+    if (user) {
+      // For multi-selection, we'll sync the first selected item
+      const firstShape = canvasState.rectangles[0];
+      if (firstShape) {
+        setSelection(user.userId, firstShape.id);
+      }
+    }
+  };
 
-      return { ...prev, rectangles: updatedRectangles };
+  const deselectAll = () => {
+    setCanvasState(prev => ({ ...prev, selectedIds: [] }));
+    
+    // Sync selection state to RTDB (ephemeral)
+    if (user) {
+      clearSelection(user.userId);
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    setCanvasState(prev => {
+      const isSelected = prev.selectedIds.includes(id);
+      const newSelectedIds = isSelected 
+        ? prev.selectedIds.filter(selectedId => selectedId !== id)
+        : [...prev.selectedIds, id];
+      
+      // Sync selection state to RTDB (ephemeral) - use the new state
+      if (user) {
+        if (isSelected) {
+          clearSelection(user.userId);
+        } else {
+          setSelection(user.userId, id);
+        }
+      }
+      
+      return {
+        ...prev,
+        selectedIds: newSelectedIds
+      };
     });
   };
 
-  const sendToBack = (id: string) => {
-    setCanvasState(prev => {
-      const targetRect = prev.rectangles.find(rect => rect.id === id);
-      if (!targetRect) return prev;
+  // Z-index operations
+  const bringToFront = async (id: string) => {
+    const targetRect = canvasState.rectangles.find((rect: Shape) => rect.id === id);
+    if (!targetRect) return;
 
-      const minZIndex = Math.min(...prev.rectangles.map(r => r.zIndex), 1);
-      if (targetRect.zIndex === minZIndex) return prev; // Already at back
+    const maxZIndex = Math.max(...canvasState.rectangles.map((r: Shape) => r.zIndex), 0);
+    if (targetRect.zIndex === maxZIndex) return; // Already at front
 
-      // Simply set to minZIndex - 1 (lower = back)
-      const updatedRectangles = prev.rectangles.map(rect =>
-        rect.id === id 
-          ? { ...rect, zIndex: Math.max(1, minZIndex - 1) } // Ensure stays >= 1
-          : rect
-      );
+    const newZIndex = maxZIndex + 1;
 
-      return { ...prev, rectangles: updatedRectangles };
-    });
+    // Clear any active edit FIRST to prevent conflicts
+    if (user?.userId) {
+      await clearActiveEdit(id);
+    }
+
+    // Update immediately using proper z-index service
+    try {
+      await updateZIndex(id, newZIndex);
+    } catch (error) {
+      console.error('[bringToFront] Failed to update z-index:', error);
+      return;
+    }
+  };
+
+  const sendToBack = async (id: string) => {
+    const targetRect = canvasState.rectangles.find((rect: Shape) => rect.id === id);
+    if (!targetRect) return;
+
+    // Find the actual minimum z-index among all shapes (no fallback to 0)
+    const zIndices = canvasState.rectangles.map((r: Shape) => r.zIndex);
+    if (zIndices.length === 0) return; // No shapes to work with
+    
+    const minZIndex = Math.min(...zIndices);
+    if (targetRect.zIndex === minZIndex) return; // Already at back
+
+    const newZIndex = minZIndex - 1;
+
+    // Clear any active edit FIRST to prevent conflicts
+    if (user?.userId) {
+      await clearActiveEdit(id);
+    }
+
+    // Update immediately using proper z-index service
+    try {
+      await updateZIndex(id, newZIndex);
+    } catch (error) {
+      console.error('[sendToBack] Failed to update z-index:', error);
+      return;
+    }
   };
 
   const setZIndex = async (id: string, zIndex: number) => {
@@ -836,7 +938,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           ...prev,
           rectangles: updatedRectangles.map(rect =>
             rect.id === id
-              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.email } // FIX: use email, not userId
+              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.userId }
               : rect
           )
         };
@@ -881,7 +983,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // State
     rectangles: canvasState.rectangles,
     viewport: canvasState.viewport,
-    selectedRectangleId: canvasState.selectedRectangleId,
+    selectedIds: canvasState.selectedIds,
     currentTool: canvasState.currentTool,
     loading: canvasState.loading,
     error: canvasState.error,
@@ -902,6 +1004,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     updateRectangle,
     deleteRectangle,
     setSelectedRectangle,
+    
+    // NEW: Multi-selection methods
+    selectShape,
+    deselectShape,
+    selectAll,
+    deselectAll,
+    toggleSelection,
     
     // Z-index operations
     bringToFront,

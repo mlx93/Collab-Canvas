@@ -1,15 +1,18 @@
 // Unit tests for z-index service
 import { autoUpdateZIndex, manualSetZIndex, validateZIndices } from '../zIndex.service';
-import { Rectangle } from '../../types/canvas.types';
+import { RectangleShape } from '../../types/canvas.types';
 
 // Helper to create mock rectangle
-const createMockRect = (id: string, zIndex: number): Rectangle => ({
+const createMockRect = (id: string, zIndex: number): RectangleShape => ({
   id,
+  type: 'rectangle',
   x: 0,
   y: 0,
   width: 100,
   height: 100,
   color: '#2196F3',
+  rotation: 0,
+  opacity: 1,
   zIndex,
   createdBy: 'test-user',
   createdAt: new Date(),
@@ -20,7 +23,7 @@ const createMockRect = (id: string, zIndex: number): Rectangle => ({
 describe('zIndex.service', () => {
   describe('autoUpdateZIndex', () => {
     it('should move shape to front (highest z-index)', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -34,7 +37,7 @@ describe('zIndex.service', () => {
     });
 
     it('should keep other shapes unchanged when moving to front', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -50,7 +53,7 @@ describe('zIndex.service', () => {
     });
 
     it('should not create duplicate z-indices', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -65,7 +68,7 @@ describe('zIndex.service', () => {
     });
 
     it('should maintain all z-indices as positive integers', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -80,7 +83,7 @@ describe('zIndex.service', () => {
     });
 
     it('should handle already front shape correctly', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -97,7 +100,7 @@ describe('zIndex.service', () => {
     });
 
     it('should return original array if shape not found', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2)
       ];
@@ -110,7 +113,7 @@ describe('zIndex.service', () => {
 
   describe('manualSetZIndex', () => {
     it('should set specific z-index correctly', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -125,7 +128,7 @@ describe('zIndex.service', () => {
     it('should trigger push-down recalculation when moving forward (toward front)', () => {
       // Shape A: 1 → 3 (moving from back toward front)
       // Shapes between (2, 3) should shift back by 1
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -144,7 +147,7 @@ describe('zIndex.service', () => {
     it('should trigger push-down recalculation when moving backward (toward back)', () => {
       // Shape C: 3 → 1 (moving from front toward back)
       // Shapes between (1, 2) should shift forward by 1
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -161,7 +164,7 @@ describe('zIndex.service', () => {
     });
 
     it('should not create duplicate z-indices after manual set', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3),
@@ -175,19 +178,21 @@ describe('zIndex.service', () => {
       expect(hasDuplicates).toBe(false);
     });
 
-    it('should reject z-index less than 1', () => {
-      const shapes: Rectangle[] = [
+    it('should allow z-index 0 and negative values', () => {
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2)
       ];
 
       const result = manualSetZIndex(shapes, 'a', 0);
 
-      expect(result).toEqual(shapes);
+      // Should update the z-index to 0
+      expect(result[0].zIndex).toBe(0);
+      expect(result[1].zIndex).toBe(2); // Should stay the same (not in the way)
     });
 
     it('should handle no change when setting same z-index', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2)
       ];
@@ -198,7 +203,7 @@ describe('zIndex.service', () => {
     });
 
     it('should return original array if shape not found', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2)
       ];
@@ -214,7 +219,7 @@ describe('zIndex.service', () => {
 
   describe('validateZIndices', () => {
     it('should return valid for correct z-indices', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3)
@@ -228,7 +233,7 @@ describe('zIndex.service', () => {
     });
 
     it('should detect duplicate z-indices', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 2)
@@ -241,7 +246,7 @@ describe('zIndex.service', () => {
     });
 
     it('should detect gaps in z-indices (but allow them)', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 3),
         createMockRect('c', 4)
@@ -255,7 +260,7 @@ describe('zIndex.service', () => {
     });
 
     it('should detect both duplicates and gaps', () => {
-      const shapes: Rectangle[] = [
+      const shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 1),
         createMockRect('c', 4)
@@ -280,7 +285,7 @@ describe('zIndex.service', () => {
 
   describe('stress testing', () => {
     it('should handle 50 shapes without duplicates', () => {
-      const shapes: Rectangle[] = Array.from({ length: 50 }, (_, i) =>
+      const shapes: RectangleShape[] = Array.from({ length: 50 }, (_, i) =>
         createMockRect(`shape-${i}`, i + 1)
       );
 
@@ -295,7 +300,7 @@ describe('zIndex.service', () => {
     });
 
     it('should handle multiple sequential auto-updates', () => {
-      let shapes: Rectangle[] = [
+      let shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3),
@@ -303,9 +308,9 @@ describe('zIndex.service', () => {
       ];
 
       // Move shapes to front in sequence
-      shapes = autoUpdateZIndex(shapes, 'd'); // d: 4 → 4 (already at front)
-      shapes = autoUpdateZIndex(shapes, 'a'); // a: 1 → 5 (maxZIndex + 1)
-      shapes = autoUpdateZIndex(shapes, 'c'); // c: 3 → 6 (maxZIndex + 1)
+      shapes = autoUpdateZIndex(shapes, 'd') as RectangleShape[]; // d: 4 → 4 (already at front)
+      shapes = autoUpdateZIndex(shapes, 'a') as RectangleShape[]; // a: 1 → 5 (maxZIndex + 1)
+      shapes = autoUpdateZIndex(shapes, 'c') as RectangleShape[]; // c: 3 → 6 (maxZIndex + 1)
 
       // Check no duplicates (gaps allowed)
       const zIndices = shapes.map(s => s.zIndex);
@@ -315,16 +320,16 @@ describe('zIndex.service', () => {
     });
 
     it('should handle multiple manual z-index changes', () => {
-      let shapes: Rectangle[] = [
+      let shapes: RectangleShape[] = [
         createMockRect('a', 1),
         createMockRect('b', 2),
         createMockRect('c', 3),
         createMockRect('d', 4)
       ];
 
-      shapes = manualSetZIndex(shapes, 'a', 3);
-      shapes = manualSetZIndex(shapes, 'd', 1);
-      shapes = manualSetZIndex(shapes, 'b', 4);
+      shapes = manualSetZIndex(shapes, 'a', 3) as RectangleShape[];
+      shapes = manualSetZIndex(shapes, 'd', 1) as RectangleShape[];
+      shapes = manualSetZIndex(shapes, 'b', 4) as RectangleShape[];
 
       // Check no duplicates (manual z-index uses atomic 3-phase approach)
       const zIndices = shapes.map(s => s.zIndex);
