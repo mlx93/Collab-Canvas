@@ -1,11 +1,7 @@
 // Clipboard service for copy/paste functionality
 import { Shape } from '../types/canvas.types';
 
-export interface ClipboardState {
-  shapes: Shape[];
-  copiedAt: number;
-  copiedBy: string;
-}
+// Removed unused ClipboardState interface (not exported/consumed)
 
 // In-memory clipboard state
 let clipboard: Shape[] = [];

@@ -35,5 +35,5 @@ if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATOR
   connectDatabaseEmulator(rtdb, '127.0.0.1', 9000);
 }
 
-export default app;
+// No default export needed; consumers import named services above
 

@@ -11,7 +11,4 @@ export interface Cursor {
   lastUpdate: number; // Timestamp for staleness detection
 }
 
-export interface CursorPosition {
-  x: number;
-  y: number;
-}
+// Removed unused CursorPosition interface

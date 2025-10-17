@@ -25,6 +25,5 @@ export const PREDEFINED_COLORS = {
 export const DEFAULT_COLOR = '#2196F3'; // Material Blue 500
 
 // Performance
-export const TARGET_FPS = 60;
-export const CURSOR_UPDATE_INTERVAL = 16; // 16ms for 60 FPS
+// Removed unused performance constants
 

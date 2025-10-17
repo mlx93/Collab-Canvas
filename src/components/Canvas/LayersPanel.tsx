@@ -286,7 +286,6 @@ export function LayersPanel() {
   };
 
   const handleRename = (shapeId: string, newName: string) => {
-    console.log('Renaming shape:', shapeId, 'to:', newName);
     updateShape(shapeId, { name: newName });
     toast.success(`Renamed to "${newName}"`);
   };
