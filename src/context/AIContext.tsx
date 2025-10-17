@@ -112,13 +112,33 @@ export function AIProvider({ children }: AIProviderProps) {
       locked: shape.locked || false,
     }));
 
+    // Calculate visible viewport dimensions in canvas coordinates
+    const viewport = canvasContext.viewport;
+    const stageSize = canvasContext.stageSize;
+    const visibleWidth = stageSize.width / viewport.scale;
+    const visibleHeight = stageSize.height / viewport.scale;
+    
+    // Calculate viewport center in canvas coordinates
+    // viewport.x and viewport.y are negative when panned right/down
+    const centerX = -viewport.x / viewport.scale + visibleWidth / 2;
+    const centerY = -viewport.y / viewport.scale + visibleHeight / 2;
+
     return {
       shapes,
       canvasWidth: 5000,
       canvasHeight: 5000,
       selectedIds: canvasContext.selectedIds || [],
+      viewport: {
+        x: viewport.x,
+        y: viewport.y,
+        scale: viewport.scale,
+        visibleWidth,
+        visibleHeight,
+        centerX,
+        centerY,
+      },
     };
-  }, [canvasContext.rectangles, canvasContext.selectedIds]);
+  }, [canvasContext.rectangles, canvasContext.selectedIds, canvasContext.viewport, canvasContext.stageSize]);
 
   /**
    * Execute an AI command

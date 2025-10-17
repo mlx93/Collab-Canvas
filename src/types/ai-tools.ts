@@ -160,6 +160,15 @@ export interface CanvasSnapshot {
   canvasWidth: number;
   canvasHeight: number;
   selectedIds: string[];
+  viewport: {
+    x: number; // Viewport X offset
+    y: number; // Viewport Y offset
+    scale: number; // Zoom level
+    visibleWidth: number; // Width of visible area in canvas coordinates
+    visibleHeight: number; // Height of visible area in canvas coordinates
+    centerX: number; // Center X of visible viewport in canvas coordinates
+    centerY: number; // Center Y of visible viewport in canvas coordinates
+  };
 }
 
 /**

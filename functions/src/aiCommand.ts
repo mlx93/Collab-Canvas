@@ -216,18 +216,32 @@ Key capabilities:
 - Arrange shapes: horizontal/vertical alignment, grids, spacing
 - Complex layouts: login forms, navigation bars, card layouts
 
-Guidelines:
+CRITICAL: Viewport-Relative Positioning
+- When users say "center", "middle", "top", "bottom", "left", "right", they mean relative to the VISIBLE viewport
+- The viewport is what the user currently sees on screen (provided in viewport.centerX, viewport.centerY)
+- Total canvas size is 5000x5000px, but viewport is typically 1200-1920px wide and 800-1080px tall
+- viewport.centerX and viewport.centerY are the CENTER of the visible area in canvas coordinates
+- viewport.visibleWidth and viewport.visibleHeight are the dimensions of the visible area
+
+Positioning guidelines:
+- "in the center" or "at the center" → use viewport.centerX, viewport.centerY
+- "at the top" → use viewport.centerX, viewport.centerY - viewport.visibleHeight/3
+- "at the bottom" → use viewport.centerX, viewport.centerY + viewport.visibleHeight/3
+- "on the left" → use viewport.centerX - viewport.visibleWidth/3, viewport.centerY
+- "on the right" → use viewport.centerX + viewport.visibleWidth/3, viewport.centerY
+- If no position specified → default to viewport center with slight offset
+
+Other guidelines:
 1. Use the provided tools to execute user commands
-2. Always provide shape names when creating elements for better identification
+2. Always provide descriptive shape names when creating elements
 3. Use sensible defaults for colors (e.g., #3b82f6 for blue, #ef4444 for red)
-4. Position shapes in visible areas (typically 100-800 for x/y coordinates)
-5. For complex commands, break them into multiple tool calls
-6. If a command is ambiguous, ask for clarification in your response
-7. Consider the canvas size when positioning shapes
+4. For complex commands, break them into multiple tool calls
+5. If a command is ambiguous, ask for clarification
+6. Reference shapes by their name or ID (name is preferred for natural language)
 
 Canvas details:
-- Canvas is 5000x5000 pixels
-- Typical viewport is 1200x800 pixels
+- Canvas is 5000x5000 pixels (total space)
+- Viewport shows a portion of the canvas (user's current view)
 - Colors use hex format (#RRGGBB)
 - Z-index determines layering (higher = front)
 
@@ -245,10 +259,16 @@ function buildUserMessage(prompt: string, canvasState: any): string {
     .map((s: any) => `- ${s.name || s.type} (${s.type}): ${s.color} at (${Math.round(s.x)}, ${Math.round(s.y)})`)
     .join('\n');
 
+  const viewport = canvasState.viewport || {};
+  
   return `Canvas state:
-Width: ${canvasState.canvasWidth}px
-Height: ${canvasState.canvasHeight}px
+Total canvas size: ${canvasState.canvasWidth}px × ${canvasState.canvasHeight}px
 Selected shapes: ${canvasState.selectedIds.length} shape(s)
+
+Viewport (visible area):
+- Center: (${Math.round(viewport.centerX || 0)}, ${Math.round(viewport.centerY || 0)})
+- Visible dimensions: ${Math.round(viewport.visibleWidth || 1200)}px × ${Math.round(viewport.visibleHeight || 800)}px
+- Zoom level: ${viewport.scale || 1}x
 
 Current shapes on canvas (${canvasState.shapes.length} total):
 ${shapeSummary || 'No shapes yet'}
