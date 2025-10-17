@@ -55,6 +55,29 @@ export async function executePlan(
 }
 
 /**
+ * Resolve a shape identifier to its actual UUID
+ * The AI might reference shapes by name or by ID, we need to handle both
+ */
+function resolveShapeId(identifier: string, context: CanvasContextMethods): string {
+  // First, check if it's already a valid UUID (exists in rectangles)
+  const shapeById = context.rectangles.find(r => r.id === identifier);
+  if (shapeById) {
+    return identifier;
+  }
+
+  // If not found, try to find by name
+  const shapeByName = context.rectangles.find(r => r.name === identifier);
+  if (shapeByName) {
+    console.log(`AI referenced shape by name "${identifier}", resolved to ID: ${shapeByName.id}`);
+    return shapeByName.id;
+  }
+
+  // If still not found, return the original identifier and let it fail gracefully
+  console.warn(`Could not resolve shape identifier: "${identifier}"`);
+  return identifier;
+}
+
+/**
  * Execute a single AI operation
  */
 async function executeOperation(
@@ -102,13 +125,17 @@ async function executeOperation(
     case 'createGrid':
       return await executeCreateGrid(args as any, context);
 
-    case 'bringToFront':
-      context.bringToFront((args as any).id);
+    case 'bringToFront': {
+      const resolvedId = resolveShapeId((args as any).id, context);
+      context.bringToFront(resolvedId);
       return [];
+    }
 
-    case 'sendToBack':
-      context.sendToBack((args as any).id);
+    case 'sendToBack': {
+      const resolvedId = resolveShapeId((args as any).id, context);
+      context.sendToBack(resolvedId);
       return [];
+    }
 
     case 'deleteElement':
       await executeDeleteElement(args as any, context);
@@ -214,13 +241,15 @@ async function executeCreateText(args: any, context: CanvasContextMethods): Prom
  * Execute moveElement
  */
 async function executeMoveElement(args: any, context: CanvasContextMethods): Promise<void> {
-  await context.updateShape(args.id, { x: args.x, y: args.y });
+  const resolvedId = resolveShapeId(args.id, context);
+  await context.updateShape(resolvedId, { x: args.x, y: args.y });
 }
 
 /**
  * Execute resizeElement
  */
 async function executeResizeElement(args: any, context: CanvasContextMethods): Promise<void> {
+  const resolvedId = resolveShapeId(args.id, context);
   const updates: any = {};
   if (args.width !== undefined) updates.width = args.width;
   if (args.height !== undefined) updates.height = args.height;
@@ -228,20 +257,22 @@ async function executeResizeElement(args: any, context: CanvasContextMethods): P
   if (args.x2 !== undefined) updates.x2 = args.x2;
   if (args.y2 !== undefined) updates.y2 = args.y2;
 
-  await context.updateShape(args.id, updates);
+  await context.updateShape(resolvedId, updates);
 }
 
 /**
  * Execute rotateElement
  */
 async function executeRotateElement(args: any, context: CanvasContextMethods): Promise<void> {
-  await context.updateShape(args.id, { rotation: args.rotation });
+  const resolvedId = resolveShapeId(args.id, context);
+  await context.updateShape(resolvedId, { rotation: args.rotation });
 }
 
 /**
  * Execute updateStyle
  */
 async function executeUpdateStyle(args: any, context: CanvasContextMethods): Promise<void> {
+  const resolvedId = resolveShapeId(args.id, context);
   const updates: any = {};
   if (args.color !== undefined) updates.color = args.color;
   if (args.opacity !== undefined) updates.opacity = args.opacity;
@@ -249,7 +280,7 @@ async function executeUpdateStyle(args: any, context: CanvasContextMethods): Pro
   if (args.locked !== undefined) updates.locked = args.locked;
   if (args.name !== undefined) updates.name = args.name;
 
-  await context.updateShape(args.id, updates);
+  await context.updateShape(resolvedId, updates);
 }
 
 /**
@@ -258,8 +289,11 @@ async function executeUpdateStyle(args: any, context: CanvasContextMethods): Pro
 async function executeArrangeElements(args: any, context: CanvasContextMethods): Promise<void> {
   const { ids, arrangement, spacing = 20 } = args;
 
-  // Get shapes by IDs
-  const shapes = ids.map((id: string) => 
+  // Resolve all IDs (might be names)
+  const resolvedIds = ids.map((id: string) => resolveShapeId(id, context));
+
+  // Get shapes by resolved IDs
+  const shapes = resolvedIds.map((id: string) => 
     context.rectangles.find(r => r.id === id)
   ).filter(Boolean);
 
@@ -338,8 +372,10 @@ async function executeCreateGrid(args: any, context: CanvasContextMethods): Prom
  * Execute deleteElement
  */
 async function executeDeleteElement(args: any, context: CanvasContextMethods): Promise<void> {
+  // Resolve the ID (might be a name)
+  const resolvedId = resolveShapeId(args.id, context);
   // Select the shape first, then delete
-  context.selectShape(args.id);
+  context.selectShape(resolvedId);
   await context.deleteSelected();
 }
 

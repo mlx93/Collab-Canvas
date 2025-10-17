@@ -226,6 +226,24 @@ export const PropertiesPanel: React.FC = () => {
     );
   }
 
+  // If selected shape doesn't exist (ID mismatch), show error state
+  if (!selectedRectangle) {
+    return (
+      <div className="p-4">
+        <h3 className="text-sm font-semibold text-gray-700 mb-2">Properties</h3>
+        <p className="text-xs text-red-500">
+          Selected shape not found. This may be due to an invalid ID.
+        </p>
+        <button
+          onClick={deleteSelected}
+          className="mt-2 text-xs text-blue-600 hover:text-blue-800"
+        >
+          Clear selection
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
