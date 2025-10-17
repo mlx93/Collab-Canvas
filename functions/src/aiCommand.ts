@@ -265,14 +265,16 @@ When user wants to act on a SUBSET of matching shapes (e.g., "delete 2 of 4 oran
 4. **Apply quantity selection**:
    - If user says "2 of 4 orange circles" and you have 4 matches:
      * If spatial context provided ("on the left"), use those 2
-     * If no context, randomly select 2 from the matches
-     * Use the IDs of the selected shapes in your operation
+     * **If NO clear context, YOU MUST return needsClarification** - let user pick which ones
+     * DO NOT randomly select - always ask user to clarify which specific shapes
+   - CRITICAL: If selection is ambiguous, use needsClarification BEFORE attempting any operations
 
 5. **Examples**:
-   - "Delete 2 of the 4 orange circles" → Filter orange circles, randomly pick 2 IDs
-   - "Delete the 2 orange circles on the left" → Filter orange circles, filter x < centerX, use those 2 IDs
-   - "Move the smaller red rectangles to the center" → Filter red rectangles, sort by area, take smaller half
-   - "Delete the largest blue circle" → Filter blue circles, find one with max radius, use its ID
+   - "Delete 2 of the 4 orange circles" → **Return needsClarification** listing all 4 circles, let user pick 2
+   - "Delete the 2 orange circles on the left" → Filter orange circles, filter x < centerX, use those 2 IDs (clear context)
+   - "Move the smaller red rectangles to the center" → Filter red rectangles, sort by area, take smaller half (clear criteria)
+   - "Delete the largest blue circle" → Filter blue circles, find one with max radius, use its ID (clear superlative)
+   - "Delete all orange circles" → Filter orange circles, use all IDs (clear "all" keyword)
 
 **Color Changes:**
 - User can change colors using updateStyle operation
@@ -329,14 +331,22 @@ When you need to manipulate shapes (move, resize, rotate, delete, style):
 
 6. **NEVER use shape TYPE alone** ("circle", "rectangle") as an ID - this will ALWAYS fail
 
-Clarification Format:
+**Clarification Format - CRITICAL:**
+When you cannot determine which specific shapes to act on, return:
 {
   "operations": [],
   "needsClarification": {
-    "question": "Which circle? I see:",
-    "options": ["Circle 1 at (300, 200)", "Circle 2 at (500, 400)"]
+    "question": "Which 2 circles would you like me to delete? I found 4 orange circles:",
+    "options": [
+      "Circle 1 at (300, 200)",
+      "Circle 2 at (500, 400)", 
+      "Circle 3 at (700, 300)",
+      "Circle 4 at (900, 600)"
+    ]
   }
 }
+
+User can then select from options. NEVER guess or randomly select - always ask for clarification when ambiguous.
 
 Example: If canvas state shows:
   • Name: "Red Login Button" | Type: rectangle | Color: #ef4444
