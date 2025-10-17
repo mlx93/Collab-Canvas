@@ -99,14 +99,10 @@ const Line: React.FC<LineProps> = ({
       return;
     }
     
-    console.log('[Line] Subscribing to live position for line being edited by:', activeEdit.userId);
     let clearTimer: NodeJS.Timeout | null = null;
     
     const unsubscribe = subscribeToShapeLivePosition(line.id, (livePositionData) => {
-      console.log('[Line] Live position update for', line.id, ':', livePositionData ? 'YES' : 'NO');
-      
       if (livePositionData && livePositionData.userId !== user?.userId) {
-        console.log('[Line] Using live position from another user:', livePositionData.userId);
         if (clearTimer) {
           clearTimeout(clearTimer);
           clearTimer = null;

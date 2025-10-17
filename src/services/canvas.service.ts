@@ -125,9 +125,11 @@ export async function updateRectangle(
   }
 
   // If this is a position/size/color update (not just z-index), auto-set z-index to front
-  if (updates.x !== undefined || updates.y !== undefined || 
-      updates.width !== undefined || updates.height !== undefined || 
-      updates.color !== undefined) {
+  // BUT only if z-index is not explicitly provided in the update
+  if (updates.zIndex === undefined && 
+      (updates.x !== undefined || updates.y !== undefined || 
+       updates.width !== undefined || updates.height !== undefined || 
+       updates.color !== undefined)) {
     // Query for maxZIndex to bring edited shape to front (higher = front)
     const shapesSnapshot = await retryOperation(
       () => getDocs(query(getShapesCollection(), orderBy('zIndex', 'desc'), limit(1))),
@@ -251,6 +253,32 @@ export async function updateZIndex(shapeId: string, newZIndex: number): Promise<
 }
 
 /**
+ * Batch update z-indices for multiple shapes (used when reordering in layers panel)
+ * This avoids race conditions from multiple simultaneous updateZIndex calls
+ */
+export async function batchUpdateZIndices(updates: Record<string, number>): Promise<void> {
+  // Check authentication
+  if (!auth.currentUser?.email) {
+    throw new Error('User must be authenticated to update z-indices');
+  }
+  
+  await retryOperation(async () => {
+    const batch = writeBatch(db);
+    
+    // Update each shape's z-index
+    Object.entries(updates).forEach(([shapeId, newZIndex]) => {
+      batch.update(getShapeDoc(shapeId), {
+        zIndex: newZIndex,
+        lastModified: Timestamp.now(),
+        lastModifiedBy: auth.currentUser!.email,
+      });
+    });
+    
+    await batch.commit();
+  }, 'Batch update z-indices');
+}
+
+/**
  * Delete a rectangle from Firestore
  */
 export async function deleteRectangle(shapeId: string): Promise<void> {
@@ -292,6 +320,7 @@ export function subscribeToShapes(
           zIndex: data.zIndex,
           visible: data.visible ?? true,
           locked: data.locked ?? false,
+          name: data.name, // Custom name for shape (editable in layers panel)
           createdBy: data.createdBy,
           createdAt: data.createdAt,
           lastModifiedBy: data.lastModifiedBy,

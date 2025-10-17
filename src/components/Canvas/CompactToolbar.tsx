@@ -10,7 +10,7 @@ export const CompactToolbar: React.FC = () => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
   const colorPickerRef = useRef<HTMLButtonElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Not currently used
 
   // Handle color change for selected shapes or default color
   const handleColorChange = (newColor: string, newOpacity: number) => {
@@ -39,6 +39,16 @@ export const CompactToolbar: React.FC = () => {
     }
     setShowColorPicker(!showColorPicker);
   };
+
+  // Listen for canvas click to close color picker
+  React.useEffect(() => {
+    const handleCloseColorPicker = () => {
+      setShowColorPicker(false);
+    };
+    
+    window.addEventListener('closeColorPicker', handleCloseColorPicker);
+    return () => window.removeEventListener('closeColorPicker', handleCloseColorPicker);
+  }, []);
 
   // Keyboard shortcut for color picker (P key)
   React.useEffect(() => {

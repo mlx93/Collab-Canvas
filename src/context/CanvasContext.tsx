@@ -5,10 +5,10 @@ import { MIN_ZOOM, MAX_ZOOM, DEFAULT_COLOR } from '../utils/constants';
 import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
 import * as canvasService from '../services/canvas.service';
-import { updateZIndex } from '../services/canvas.service';
 import { setLiveSelection, clearLiveSelection } from '../services/liveSelections.service';
 import { getCursorColorForUser } from '../services/cursor.service';
 import { clearActiveEdit } from '../services/activeEdits.service';
+import { setLivePosition, clearLivePosition } from '../services/livePositions.service';
 import { clipboardService } from '../services/clipboard.service';
 import { useUndo } from './UndoContext';
 import toast from 'react-hot-toast';
@@ -51,6 +51,7 @@ interface CanvasContextType {
   bringToFront: (id: string) => void;
   sendToBack: (id: string) => void;
   setZIndex: (id: string, zIndex: number) => void;
+  batchSetZIndex: (updates: Record<string, number>) => Promise<void>;
   
   // Copy/Paste operations
   copyShapes: () => void;
@@ -80,6 +81,18 @@ export const CanvasContext = createContext<CanvasContextType | undefined>(undefi
 
 interface CanvasProviderProps {
   children: ReactNode;
+}
+
+// Helper function to remove undefined values from an object
+// Firestore does not accept undefined values
+function removeUndefinedFields(obj: any): any {
+  const cleaned: any = {};
+  for (const key in obj) {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  }
+  return cleaned;
 }
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
@@ -370,6 +383,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         id: tempId,
         rotation: 0, // Default rotation
         opacity: 1, // Default opacity
+        visible: true, // Default visible
+        locked: false, // Default unlocked
         zIndex: maxZIndex + 1, // New circle goes to front
         createdAt: new Date(),
         lastModified: new Date()
@@ -411,7 +426,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
       await canvasService.createRectangle(fullCircle as any); // TODO: Update service to accept Shape
     } catch (error) {
-      console.error('Failed to create circle in Firestore:', error);
       // Revert optimistic update on failure
       setCanvasState(prev => ({
         ...prev,
@@ -487,6 +501,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         id: tempId,
         rotation: 0,
         opacity: 1,
+        visible: true, // Default visible
+        locked: false, // Default unlocked
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -526,7 +542,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
       await canvasService.createRectangle(fullTriangle as any);
     } catch (error) {
-      console.error('Failed to create triangle in Firestore:', error);
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
@@ -659,6 +674,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         id: tempId,
         rotation: 0,
         opacity: 1,
+        visible: true, // Default visible
+        locked: false, // Default unlocked
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -698,7 +715,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
       await canvasService.createRectangle(fullLine as any);
     } catch (error) {
-      console.error('Failed to create line in Firestore:', error);
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
@@ -722,6 +738,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         id: tempId,
         rotation: 0,
         opacity: 1,
+        visible: true, // Default visible
+        locked: false, // Default unlocked
         zIndex: maxZIndex + 1,
         createdAt: new Date(),
         lastModified: new Date()
@@ -760,7 +778,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
       await canvasService.createRectangle(fullText as any); // TODO: Update service to accept Shape
     } catch (error) {
-      console.error('Failed to create text in Firestore:', error);
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => r.id !== tempId),
@@ -787,6 +804,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         id: tempId,
         rotation: 0, // Default rotation
         opacity: 1, // Default opacity
+        visible: true, // Default visible
+        locked: false, // Default unlocked
         zIndex: maxZIndex + 1, // New rectangle goes to front
         createdAt: new Date(),
         lastModified: new Date()
@@ -828,7 +847,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
       await canvasService.createRectangle(fullRectangle);
     } catch (error) {
-      console.error('Failed to create rectangle in Firestore:', error);
       // Revert optimistic update on failure
       setCanvasState(prev => ({
         ...prev,
@@ -902,9 +920,19 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
 
     // Sync to Firestore in background
     try {
-      // TODO (Phase 1 - Circle/Triangle/Line/Text): Refactor canvas.service.ts to accept Shape union type
-      // For now, using 'as any' cast since we only have rectangles and dev is working
-      await canvasService.updateRectangle(id, updates as any);
+      // If z-index is being updated, use updateZIndex which handles cascading updates
+      if (updates.zIndex !== undefined) {
+        await canvasService.updateZIndex(id, updates.zIndex);
+        
+        // If there are other updates besides z-index, apply them separately
+        const { zIndex, ...otherUpdates } = updates;
+        if (Object.keys(otherUpdates).length > 0) {
+          await canvasService.updateRectangle(id, otherUpdates as any);
+        }
+      } else {
+        // Normal update for non-zIndex changes
+        await canvasService.updateRectangle(id, updates as any);
+      }
       
       // Add undo tracking for all modify operations (only if trackUndo is true)
       if (trackUndo && isModifyOperation && beforeShape && user) {
@@ -920,7 +948,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         });
       }
     } catch (error) {
-      console.error('Failed to update rectangle in Firestore:', error);
       // The Firestore listener will eventually sync the correct state
     }
   };
@@ -937,7 +964,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     try {
       await canvasService.deleteRectangle(id);
     } catch (error) {
-      console.error('Failed to delete rectangle from Firestore:', error);
       // The Firestore listener will eventually sync the correct state
     }
   };
@@ -1106,7 +1132,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
       toast.success(`Pasted ${shapesWithMetadata.length} shape(s)`);
     } catch (error) {
-      console.error('Failed to paste shapes:', error);
       toast.error('Failed to paste shapes');
       // Revert optimistic update on failure
       setCanvasState(prev => ({
@@ -1162,7 +1187,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       }
       toast.success(`Duplicated ${duplicates.length} shape(s)`);
     } catch (error) {
-      console.error('Failed to duplicate shapes:', error);
       toast.error('Failed to duplicate shapes');
       // Revert optimistic update on failure
       setCanvasState(prev => ({
@@ -1204,7 +1228,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await Promise.all(deletePromises);
       toast.success(`Deleted ${selectedCount} shape(s)`);
     } catch (error) {
-      console.error('Failed to delete selected shapes:', error);
       toast.error('Failed to delete some shapes');
     }
   };
@@ -1272,31 +1295,36 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           // Undo delete = recreate the deleted shapes
           if (action.before && Array.isArray(action.before)) {
             for (const shape of action.before) {
+              // Remove undefined fields before recreating (Firestore doesn't accept undefined values)
+              const cleanedShape = removeUndefinedFields(shape);
+              
               // Recreate the shape with the same properties
-              if (shape.type === 'rectangle') {
-                await addRectangleFull(shape as any);
-              } else if (shape.type === 'circle') {
-                await addCircleFull(shape as any);
-              } else if (shape.type === 'triangle') {
-                await addTriangleFull(shape as any);
-              } else if (shape.type === 'line') {
-                await addLineFull(shape as any);
-              } else if (shape.type === 'text') {
-                await addTextFull(shape as any);
+              if (cleanedShape.type === 'rectangle') {
+                await addRectangleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'circle') {
+                await addCircleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'triangle') {
+                await addTriangleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'line') {
+                await addLineFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'text') {
+                await addTextFull(cleanedShape as any);
               }
             }
           } else if (action.before && !Array.isArray(action.before)) {
-            const shape = action.before;
-            if (shape.type === 'rectangle') {
-              await addRectangleFull(shape as any);
-            } else if (shape.type === 'circle') {
-              await addCircleFull(shape as any);
-            } else if (shape.type === 'triangle') {
-              await addTriangleFull(shape as any);
-            } else if (shape.type === 'line') {
-              await addLineFull(shape as any);
-            } else if (shape.type === 'text') {
-              await addTextFull(shape as any);
+            // Remove undefined fields before recreating (Firestore doesn't accept undefined values)
+            const cleanedShape = removeUndefinedFields(action.before);
+            
+            if (cleanedShape.type === 'rectangle') {
+              await addRectangleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'circle') {
+              await addCircleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'triangle') {
+              await addTriangleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'line') {
+              await addLineFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'text') {
+              await addTextFull(cleanedShape as any);
             }
           }
           // For redo, we'll find the recreated shapes by matching properties
@@ -1318,7 +1346,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       
       toast.success(`Undid ${action.type} operation`);
     } catch (error) {
-      console.error('Failed to undo action:', error);
       toast.error('Failed to undo action');
       // Still add to redo stack even if there was an error
       setRedoStack(prev => [...prev, redoAction]);
@@ -1338,30 +1365,35 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           // Redo create = recreate the shapes
           if (action.after && Array.isArray(action.after)) {
             for (const shape of action.after) {
-              if (shape.type === 'rectangle') {
-                await addRectangleFull(shape as any);
-              } else if (shape.type === 'circle') {
-                await addCircleFull(shape as any);
-              } else if (shape.type === 'triangle') {
-                await addTriangleFull(shape as any);
-              } else if (shape.type === 'line') {
-                await addLineFull(shape as any);
-              } else if (shape.type === 'text') {
-                await addTextFull(shape as any);
+              // Remove undefined fields before recreating (Firestore doesn't accept undefined values)
+              const cleanedShape = removeUndefinedFields(shape);
+              
+              if (cleanedShape.type === 'rectangle') {
+                await addRectangleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'circle') {
+                await addCircleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'triangle') {
+                await addTriangleFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'line') {
+                await addLineFull(cleanedShape as any);
+              } else if (cleanedShape.type === 'text') {
+                await addTextFull(cleanedShape as any);
               }
             }
           } else if (action.after && !Array.isArray(action.after)) {
-            const shape = action.after;
-            if (shape.type === 'rectangle') {
-              await addRectangleFull(shape as any);
-            } else if (shape.type === 'circle') {
-              await addCircleFull(shape as any);
-            } else if (shape.type === 'triangle') {
-              await addTriangleFull(shape as any);
-            } else if (shape.type === 'line') {
-              await addLineFull(shape as any);
-            } else if (shape.type === 'text') {
-              await addTextFull(shape as any);
+            // Remove undefined fields before recreating (Firestore doesn't accept undefined values)
+            const cleanedShape = removeUndefinedFields(action.after);
+            
+            if (cleanedShape.type === 'rectangle') {
+              await addRectangleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'circle') {
+              await addCircleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'triangle') {
+              await addTriangleFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'line') {
+              await addLineFull(cleanedShape as any);
+            } else if (cleanedShape.type === 'text') {
+              await addTextFull(cleanedShape as any);
             }
           }
           break;
@@ -1445,7 +1477,6 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       
       toast.success(`Redid ${action.type} operation`);
     } catch (error) {
-      console.error('Failed to redo action:', error);
       toast.error('Failed to redo action');
     }
   };
@@ -1465,11 +1496,13 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await clearActiveEdit(id);
     }
 
-    // Update immediately using proper z-index service
+    // Use updateShape for consistency with layers panel - this will update local state and Firestore
     try {
-      await updateZIndex(id, newZIndex);
+      await updateShape(id, { zIndex: newZIndex });
+      toast.success('Brought to front');
     } catch (error) {
       console.error('[bringToFront] Failed to update z-index:', error);
+      toast.error('Failed to bring to front');
       return;
     }
   };
@@ -1492,44 +1525,128 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await clearActiveEdit(id);
     }
 
-    // Update immediately using proper z-index service
+    // Use updateShape for consistency with layers panel - this will update local state and Firestore
     try {
-      await updateZIndex(id, newZIndex);
+      await updateShape(id, { zIndex: newZIndex });
+      toast.success('Sent to back');
     } catch (error) {
       console.error('[sendToBack] Failed to update z-index:', error);
+      toast.error('Failed to send to back');
       return;
     }
   };
 
   const setZIndex = async (id: string, zIndex: number) => {
-    // Optimistic update: update local state immediately
-    setCanvasState(prev => {
-      const updatedRectangles = manualSetZIndex(prev.rectangles, id, zIndex);
-      
-      // Add metadata if user is available
-      if (user) {
-        return {
-          ...prev,
-          rectangles: updatedRectangles.map(rect =>
-            rect.id === id
-              ? { ...rect, lastModified: new Date(), lastModifiedBy: user.userId }
-              : rect
-          )
-        };
+    // Validate z-index range
+    if (zIndex < -100000000 || zIndex > 100000000) {
+      toast.error('Z-index must be between -100M and 100M');
+      return;
+    }
+
+    // Use batch approach like layers panel to avoid "No document to update" errors
+    const targetShape = canvasState.rectangles.find(s => s.id === id);
+    if (!targetShape) {
+      toast.error('Shape not found');
+      return;
+    }
+
+    const oldZIndex = targetShape.zIndex;
+    if (oldZIndex === zIndex) {
+      toast('Z-index unchanged');
+      return;
+    }
+
+    // Calculate all z-index updates using manualSetZIndex logic
+    const updatedShapes = manualSetZIndex(canvasState.rectangles, id, zIndex);
+    
+    // Build updates map for all shapes that changed
+    const zIndexUpdates: Record<string, number> = {};
+    updatedShapes.forEach(shape => {
+      const originalShape = canvasState.rectangles.find(s => s.id === shape.id);
+      if (originalShape && originalShape.zIndex !== shape.zIndex) {
+        zIndexUpdates[shape.id] = shape.zIndex;
       }
-      
-      return {
-        ...prev,
-        rectangles: updatedRectangles
-      };
     });
 
-    // Sync to Firestore in background
+    // Optimistic update: Update local state immediately
+    setCanvasState(prev => ({
+      ...prev,
+      rectangles: updatedShapes
+    }));
+
+    // Batch update all z-indices in Firestore
+    if (Object.keys(zIndexUpdates).length > 0) {
+      try {
+        await canvasService.batchUpdateZIndices(zIndexUpdates);
+        toast.success(`Z-index set to ${zIndex}`);
+      } catch (error) {
+        console.error('Failed to update z-index:', error);
+        toast.error('Failed to update z-index');
+        // Revert optimistic update on error
+        setCanvasState(prev => ({
+          ...prev,
+          rectangles: canvasState.rectangles
+        }));
+      }
+    }
+  };
+
+  // Batch z-index update with optimistic local state updates
+  const batchSetZIndex = async (updates: Record<string, number>): Promise<void> => {
+    if (!user) return;
+    
+    // Apply updates optimistically to local state
+    const updatedShapes = canvasState.rectangles.map(shape => {
+      if (updates[shape.id] !== undefined) {
+        return { ...shape, zIndex: updates[shape.id] };
+      }
+      return shape;
+    });
+
+    // Update local state immediately
+    setCanvasState(prev => ({
+      ...prev,
+      rectangles: updatedShapes
+    }));
+
+    // Broadcast z-index changes to RTDB for instant visual updates
+    for (const [shapeId, newZIndex] of Object.entries(updates)) {
+      const shape = canvasState.rectangles.find(s => s.id === shapeId);
+      if (shape) {
+        // Broadcast the z-index change with current position/size data
+        const width = 'width' in shape ? shape.width : ('radius' in shape ? shape.radius * 2 : 100);
+        const height = 'height' in shape ? shape.height : ('radius' in shape ? shape.radius * 2 : 100);
+        
+        setLivePosition(
+          shapeId,
+          user.userId,
+          shape.x,
+          shape.y,
+          width as number,
+          height as number,
+          newZIndex,
+          'x2' in shape ? shape.x2 : undefined,
+          'y2' in shape ? shape.y2 : undefined
+        );
+        
+        // Clear the live position after a short delay to allow others to see the change
+        setTimeout(() => {
+          clearLivePosition(shapeId);
+        }, 500);
+      }
+    }
+
+    // Update Firestore
     try {
-      await canvasService.updateZIndex(id, zIndex);
+      await canvasService.batchUpdateZIndices(updates);
     } catch (error) {
-      console.error('Failed to update z-index in Firestore:', error);
-      // The Firestore listener will eventually sync the correct state
+      console.error('Failed to batch update z-indices:', error);
+      // Revert optimistic update on error
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: canvasState.rectangles
+      }));
+      throw error; // Re-throw so caller can handle
     }
   };
 
@@ -1597,6 +1714,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     bringToFront,
     sendToBack,
     setZIndex,
+    batchSetZIndex,
     
     // Copy/Paste operations
     copyShapes,

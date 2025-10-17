@@ -123,7 +123,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Clean up presence BEFORE signing out to ensure it completes
       if (authState.user?.userId) {
-        console.log('[AuthContext] Cleaning up presence before sign-out:', authState.user.userId);
         await setUserOffline(authState.user.userId);
       }
       

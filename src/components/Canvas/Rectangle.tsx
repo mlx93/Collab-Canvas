@@ -103,15 +103,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       return;
     }
     
-    console.log('[Rectangle] Subscribing to live position for shape being edited by:', activeEdit.userId);
     let clearTimer: NodeJS.Timeout | null = null;
     
     // Subscribe to just THIS shape's live position
     const unsubscribe = subscribeToShapeLivePosition(rectangle.id, (livePositionData) => {
-      console.log('[Rectangle] Live position update for', rectangle.id, ':', livePositionData ? 'YES' : 'NO');
-      
       if (livePositionData && livePositionData.userId !== user?.userId) {
-        console.log('[Rectangle] Using live position from another user:', livePositionData.userId);
         if (clearTimer) {
           clearTimeout(clearTimer);
           clearTimer = null;

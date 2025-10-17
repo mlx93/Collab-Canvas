@@ -27,6 +27,7 @@ export interface BaseShape {
   // Layer management
   visible?: boolean; // Hide/show shape
   locked?: boolean; // Prevent editing
+  name?: string; // Custom name for the shape (editable in layers panel)
   
   // Metadata
   createdBy: string; // User ID

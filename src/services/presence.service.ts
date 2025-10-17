@@ -49,8 +49,6 @@ export async function setUserOnline(
       online: false,
       lastSeen: Date.now(),
     });
-
-    console.log('[presence.service] User set online:', userId);
   } catch (error) {
     console.error('[presence.service] Failed to set user online:', error);
     throw error;
@@ -91,8 +89,6 @@ export async function setUserOffline(userId: string): Promise<void> {
 
     // Cancel the onDisconnect handler since we're manually setting offline
     await onDisconnect(presenceRef).cancel();
-
-    console.log('[presence.service] User set offline:', userId);
   } catch (error) {
     console.error('[presence.service] Failed to set user offline:', error);
     // Don't throw - offline status is non-critical
@@ -168,7 +164,6 @@ export function subscribeToConnectionState(
     (snapshot) => {
       const connected = snapshot.val() === true;
       callback(connected);
-      console.log('[presence.service] Connection state:', connected ? 'online' : 'offline');
     },
     (error) => {
       console.error('[presence.service] Error subscribing to connection state:', error);

@@ -6,7 +6,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useCursors } from '../../hooks/useCursors';
 import { useAuth } from '../../hooks/useAuth';
 // import { useUndo } from '../../context/UndoContext'; // No longer needed - using CanvasContext undo/redo
-import { FPSCounter } from './FPSCounter';
+// import { FPSCounter } from './FPSCounter'; // Hidden in production for cleaner UI
 import { Rectangle } from './Rectangle';
 import Circle from './Circle';
 import Triangle from './Triangle';
@@ -240,8 +240,8 @@ export const Canvas: React.FC = () => {
         }
       }
       
-      // Handle Delete key
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      // Handle Shift+Delete key to avoid conflicts with text editing in input fields
+      if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault();
         deleteSelected();
       }
@@ -322,7 +322,6 @@ export const Canvas: React.FC = () => {
     const draggedShape = rectangles.find(r => r.id === draggedShapeId);
     if (!draggedShape) return;
 
-    console.log(`[Multi-drag] Starting multi-drag for ${selectedIds.length} shapes, leader: ${draggedShapeId}`);
 
     // Calculate offsets from dragged shape to all other selected shapes
     const offsets: Record<string, { x: number; y: number }> = {};
@@ -344,7 +343,6 @@ export const Canvas: React.FC = () => {
             x: shape.x - draggedShape.x,
             y: shape.y - draggedShape.y
           };
-          console.log(`[Multi-drag] Follower ${id} offset: (${offsets[id].x}, ${offsets[id].y})`);
         }
       }
     });
@@ -376,7 +374,6 @@ export const Canvas: React.FC = () => {
     const deltaX = newX - draggedStartPos.x;
     const deltaY = newY - draggedStartPos.y;
     
-    console.log(`[Multi-drag] Update: leader ${draggedShapeId} at (${newX}, ${newY}), delta: (${deltaX}, ${deltaY})`);
 
     // Update local multi-drag positions for all selected shapes
     const newPositions: Record<string, { x: number; y: number; x2?: number; y2?: number }> = {};
@@ -399,12 +396,9 @@ export const Canvas: React.FC = () => {
             y: startPos.y + deltaY
           };
         }
-        console.log(`[Multi-drag] Calculated position for ${id}: (${newPositions[id].x}, ${newPositions[id].y})`);
       } else {
-        console.log(`[Multi-drag] No start position found for ${id}`);
       }
     });
-    console.log(`[Multi-drag] Setting multiDragPositions:`, newPositions);
     setMultiDragPositions(newPositions);
 
     // Broadcast live positions for FOLLOWER shapes only during multi-drag
@@ -446,10 +440,8 @@ export const Canvas: React.FC = () => {
           }
           
           // Broadcast live position for this follower shape
-          console.log(`[Multi-drag] Broadcasting follower shape ${id} to position (${broadcastX}, ${broadcastY})`);
           setLivePosition(id, user?.userId || '', broadcastX, broadcastY, width, height, undefined, x2, y2);
         } else {
-          console.log(`[Multi-drag] No position calculated for follower shape ${id}`);
         }
       }
     });
@@ -504,6 +496,9 @@ export const Canvas: React.FC = () => {
     if (clickedOnEmpty) {
       const pos = e.target.getStage()?.getPointerPosition();
       if (!pos) return;
+
+      // Close color picker when clicking canvas
+      window.dispatchEvent(new CustomEvent('closeColorPicker'));
 
       if (isShiftPressed) {
         // Start drag-select - convert screen coordinates to canvas coordinates
@@ -562,7 +557,6 @@ export const Canvas: React.FC = () => {
 
     // Update cursor position for multiplayer ONLY when not panning
     // (reuse the already calculated canvas coordinates)
-    // console.log('[Canvas] Updating cursor position:', canvasX, canvasY);
     updateOwnCursor(canvasX, canvasY);
   };
 
@@ -833,7 +827,7 @@ export const Canvas: React.FC = () => {
         </Layer>
 
         {/* Indicators Layer - Always on top of all shapes */}
-        <Layer listening={false} zIndex={10000}>
+        <Layer listening={false}>
           {rectangles.map((shape) => {
             // Render indicator based on shape type
             if (shape.type === 'rectangle') {
@@ -905,7 +899,6 @@ export const Canvas: React.FC = () => {
         {/* Other Users' Selection Indicators */}
         <Layer listening={false} zIndex={9999}>
           {Object.entries(liveSelections).map(([userId, selection]) => {
-            console.log('Processing liveSelections:', { userId, selection, currentUserId: user?.userId });
             // Don't show our own selections
             if (userId === user?.userId) return null;
             
@@ -926,7 +919,6 @@ export const Canvas: React.FC = () => {
               
               // Validate coordinates - if they're invalid, skip rendering
               if (currentX === undefined || currentY === undefined || currentX < 0 || currentY < 0) {
-                console.warn('Invalid coordinates for selection border:', { currentX, currentY, shape, livePosition });
                 return null;
               }
               
@@ -951,18 +943,8 @@ export const Canvas: React.FC = () => {
                 // For circles, prioritize shape radius over live position radius when not actively editing
                 // This prevents stale radius values from live position after editing is complete
                 const currentRadius = isBeingEdited && livePosition ? livePosition.width : (shape as any).radius;
-                console.log('Circle selection border:', { 
-                  shapeId, 
-                  currentX, 
-                  currentY, 
-                  currentRadius, 
-                  cursorColor: selection.cursorColor,
-                  shape: shape,
-                  livePosition: livePosition
-                });
                 // Ensure radius is valid - use fallback if invalid
                 if (!currentRadius || currentRadius <= 0) {
-                  console.warn('Invalid radius for circle selection border, using fallback:', { currentRadius, shape, livePosition });
                   // Use a default radius of 20 if invalid
                   const fallbackRadius = 20;
                   return (
@@ -1054,12 +1036,6 @@ export const Canvas: React.FC = () => {
               const livePosition = livePositions[shapeId];
               const isBeingEdited = activeEdits[shapeId];
               
-              console.log('Selection label check:', { 
-                shapeId, 
-                isBeingEdited, 
-                activeEdits: activeEdits,
-                livePosition: livePosition
-              });
               
               // Don't show selection label if shape is being actively edited (editing indicator takes priority)
               if (isBeingEdited) return null;
@@ -1076,7 +1052,6 @@ export const Canvas: React.FC = () => {
               
               // Validate coordinates - if they're invalid, skip rendering
               if (currentX === undefined || currentY === undefined || currentX < 0 || currentY < 0) {
-                console.warn('Invalid coordinates for selection indicator:', { currentX, currentY, shape, livePosition });
                 return null;
               }
               
@@ -1089,7 +1064,6 @@ export const Canvas: React.FC = () => {
                     const radius = isBeingEdited && livePos ? livePos.width : shape.radius;
                     // Ensure radius is valid, fallback to 20 if invalid
                     if (!radius || radius <= 0) {
-                      console.warn('Invalid radius for circle selection indicator:', { radius, shape, livePos });
                       return 40; // Default diameter of 40px
                     }
                     return radius * 2;
@@ -1102,15 +1076,6 @@ export const Canvas: React.FC = () => {
               };
               
               const shapeWidth = getShapeWidth(shape, livePosition);
-              console.log('SelectionIndicator coordinates:', { 
-                shapeId, 
-                currentX, 
-                currentY, 
-                shapeWidth, 
-                scale: viewport.scale,
-                shape: shape,
-                livePosition: livePosition
-              });
               
               return (
                 <SelectionIndicator

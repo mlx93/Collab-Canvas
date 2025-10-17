@@ -20,7 +20,7 @@ export const ShortcutsLegend: React.FC = () => {
         { key: '⌘C', description: 'Copy Selected' },
         { key: '⌘V', description: 'Paste Shapes' },
         { key: '⌘D', description: 'Create Duplicate' },
-        { key: 'Del', description: 'Delete Selected' },
+        { key: 'Shift+Del', description: 'Delete Selected' },
       ]
     },
     {

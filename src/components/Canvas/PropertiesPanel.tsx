@@ -35,7 +35,7 @@ export const PropertiesPanel: React.FC = () => {
   const [showFloatingColorPicker, setShowFloatingColorPicker] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
   const colorPickerRef = useRef<HTMLButtonElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Not currently used
   
   // Refs for click-outside detection
   const textColorRef = React.useRef<HTMLDivElement>(null);
@@ -197,17 +197,13 @@ export const PropertiesPanel: React.FC = () => {
     deleteSelected();
   };
 
-  // Handle keyboard delete (Delete/Backspace) - MUST be before any conditional returns
+  // Handle keyboard delete (Shift+Delete/Backspace) - MUST be before any conditional returns
+  // Changed to Shift+Delete to avoid conflicts with text editing in input fields like Z-index
   React.useEffect(() => {
     if (selectedIds.length === 0) return; // Early exit inside hook is OK
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        // Prevent default backspace navigation
-        if (e.key === 'Backspace' && e.target instanceof HTMLElement && 
-            ['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
-          return; // Allow backspace in input fields
-        }
+      if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault();
         // Use deleteSelected to handle all selected shapes
         deleteSelected();
@@ -688,14 +684,14 @@ export const PropertiesPanel: React.FC = () => {
           value={zIndexInput}
           onChange={handleZIndexChange}
           onBlur={handleZIndexBlur}
-          placeholder="Enter layer number (-100M to 100M)"
+          placeholder="Enter z-index"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck="false"
           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
-        <p className="text-xs text-gray-500 mt-1">Lower = back, higher = front (-100M to 100M)</p>
+        <p className="text-xs text-gray-500 mt-1">Lower = back, higher = front</p>
       </div>
 
       {/* Z-Index Control Buttons - Available for all shapes */}
@@ -732,7 +728,7 @@ export const PropertiesPanel: React.FC = () => {
           Delete {selectedIds.length > 1 ? `${selectedIds.length} Shapes` : (selectedRectangle.type === 'text' ? 'Text Box' : 'Shape')}
         </button>
         <p className="text-xs text-gray-500 mt-2 text-center">
-          Press Delete or Backspace key to delete
+          Press Shift+Delete or Shift+Backspace to delete
         </p>
       </div>
 

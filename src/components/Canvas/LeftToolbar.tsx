@@ -169,7 +169,7 @@ export const LeftToolbar: React.FC = () => {
           </div>
           <div className="flex justify-between items-center">
             <span>Delete:</span>
-            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Del</kbd>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Shift+Del</kbd>
           </div>
         </div>
       </div>

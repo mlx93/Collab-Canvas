@@ -57,7 +57,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null);
+  // const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null); // No longer used - indicators now use shapePos directly
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -124,14 +124,6 @@ const CircleComponent: React.FC<CircleProps> = ({
       ? { x: livePosition.x, y: livePosition.y, radius: livePosition.width }
       : { x: circle.x, y: circle.y, radius: circle.radius };
     
-    console.log('Circle editing indicator:', { 
-      circleId: circle.id, 
-      livePosition, 
-      circleRadius: circle.radius, 
-      indicatorPos, 
-      editingIndicatorWidth: indicatorPos.radius * 2
-    });
-    
     return (
       <EditingIndicator
         activeEdit={activeEdit}
@@ -167,14 +159,15 @@ const CircleComponent: React.FC<CircleProps> = ({
       };
 
   // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
-  const indicatorPos = immediateDragPosition && isDragging
-    ? { 
-        x: immediateDragPosition.x, 
-        y: immediateDragPosition.y, 
-        radius: circle.radius,
-        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : circle.zIndex
-      }
-    : shapePos;
+  // Note: This variable is not currently used as indicators use the shapePos above
+  // const indicatorPos = immediateDragPosition && isDragging
+  //   ? { 
+  //       x: immediateDragPosition.x, 
+  //       y: immediateDragPosition.y, 
+  //       radius: circle.radius,
+  //       zIndex: newZIndexRef.current !== null ? newZIndexRef.current : circle.zIndex
+  //     }
+  //   : shapePos;
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
@@ -215,7 +208,7 @@ const CircleComponent: React.FC<CircleProps> = ({
     const y = node.y();
     
     // Store immediate drag position for instant indicator updates
-    setImmediateDragPosition({ x, y });
+    // setImmediateDragPosition({ x, y }); // No longer used
     
     // Update resize handle position during drag
     if (handleRef.current) {
@@ -251,7 +244,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
     setIsDragging(false);
-    setImmediateDragPosition(null);
+    // setImmediateDragPosition(null); // No longer used
     
     const node = e.target;
     const x = node.x();
@@ -415,15 +408,6 @@ const CircleComponent: React.FC<CircleProps> = ({
       {/* Editing indicator (who is editing this shape) */}
       {showIndicator && activeEdit && activeEdit.userId !== user?.userId && (
         <>
-          {console.log('Circle main editing indicator:', { 
-            circleId: circle.id, 
-            livePosition, 
-            circleRadius: circle.radius, 
-            shapePos, 
-            editingIndicatorWidth: shapePos.radius * 2,
-            rectangleX: shapePos.x,
-            rectangleY: shapePos.y - shapePos.radius
-          })}
           {/* Editing indicator is rendered in the indicators layer for proper z-index */}
         </>
       )}

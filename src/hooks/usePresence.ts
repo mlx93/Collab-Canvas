@@ -31,11 +31,8 @@ export function usePresence(): UsePresenceReturn {
   // Set up presence on mount
   useEffect(() => {
     if (!user?.userId || !user?.email) {
-      console.log('[usePresence] User not ready:', { userId: user?.userId, email: user?.email });
-      
       // If we had a user before but now we don't, they signed out - clean up presence
       if (previousUserIdRef.current) {
-        console.log('[usePresence] User signed out, cleaning up presence for:', previousUserIdRef.current);
         setUserOffline(previousUserIdRef.current);
         previousUserIdRef.current = null;
       }
@@ -49,8 +46,6 @@ export function usePresence(): UsePresenceReturn {
     // Use firstName/lastName if available, otherwise use 'User' as fallback
     const firstName = user.firstName || 'User';
     const lastName = user.lastName || '';
-
-    console.log('[usePresence] Setting user online:', user.userId, { firstName, lastName });
 
     // Set user online
     setUserOnline(user.userId, user.email, firstName, lastName).catch((error) => {
@@ -72,8 +67,6 @@ export function usePresence(): UsePresenceReturn {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
-      console.log('[usePresence] Cleanup function called for:', user.userId);
-
       // Clear heartbeat
       if (heartbeatIntervalRef.current) {
         clearInterval(heartbeatIntervalRef.current);
@@ -91,25 +84,19 @@ export function usePresence(): UsePresenceReturn {
 
   // Subscribe to presence updates
   useEffect(() => {
-    console.log('[usePresence] Subscribing to presence updates');
-
     const unsubscribe = subscribeToPresence((presenceMap) => {
       // Convert presence map to array and filter for online users
       const users = Object.values(presenceMap).filter((p) => p.online);
       setOnlineUsers(users);
-      console.log('[usePresence] Online users:', users.length);
     });
 
     return () => {
-      console.log('[usePresence] Unsubscribing from presence');
       unsubscribe();
     };
   }, []);
 
   // Subscribe to connection state
   useEffect(() => {
-    console.log('[usePresence] Subscribing to connection state');
-
     const unsubscribe = subscribeToConnectionState((connected) => {
       setIsConnected(connected);
 
@@ -139,7 +126,6 @@ export function usePresence(): UsePresenceReturn {
     });
 
     return () => {
-      console.log('[usePresence] Unsubscribing from connection state');
       unsubscribe();
     };
   }, []);

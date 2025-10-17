@@ -35,6 +35,18 @@ export function UndoProvider({ children }: { children: ReactNode }) {
   const [redoStack, setRedoStack] = useState<UndoAction[]>([]);
   const MAX_STACK_SIZE = 50;
 
+  // Helper function to remove undefined values from an object
+  // Firestore does not accept undefined values
+  const removeUndefinedFields = useCallback((obj: any) => {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (obj[key] !== undefined) {
+        cleaned[key] = obj[key];
+      }
+    }
+    return cleaned;
+  }, []);
+
   const pushUndo = useCallback((action: UndoAction) => {
     setUndoStack(prev => {
       const newStack = [...prev, action];
@@ -64,10 +76,14 @@ export function UndoProvider({ children }: { children: ReactNode }) {
           // Undo delete = recreate
           if (action.before && Array.isArray(action.before)) {
             for (const shape of action.before) {
-              await canvasService.createRectangle(shape as any);
+              // Remove undefined fields before creating
+              const cleanedShape = removeUndefinedFields(shape);
+              await canvasService.createRectangle(cleanedShape as any);
             }
           } else if (action.before && !Array.isArray(action.before)) {
-            await canvasService.createRectangle(action.before as any);
+            // Remove undefined fields before creating
+            const cleanedShape = removeUndefinedFields(action.before);
+            await canvasService.createRectangle(cleanedShape as any);
           }
           break;
         
@@ -84,7 +100,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       console.error('Failed to apply inverse action:', error);
       toast.error('Failed to undo action');
     }
-  }, []);
+  }, [removeUndefinedFields]);
 
   const applyAction = useCallback(async (action: UndoAction) => {
     try {
@@ -93,10 +109,14 @@ export function UndoProvider({ children }: { children: ReactNode }) {
           // Redo create = create the shapes
           if (action.after && Array.isArray(action.after)) {
             for (const shape of action.after) {
-              await canvasService.createRectangle(shape as any);
+              // Remove undefined fields before creating
+              const cleanedShape = removeUndefinedFields(shape);
+              await canvasService.createRectangle(cleanedShape as any);
             }
           } else if (action.after && !Array.isArray(action.after)) {
-            await canvasService.createRectangle(action.after as any);
+            // Remove undefined fields before creating
+            const cleanedShape = removeUndefinedFields(action.after);
+            await canvasService.createRectangle(cleanedShape as any);
           }
           break;
         
@@ -142,7 +162,7 @@ export function UndoProvider({ children }: { children: ReactNode }) {
       console.error('Failed to apply action:', error);
       toast.error('Failed to redo action');
     }
-  }, []);
+  }, [removeUndefinedFields]);
 
   const undo = useCallback(async () => {
     if (undoStack.length === 0) return;

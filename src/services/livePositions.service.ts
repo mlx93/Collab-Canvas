@@ -75,8 +75,6 @@ export async function setLivePosition(
     lastUpdate: Date.now(),
   };
 
-  console.log('[livePositions.service] Setting live position:', { shapeId, userId, x, y });
-
   try {
     // Don't await - fire and forget for speed, handle errors separately
     set(livePositionRef, positionData).catch((error) => {

@@ -69,8 +69,6 @@ export async function setLiveSelection(
     lastUpdate: Date.now(),
   };
 
-  console.log('[liveSelections.service] Setting live selection:', { userId, selectedIds });
-
   try {
     // Don't await - fire and forget for speed, handle errors separately
     set(selectionRef, selectionData).catch((error) => {

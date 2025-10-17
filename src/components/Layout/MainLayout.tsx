@@ -18,9 +18,10 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   layers,
   hasSelection = false
 }) => {
-  const [showLayers, setShowLayers] = useState(false);
+  const [showLayers, setShowLayers] = useState(false); // Start with layers panel hidden
+  const [previousHasSelection, setPreviousHasSelection] = useState(false);
   
-  // Listen for toggle layers event from PropertiesPanel
+  // Listen for toggle layers event from PropertiesPanel (manual toggle)
   useEffect(() => {
     const handleToggleLayers = () => {
       setShowLayers(prev => !prev);
@@ -29,6 +30,24 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     window.addEventListener('toggleLayers', handleToggleLayers);
     return () => window.removeEventListener('toggleLayers', handleToggleLayers);
   }, []);
+  
+  // Auto-hide layers panel when selection state changes
+  useEffect(() => {
+    // Going from no selection to selection: hide layers panel
+    if (!previousHasSelection && hasSelection) {
+      setShowLayers(false);
+    }
+    
+    // Going from selection to no selection: hide layers panel
+    if (previousHasSelection && !hasSelection) {
+      setShowLayers(false);
+    }
+    
+    // Keep layers panel state when jumping from shape to shape (both had selection)
+    // This is handled automatically by not changing showLayers
+    
+    setPreviousHasSelection(hasSelection);
+  }, [hasSelection, previousHasSelection]);
   
   // Update arrow direction based on showLayers state
   useEffect(() => {
@@ -58,19 +77,19 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         </div>
 
         {/* Right Panels - fixed position overlay, doesn't affect canvas size */}
-        <div className={`fixed right-0 top-16 bottom-0 transition-transform duration-300 z-20 ${hasSelection ? 'translate-x-0' : 'translate-x-full'}`}>
-          <div className="flex h-full">
-            {/* Properties Panel */}
-            <div className="w-72 bg-white border-l border-gray-200 shadow-lg overflow-y-auto">
-              {hasSelection && properties}
-            </div>
-            
-            {/* Layers Panel */}
-            {layers && showLayers && (
-              <div className="w-60 bg-white border-l border-gray-200 shadow-lg overflow-y-auto">
-                {layers}
-              </div>
-            )}
+        {/* Layers Panel - Only visible when properties panel is visible AND user has toggled it on */}
+        {layers && showLayers && hasSelection && (
+          <div className="fixed right-0 top-16 bottom-0 z-30">
+            {layers}
+          </div>
+        )}
+        
+        {/* Properties Panel - shows when there's a selection, positioned left of layers panel if layers visible */}
+        <div className={`fixed top-16 bottom-0 transition-all duration-300 z-20 ${
+          hasSelection ? 'translate-x-0' : 'translate-x-full'
+        } ${showLayers && hasSelection ? 'right-80' : 'right-0'}`}>
+          <div className="w-72 bg-white border-l border-gray-200 shadow-lg overflow-y-auto h-full">
+            {hasSelection && properties}
           </div>
         </div>
       </div>
