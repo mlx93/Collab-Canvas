@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { CanvasProvider } from './context/CanvasContext';
 import { UndoProvider } from './context/UndoContext';
+import { AIProvider } from './context/AIContext';
 import { useAuth } from './hooks/useAuth';
 import { useCanvas } from './hooks/useCanvas';
 import { useFPS } from './hooks/useFPS';
@@ -15,6 +16,7 @@ import { Canvas } from './components/Canvas/Canvas';
 import { CompactToolbar } from './components/Canvas/CompactToolbar';
 import { PropertiesPanel } from './components/Canvas/PropertiesPanel';
 import { LayersPanel } from './components/Canvas/LayersPanel';
+import { AIPanel } from './components/AI/AIPanel';
 import './App.css';
 
 // Inner component that has access to canvas context
@@ -26,7 +28,19 @@ const CanvasLayout: React.FC = () => {
     <MainLayout
       header={<Header fps={fps} showFPS={false} />}
       toolbar={<CompactToolbar />}
-      canvas={<Canvas />}
+      canvas={
+        <>
+          <Canvas />
+          {/* AI Panel - Fixed at bottom */}
+          <div className="fixed bottom-4 left-16 right-4 z-10 pointer-events-none">
+            <div className="max-w-2xl mx-auto pointer-events-auto">
+              <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                <AIPanel />
+              </div>
+            </div>
+          </div>
+        </>
+      }
       properties={<PropertiesPanel />}
       layers={<LayersPanel />}
       hasSelection={selectedIds.length > 0}
@@ -39,7 +53,9 @@ const ProtectedCanvas: React.FC = () => {
   return (
     <UndoProvider>
       <CanvasProvider>
-        <CanvasLayout />
+        <AIProvider>
+          <CanvasLayout />
+        </AIProvider>
       </CanvasProvider>
     </UndoProvider>
   );

@@ -38,6 +38,10 @@ interface CanvasContextType {
   addLine: () => void; // Simplified: creates line at viewport center with smart offset
   addText: () => void; // Simplified: creates text at viewport center with smart offset
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
+  addCircleFull: (circle: Omit<import('../types/canvas.types').CircleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void;
+  addTriangleFull: (triangle: Omit<TriangleShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void;
+  addLineFull: (line: Omit<import('../types/canvas.types').LineShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void;
+  addTextFull: (text: Omit<import('../types/canvas.types').TextShape, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void;
   updateShape: (id: string, updates: Partial<Shape>, trackUndo?: boolean) => void;
   deleteRectangle: (id: string) => void;
   setSelectedRectangle: (id: string | null) => void; // Legacy method for backward compatibility
@@ -1105,7 +1109,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       : 0;
     
     // Set proper metadata for new shapes
-    const shapesWithMetadata = newShapes.map((shape, index) => ({
+    const shapesWithMetadata = newShapes.map((shape, index) => removeUndefinedFields({
       ...shape,
       zIndex: maxZIndex + 1 + index, // Each pasted shape gets a higher z-index
       createdBy: user.email,
@@ -1155,7 +1159,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
     
     // Create duplicates with +20px offset and new IDs
-    const duplicates = selected.map((shape, index) => ({
+    const duplicates = selected.map((shape, index) => removeUndefinedFields({
       ...shape,
       id: 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
       x: shape.x + 20,
@@ -1699,6 +1703,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     addLine,
     addText,
     addRectangleFull,
+    addCircleFull,
+    addTriangleFull,
+    addLineFull,
+    addTextFull,
     updateShape,
     deleteRectangle,
     setSelectedRectangle,
@@ -1744,4 +1752,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   };
 
   return <CanvasContext.Provider value={value}>{children}</CanvasContext.Provider>;
+};
+
+export const useCanvas = () => {
+  const context = React.useContext(CanvasContext);
+  if (!context) {
+    throw new Error('useCanvas must be used within a CanvasProvider');
+  }
+  return context;
 };

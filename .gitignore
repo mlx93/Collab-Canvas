@@ -26,6 +26,11 @@
 .env.staging
 .env.staging.local
 
+# Functions runtime config and env (ignored from app root via relative path awareness)
+../functions/.runtimeconfig.json
+../functions/.env.local
+../functions/.env.*
+
 # Keep example for reference
 !.env.example
 
