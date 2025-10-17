@@ -5,7 +5,7 @@
  * Handles mapping from AI operations to canvas operations.
  */
 
-import { AIOperation, AIOperationName } from '../types/ai-tools';
+import { AIOperation } from '../types/ai-tools';
 
 /**
  * Canvas context methods interface

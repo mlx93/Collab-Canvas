@@ -45,6 +45,28 @@ interface AIProviderProps {
 }
 
 /**
+ * Helper function to save command history to localStorage
+ */
+function saveCommandToHistory(prompt: string, success: boolean, result?: string) {
+  try {
+    const history = JSON.parse(localStorage.getItem('ai_command_history') || '[]');
+    history.push({
+      prompt,
+      timestamp: Date.now(),
+      success,
+      result,
+    });
+    // Keep only last 50 commands
+    if (history.length > 50) {
+      history.shift();
+    }
+    localStorage.setItem('ai_command_history', JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed to save command history:', e);
+  }
+}
+
+/**
  * AI Provider
  */
 export function AIProvider({ children }: AIProviderProps) {
@@ -130,10 +152,12 @@ export function AIProvider({ children }: AIProviderProps) {
       const shouldExecuteServerSide = plan.operations.length >= 6 || 
         plan.operations.some(op => op.name === 'createGrid');
 
+      let resultMessage = '';
       if (shouldExecuteServerSide) {
         // Server-side execution for complex operations
         const result = await aiCanvasService.requestExecute(prompt, canvasSnapshot);
-        toast.success(`Created ${result.executionSummary.shapeIds.length} shapes`);
+        resultMessage = `Created ${result.executionSummary.shapeIds.length} shapes`;
+        toast.success(resultMessage);
       } else {
         // Client-side execution for simple operations
         // Get authenticated user info for Firestore security rules
@@ -199,7 +223,12 @@ export function AIProvider({ children }: AIProviderProps) {
             return canvasContext.selectedIds[0] || '';
           },
           updateShape: async (id, updates) => {
-            canvasContext.updateShape(id, updates, false);
+            // Add lastModifiedBy to updates for Firestore security rules
+            const updatesWithMetadata = {
+              ...updates,
+              lastModifiedBy: userEmail
+            };
+            canvasContext.updateShape(id, updatesWithMetadata, false);
             await new Promise(resolve => setTimeout(resolve, 10));
           },
           deleteSelected: async () => {
@@ -229,11 +258,16 @@ export function AIProvider({ children }: AIProviderProps) {
 
         // Show success message
         if (createdIds.length > 0) {
-          toast.success(`Created ${createdIds.length} shape(s)`);
+          resultMessage = `Created ${createdIds.length} shape(s)`;
+          toast.success(resultMessage);
         } else if (plan.operations.length > 0) {
-          toast.success('Command executed successfully');
+          resultMessage = 'Command executed successfully';
+          toast.success(resultMessage);
         }
       }
+
+      // Save to history
+      saveCommandToHistory(prompt, true, resultMessage);
 
       // Clear progress
       setProgress(null);
@@ -242,6 +276,9 @@ export function AIProvider({ children }: AIProviderProps) {
       
       const error = err as Error;
       setError(error);
+
+      // Save failed command to history
+      saveCommandToHistory(prompt, false, error.message);
 
       // Show user-friendly error message
       if (err instanceof AIServiceError) {
@@ -258,7 +295,7 @@ export function AIProvider({ children }: AIProviderProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [canvasContext, getCanvasSnapshot]);
+  }, [canvasContext, getCanvasSnapshot, user]);
 
   const value: AIContextType = {
     isProcessing,
