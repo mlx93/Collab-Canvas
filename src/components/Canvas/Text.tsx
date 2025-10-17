@@ -54,7 +54,7 @@ export const Text: React.FC<TextProps> = ({
   const textRef = useRef<Konva.Text>(null);
   const groupRef = useRef<Konva.Group>(null);
   const handleRef = useRef<Konva.Circle>(null);
-  const { updateRectangle, rectangles, viewport } = useCanvas();
+  const { updateShape, rectangles, viewport } = useCanvas();
   const { user } = useAuth();
   
   const [isEditing, setIsEditing] = useState(false);
@@ -72,10 +72,10 @@ export const Text: React.FC<TextProps> = ({
   // Throttled text update for real-time syncing (100ms delay for more responsive feel)
   const throttledTextUpdate = useRef(
     throttle((textId: string, newText: string) => {
-      updateRectangle(textId, { 
+      updateShape(textId, { 
         text: newText, 
         lastModifiedBy: user?.email || text.createdBy 
-      });
+      }, false); // Don't track undo for throttled updates
     }, 100)
   );
 
@@ -285,7 +285,7 @@ export const Text: React.FC<TextProps> = ({
     const newY = e.target.y();
     
     // Update Firestore
-    await updateRectangle(text.id, { x: newX, y: newY, lastModifiedBy: user?.email || text.createdBy });
+    await updateShape(text.id, { x: newX, y: newY, lastModifiedBy: user?.email || text.createdBy });
     
     // Clear z-index ref
     newZIndexRef.current = null;
@@ -425,7 +425,7 @@ export const Text: React.FC<TextProps> = ({
       // Wait for Firestore update to propagate before clearing active edit
       // This ensures Browser 2 has the new text props from Firestore
       // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
-      await updateRectangle(text.id, {
+      await updateShape(text.id, {
         width: finalWidth,
         height: finalHeight,
         lastModifiedBy: user?.email || text.createdBy,
@@ -543,7 +543,7 @@ export const Text: React.FC<TextProps> = ({
     const finalText = editText.trim() === '' ? 'Double-click to edit' : editText;
     
     // Update Firestore with final text (this will override any throttled updates)
-    await updateRectangle(text.id, { text: finalText, lastModifiedBy: user?.email || text.createdBy });
+    await updateShape(text.id, { text: finalText, lastModifiedBy: user?.email || text.createdBy });
     
     // Optimistic update: immediately clear edit indicator locally
     if (onOptimisticClearActiveEdit) {

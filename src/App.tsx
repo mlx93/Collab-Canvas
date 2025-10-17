@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { CanvasProvider } from './context/CanvasContext';
+import { UndoProvider } from './context/UndoContext';
 import { useAuth } from './hooks/useAuth';
 import { useCanvas } from './hooks/useCanvas';
 import { useFPS } from './hooks/useFPS';
@@ -34,9 +35,11 @@ const CanvasLayout: React.FC = () => {
 // Protected route component that shows canvas when authenticated
 const ProtectedCanvas: React.FC = () => {
   return (
-    <CanvasProvider>
-      <CanvasLayout />
-    </CanvasProvider>
+    <UndoProvider>
+      <CanvasProvider>
+        <CanvasLayout />
+      </CanvasProvider>
+    </UndoProvider>
   );
 };
 

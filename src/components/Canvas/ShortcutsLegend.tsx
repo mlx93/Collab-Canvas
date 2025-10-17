@@ -24,10 +24,25 @@ export const ShortcutsLegend: React.FC = () => {
       ]
     },
     {
+      category: 'Undo/Redo',
+      items: [
+        { key: '⌘U', description: 'Undo Last Action' },
+        { key: '⌘R', description: 'Redo Action' },
+      ]
+    },
+    {
       category: 'Movement',
       items: [
         { key: 'Drag', description: 'Move Shape(s)' },
         { key: 'Shift+Drag', description: 'Move Multiple' },
+      ]
+    },
+    {
+      category: 'Arrow Keys',
+      items: [
+        { key: '↑↓←→', description: 'Move Selected (10px)' },
+        { key: '⇧↑↓←→', description: 'Move Selected (1px)' },
+        { key: '↑↓←→', description: 'Pan Canvas (no selection)' },
       ]
     },
     {

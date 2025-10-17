@@ -25,7 +25,7 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
 };
 
 export const PropertiesPanel: React.FC = () => {
-  const { rectangles, selectedIds, updateRectangle, deleteSelected, setZIndex, bringToFront, sendToBack } = useCanvas();
+  const { rectangles, selectedIds, updateShape, deleteSelected, setZIndex, bringToFront, sendToBack } = useCanvas();
   const { user } = useAuth();
   const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
   const [isTextColorDropdownOpen, setIsTextColorDropdownOpen] = useState(false);
@@ -80,7 +80,7 @@ export const PropertiesPanel: React.FC = () => {
       setActiveEdit(selectedRectangle.id, user.userId, user.email, user.firstName, 'recoloring', cursorColor);
     }
     
-    updateRectangle(selectedRectangle.id, {
+    updateShape(selectedRectangle.id, {
       color: newColor,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
@@ -98,7 +98,7 @@ export const PropertiesPanel: React.FC = () => {
   const handleTextColorChange = (newColor: string) => {
     if (!selectedRectangle) return;
     
-    updateRectangle(selectedRectangle.id, {
+    updateShape(selectedRectangle.id, {
       textColor: newColor,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
@@ -108,7 +108,7 @@ export const PropertiesPanel: React.FC = () => {
   const handleBackgroundColorChange = (newColor: string) => {
     if (!selectedRectangle) return;
     
-    updateRectangle(selectedRectangle.id, {
+    updateShape(selectedRectangle.id, {
       backgroundColor: newColor,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
@@ -118,7 +118,7 @@ export const PropertiesPanel: React.FC = () => {
   const handleBorderColorChange = (newColor: string) => {
     if (!selectedRectangle) return;
     
-    updateRectangle(selectedRectangle.id, {
+    updateShape(selectedRectangle.id, {
       borderColor: newColor,
       lastModifiedBy: user?.email || selectedRectangle.createdBy,
     });
@@ -157,7 +157,7 @@ export const PropertiesPanel: React.FC = () => {
     if (!selectedRectangle || selectedRectangle.type !== 'text') return;
     const newFontSize = parseInt(value, 10);
     if (!isNaN(newFontSize) && newFontSize >= 1 && newFontSize <= 72) {
-      updateRectangle(selectedRectangle.id, { fontSize: newFontSize });
+      updateShape(selectedRectangle.id, { fontSize: newFontSize });
     }
   };
 
@@ -354,7 +354,7 @@ export const PropertiesPanel: React.FC = () => {
               value={selectedRectangle.strokeWidth || 2}
               onChange={(e) => {
                 const strokeWidth = Math.max(1, Math.min(20, parseInt(e.target.value) || 2));
-                updateRectangle(selectedRectangle.id, { strokeWidth });
+                updateShape(selectedRectangle.id, { strokeWidth });
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -373,7 +373,7 @@ export const PropertiesPanel: React.FC = () => {
             <textarea
               value={selectedRectangle.text || ''}
               onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { text: e.target.value });
+                updateShape(selectedRectangle.id, { text: e.target.value });
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
@@ -591,7 +591,7 @@ export const PropertiesPanel: React.FC = () => {
             <select
               value={selectedRectangle.fontFamily || 'Arial'}
               onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { fontFamily: e.target.value });
+                updateShape(selectedRectangle.id, { fontFamily: e.target.value });
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
@@ -613,7 +613,7 @@ export const PropertiesPanel: React.FC = () => {
             <select
               value={selectedRectangle.fontStyle || 'normal'}
               onChange={(e) => {
-                updateRectangle(selectedRectangle.id, { fontStyle: e.target.value });
+                updateShape(selectedRectangle.id, { fontStyle: e.target.value });
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >

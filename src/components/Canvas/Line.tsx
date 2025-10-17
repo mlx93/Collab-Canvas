@@ -50,7 +50,7 @@ const Line: React.FC<LineProps> = ({
   onOptimisticActiveEdit,
   onOptimisticClearActiveEdit
 }) => {
-  const { updateRectangle, viewport } = useCanvas();
+  const { updateShape, viewport } = useCanvas();
   const { user } = useAuth();
   const groupRef = useRef<Konva.Group>(null);
   const lineRef = useRef<Konva.Line>(null);
@@ -266,7 +266,7 @@ const Line: React.FC<LineProps> = ({
     }
     
     // Update Firestore
-    await updateRectangle(line.id, {
+    await updateShape(line.id, {
       x: newX,
       y: newY,
       x2: newX2,
@@ -350,7 +350,7 @@ const Line: React.FC<LineProps> = ({
     const newY = node.y();
     
     // Update Firestore first
-    await updateRectangle(line.id, {
+    await updateShape(line.id, {
       x: newX,
       y: newY,
       lastModifiedBy: user?.email || line.createdBy,
@@ -430,7 +430,7 @@ const Line: React.FC<LineProps> = ({
     const newY2 = node.y();
     
     // Update Firestore first
-    await updateRectangle(line.id, {
+    await updateShape(line.id, {
       x2: newX2,
       y2: newY2,
       lastModifiedBy: user?.email || line.createdBy,

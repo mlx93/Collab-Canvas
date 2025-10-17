@@ -51,7 +51,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   onOptimisticActiveEdit,
   onOptimisticClearActiveEdit
 }) => {
-  const { updateRectangle, viewport, rectangles } = useCanvas();
+  const { updateShape, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -274,7 +274,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     const y = node.y();
     
     // Update shape in Firestore
-    await updateRectangle(rectangle.id, { x, y, lastModifiedBy: user?.email || rectangle.createdBy });
+    await updateShape(rectangle.id, { x, y, lastModifiedBy: user?.email || rectangle.createdBy });
     
     // Clear z-index ref
     newZIndexRef.current = null;
@@ -392,7 +392,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       // Wait for Firestore update to propagate before clearing active edit
       // This ensures Browser 2 has the new rectangle props from Firestore
       // When clearActiveEdit() removes the live position, Browser 2 falls back to the NEW props (no flicker)
-      await updateRectangle(rectangle.id, {
+      await updateShape(rectangle.id, {
         y: finalY,
         width: finalWidth,
         height: finalHeight,

@@ -5,6 +5,7 @@ import Konva from 'konva';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useCursors } from '../../hooks/useCursors';
 import { useAuth } from '../../hooks/useAuth';
+import { useUndo } from '../../context/UndoContext';
 import { FPSCounter } from './FPSCounter';
 import { Rectangle } from './Rectangle';
 import Circle from './Circle';
@@ -26,9 +27,10 @@ import {
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
-  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateRectangle, copyShapes, pasteShapes, duplicateShapes, updateCursorPosition, deleteSelected } = useCanvas();
+  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateShape, copyShapes, pasteShapes, duplicateShapes, updateCursorPosition, deleteSelected } = useCanvas();
   const { cursors, updateOwnCursor } = useCursors();
   const { user } = useAuth();
+  const { undo, redo } = useUndo();
   const stageRef = useRef<Konva.Stage>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
@@ -223,6 +225,14 @@ export const Canvas: React.FC = () => {
             e.preventDefault();
             duplicateShapes();
             break;
+          case 'u':
+            e.preventDefault();
+            undo();
+            break;
+          case 'r':
+            e.preventDefault();
+            redo();
+            break;
           case 'escape':
             e.preventDefault();
             deselectAll();
@@ -255,7 +265,55 @@ export const Canvas: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectAll, deselectAll, copyShapes, pasteShapes, duplicateShapes, deleteSelected]);
+  }, [selectAll, deselectAll, copyShapes, pasteShapes, duplicateShapes, deleteSelected, undo, redo]);
+
+  // Move selected shapes with arrow keys
+  const moveSelectedShapes = useCallback((dx: number, dy: number) => {
+    if (selectedIds.length === 0) return;
+    
+    // Update all selected shapes
+    selectedIds.forEach(id => {
+      const shape = rectangles.find(r => r.id === id);
+      if (shape) {
+        updateShape(id, {
+          x: shape.x + dx,
+          y: shape.y + dy
+        });
+      }
+    });
+  }, [selectedIds, rectangles, updateShape]);
+
+  // Arrow key handler (separate useEffect to avoid dependency issues)
+  useEffect(() => {
+    const handleArrowKeys = (e: KeyboardEvent) => {
+      // Ignore if typing in input
+      if (e.target instanceof HTMLInputElement || 
+          e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Handle Arrow keys for moving selected shapes or panning canvas
+      if (e.key.startsWith('Arrow')) {
+        e.preventDefault();
+        const distance = e.shiftKey ? 1 : 10; // Shift = 1px, normal = 10px
+        const dx = e.key === 'ArrowLeft' ? -distance : e.key === 'ArrowRight' ? distance : 0;
+        const dy = e.key === 'ArrowUp' ? -distance : e.key === 'ArrowDown' ? distance : 0;
+        
+        if (dx !== 0 || dy !== 0) {
+          if (selectedIds.length > 0) {
+            // Move selected shapes
+            moveSelectedShapes(dx, dy);
+          } else {
+            // Pan canvas when no shapes are selected (opposite direction for intuitive navigation)
+            panViewport(-dx, -dy);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleArrowKeys);
+    return () => window.removeEventListener('keydown', handleArrowKeys);
+  }, [moveSelectedShapes, selectedIds, panViewport]);
 
   // Multi-shape movement functions
   const startMultiDrag = useCallback((draggedShapeId: string, startX: number, startY: number) => {
@@ -406,7 +464,7 @@ export const Canvas: React.FC = () => {
           const shape = rectangles.find(r => r.id === id);
           // Handle lines with x2, y2
           if (shape?.type === 'line' && newPos.x2 !== undefined && newPos.y2 !== undefined) {
-            return updateRectangle(id, {
+            return updateShape(id, {
               x: newPos.x,
               y: newPos.y,
               x2: newPos.x2,
@@ -414,7 +472,7 @@ export const Canvas: React.FC = () => {
               lastModifiedBy: user.email || (shape?.createdBy || user.email)
             });
           } else {
-            return updateRectangle(id, {
+            return updateShape(id, {
               x: newPos.x,
               y: newPos.y,
               lastModifiedBy: user.email || (shape?.createdBy || user.email)
@@ -437,7 +495,7 @@ export const Canvas: React.FC = () => {
     multiDragOffsetsRef.current = {};
     multiDragStartPositionsRef.current = {};
     setMultiDragPositions({});
-  }, [selectedIds, multiDragPositions, rectangles, user, updateRectangle]);
+  }, [selectedIds, multiDragPositions, rectangles, user, updateShape]);
 
   // Handle pan (drag empty space) - manual implementation
   const handleMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {

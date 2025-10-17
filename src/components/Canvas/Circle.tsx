@@ -53,7 +53,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   onOptimisticActiveEdit,
   onOptimisticClearActiveEdit
 }) => {
-  const { updateRectangle, viewport, rectangles } = useCanvas();
+  const { updateShape, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -258,7 +258,7 @@ const CircleComponent: React.FC<CircleProps> = ({
     const y = node.y();
     
     // Update shape in Firestore
-    await updateRectangle(circle.id, { x, y, lastModifiedBy: user?.email || circle.createdBy });
+    await updateShape(circle.id, { x, y, lastModifiedBy: user?.email || circle.createdBy });
     
     // Clear z-index ref
     newZIndexRef.current = null;
@@ -352,7 +352,7 @@ const CircleComponent: React.FC<CircleProps> = ({
       if (!circleNode) return;
       
       const finalRadius = circleNode.radius();
-      await updateRectangle(circle.id, {
+      await updateShape(circle.id, {
         radius: finalRadius,
         lastModifiedBy: user?.email || circle.createdBy,
       });

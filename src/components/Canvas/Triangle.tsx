@@ -52,7 +52,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   onOptimisticActiveEdit,
   onOptimisticClearActiveEdit
 }) => {
-  const { updateRectangle, viewport, rectangles } = useCanvas();
+  const { updateShape, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -264,7 +264,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     const x = node.x();
     const y = node.y();
     
-    await updateRectangle(triangle.id, { x, y, lastModifiedBy: user?.email || triangle.createdBy });
+    await updateShape(triangle.id, { x, y, lastModifiedBy: user?.email || triangle.createdBy });
     
     // Clear z-index ref
     newZIndexRef.current = null;
@@ -378,7 +378,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       // Clear resize dimensions
       setResizeDimensions(null);
       
-      await updateRectangle(triangle.id, {
+      await updateShape(triangle.id, {
         width: finalWidth,
         height: finalHeight,
         lastModifiedBy: user?.email || triangle.createdBy,

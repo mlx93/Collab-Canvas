@@ -10,6 +10,7 @@ import { setLiveSelection, clearLiveSelection } from '../services/liveSelections
 import { getCursorColorForUser } from '../services/cursor.service';
 import { clearActiveEdit } from '../services/activeEdits.service';
 import { clipboardService } from '../services/clipboard.service';
+import { useUndo } from './UndoContext';
 import toast from 'react-hot-toast';
 
 interface CanvasContextType {
@@ -35,7 +36,7 @@ interface CanvasContextType {
   addLine: () => void; // Simplified: creates line at viewport center with smart offset
   addText: () => void; // Simplified: creates text at viewport center with smart offset
   addRectangleFull: (rectangle: Omit<Rectangle, 'id' | 'zIndex' | 'createdAt' | 'lastModified' | 'type' | 'rotation' | 'opacity'>) => void; // Full API for tests
-  updateRectangle: (id: string, updates: Partial<Shape>) => void;
+  updateShape: (id: string, updates: Partial<Shape>, trackUndo?: boolean) => void;
   deleteRectangle: (id: string) => void;
   setSelectedRectangle: (id: string | null) => void; // Legacy method for backward compatibility
   selectShape: (id: string) => void; // NEW: Add shape to selection
@@ -74,6 +75,7 @@ interface CanvasProviderProps {
 
 export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const { user } = useAuth();
+  const { pushUndo } = useUndo();
   const [canvasState, setCanvasState] = useState<CanvasState>({
     rectangles: [],
     viewport: { x: 0, y: 0, scale: 1 },
@@ -745,6 +747,21 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         opacity: 1
       };
       await canvasService.createRectangle(fullRectangle);
+      
+      // Add undo tracking for create operation
+      if (user) {
+        const createdShape = canvasState.rectangles.find(r => r.id === tempId);
+        if (createdShape) {
+          pushUndo({
+            type: 'create',
+            timestamp: Date.now(),
+            userId: user.userId,
+            shapeIds: [tempId],
+            before: null,
+            after: createdShape
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to create rectangle in Firestore:', error);
       // Revert optimistic update on failure
@@ -756,7 +773,21 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
   };
 
-  const updateRectangle = async (id: string, updates: Partial<Shape>) => {
+  const updateShape = async (id: string, updates: Partial<Shape>, trackUndo: boolean = true) => {
+    // Capture before state for undo (for all operations)
+    const beforeShape = canvasState.rectangles.find(rect => rect.id === id);
+    const isMoveOperation = updates.x !== undefined || updates.y !== undefined;
+    
+    // Check for resize operations using type-safe property access
+    const isResizeOperation = 
+      ('width' in updates && updates.width !== undefined) ||
+      ('height' in updates && updates.height !== undefined) ||
+      ('radius' in updates && updates.radius !== undefined) ||
+      ('x2' in updates && updates.x2 !== undefined) ||
+      ('y2' in updates && updates.y2 !== undefined);
+    
+    const isModifyOperation = isMoveOperation || isResizeOperation || updates.color !== undefined || updates.opacity !== undefined || updates.rotation !== undefined;
+    
     // Optimistic update: update local state immediately
     setCanvasState(prev => {
       // If manual z-index update, use manualSetZIndex (don't apply zIndex in map yet)
@@ -809,6 +840,20 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       // TODO (Phase 1 - Circle/Triangle/Line/Text): Refactor canvas.service.ts to accept Shape union type
       // For now, using 'as any' cast since we only have rectangles and dev is working
       await canvasService.updateRectangle(id, updates as any);
+      
+      // Add undo tracking for all modify operations (only if trackUndo is true)
+      if (trackUndo && isModifyOperation && beforeShape && user) {
+        const afterShape = { ...beforeShape, ...updates } as Shape;
+        const actionType = isMoveOperation ? 'move' : isResizeOperation ? 'modify' : 'modify';
+        pushUndo({
+          type: actionType,
+          timestamp: Date.now(),
+          userId: user.userId,
+          shapeIds: [id],
+          before: beforeShape,
+          after: afterShape
+        });
+      }
     } catch (error) {
       console.error('Failed to update rectangle in Firestore:', error);
       // The Firestore listener will eventually sync the correct state
@@ -1075,6 +1120,17 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     }
     
     const selectedCount = canvasState.selectedIds.length;
+    const shapesToDelete = canvasState.rectangles.filter(r => canvasState.selectedIds.includes(r.id));
+    
+    // Capture undo action BEFORE deleting
+    pushUndo({
+      type: 'delete',
+      timestamp: Date.now(),
+      userId: user.userId,
+      shapeIds: canvasState.selectedIds,
+      before: shapesToDelete,
+      after: null
+    });
     
     // Delete all selected shapes
     const deletePromises = canvasState.selectedIds.map(id => deleteRectangle(id));
@@ -1218,7 +1274,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     addLine,
     addText,
     addRectangleFull,
-    updateRectangle,
+    updateShape,
     deleteRectangle,
     setSelectedRectangle,
     
