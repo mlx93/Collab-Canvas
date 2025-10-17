@@ -26,10 +26,16 @@ interface AIContextType {
     total: number;
     operation?: AIOperation;
   } | null;
+  clarification: {
+    question: string;
+    options: string[];
+    originalPrompt: string;
+  } | null;
 
   // Methods
-  executeCommand: (prompt: string) => Promise<void>;
+  executeCommand: (prompt: string, clarificationResponse?: string) => Promise<void>;
   clearError: () => void;
+  cancelClarification: () => void;
 }
 
 /**
@@ -78,6 +84,11 @@ export function AIProvider({ children }: AIProviderProps) {
     total: number;
     operation?: AIOperation;
   } | null>(null);
+  const [clarification, setClarification] = useState<{
+    question: string;
+    options: string[];
+    originalPrompt: string;
+  } | null>(null);
 
   const canvasContext = useCanvas();
   const { user } = useAuth();
@@ -90,27 +101,50 @@ export function AIProvider({ children }: AIProviderProps) {
   }, []);
 
   /**
+   * Cancel clarification and reset state
+   */
+  const cancelClarification = useCallback(() => {
+    setClarification(null);
+    setIsProcessing(false);
+  }, []);
+
+  /**
    * Get current canvas snapshot for AI
    */
   const getCanvasSnapshot = useCallback((): CanvasSnapshot => {
-    const shapes = canvasContext.rectangles.map(shape => ({
-      id: shape.id,
-      type: shape.type as any,
-      name: shape.name,
-      x: shape.x,
-      y: shape.y,
-      width: (shape as any).width,
-      height: (shape as any).height,
-      radius: (shape as any).radius,
-      x2: (shape as any).x2,
-      y2: (shape as any).y2,
-      color: shape.color,
-      opacity: shape.opacity || 1,
-      rotation: shape.rotation || 0,
-      zIndex: shape.zIndex,
-      visible: shape.visible !== false,
-      locked: shape.locked || false,
-    }));
+    // Group shapes by type to generate sequential names for unnamed shapes
+    const shapeCountsByType: Record<string, number> = {};
+    
+    const shapes = canvasContext.rectangles.map((shape, index) => {
+      // Generate a fallback name if shape doesn't have one
+      let displayName = shape.name;
+      if (!displayName || displayName.trim() === '') {
+        const type = shape.type;
+        shapeCountsByType[type] = (shapeCountsByType[type] || 0) + 1;
+        // Capitalize first letter: circle -> Circle
+        const capitalizedType = type.charAt(0).toUpperCase() + type.slice(1);
+        displayName = `${capitalizedType} ${shapeCountsByType[type]}`;
+      }
+      
+      return {
+        id: shape.id,
+        type: shape.type as any,
+        name: displayName,
+        x: shape.x,
+        y: shape.y,
+        width: (shape as any).width,
+        height: (shape as any).height,
+        radius: (shape as any).radius,
+        x2: (shape as any).x2,
+        y2: (shape as any).y2,
+        color: shape.color,
+        opacity: shape.opacity || 1,
+        rotation: shape.rotation || 0,
+        zIndex: shape.zIndex,
+        visible: shape.visible !== false,
+        locked: shape.locked || false,
+      };
+    });
 
     // Calculate visible viewport dimensions in canvas coordinates
     const viewport = canvasContext.viewport;
@@ -143,7 +177,7 @@ export function AIProvider({ children }: AIProviderProps) {
   /**
    * Execute an AI command
    */
-  const executeCommand = useCallback(async (prompt: string) => {
+  const executeCommand = useCallback(async (prompt: string, clarificationResponse?: string) => {
     if (!prompt || prompt.trim().length === 0) {
       toast.error('Please enter a command');
       return;
@@ -157,16 +191,30 @@ export function AIProvider({ children }: AIProviderProps) {
       // Get current canvas state
       const canvasSnapshot = getCanvasSnapshot();
 
+      // Build enhanced prompt if this is a clarification response
+      let enhancedPrompt = prompt;
+      if (clarificationResponse) {
+        enhancedPrompt = `${prompt} (User clarified: ${clarificationResponse})`;
+      }
+
       // Request plan from AI
-      const plan = await aiCanvasService.requestPlan(prompt, canvasSnapshot);
+      const plan = await aiCanvasService.requestPlan(enhancedPrompt, canvasSnapshot);
       setLastPlan(plan);
 
       // Check if AI needs clarification
       if (plan.needsClarification) {
-        toast.error(plan.needsClarification.question);
+        // Show clarification modal instead of toast
+        setClarification({
+          question: plan.needsClarification.question,
+          options: plan.needsClarification.options || [],
+          originalPrompt: prompt,
+        });
         setIsProcessing(false);
         return;
       }
+
+      // Clear any previous clarification
+      setClarification(null);
 
       // Determine execution mode
       // Simple operations (< 6): Client-side for speed (~100ms)
@@ -324,8 +372,10 @@ export function AIProvider({ children }: AIProviderProps) {
     lastPlan,
     error,
     progress,
+    clarification,
     executeCommand,
     clearError,
+    cancelClarification,
   };
 
   return <AIContext.Provider value={value}>{children}</AIContext.Provider>;

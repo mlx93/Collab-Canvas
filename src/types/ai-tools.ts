@@ -107,8 +107,9 @@ export interface AIToolSchemas {
   bringToFront: { id: string };
   sendToBack: { id: string };
 
-  // Delete Command
+  // Delete Commands
   deleteElement: { id: string };
+  deleteMultipleElements: { ids: string[] };
 
   // Canvas Insight
   getCanvasState: {};

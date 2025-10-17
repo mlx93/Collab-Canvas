@@ -8,6 +8,7 @@ import React, { useState } from 'react';
 import { AICommandInput } from './AICommandInput';
 import { AILoadingIndicator } from './AILoadingIndicator';
 import { AIHistoryModal } from './AIHistoryModal';
+import { AIClarificationModal } from './AIClarificationModal';
 import { useAI } from '../../context/AIContext';
 
 interface AIPanelProps {
@@ -15,9 +16,9 @@ interface AIPanelProps {
 }
 
 export function AIPanel({ className = '' }: AIPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false); // Start collapsed
   const [showHistory, setShowHistory] = useState(false);
-  const { isProcessing } = useAI();
+  const { isProcessing, clarification, executeCommand, cancelClarification } = useAI();
 
   return (
     <>
@@ -127,6 +128,19 @@ export function AIPanel({ className = '' }: AIPanelProps) {
         isOpen={showHistory} 
         onClose={() => setShowHistory(false)} 
       />
+
+      {/* Clarification Modal */}
+      {clarification && (
+        <AIClarificationModal
+          question={clarification.question}
+          options={clarification.options}
+          onSelect={(selectedOption) => {
+            // Re-execute command with user's clarification
+            executeCommand(clarification.originalPrompt, selectedOption);
+          }}
+          onCancel={cancelClarification}
+        />
+      )}
     </>
   );
 }

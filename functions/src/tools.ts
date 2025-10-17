@@ -117,11 +117,11 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'moveElement',
-        description: 'Move an element to a new position',
+        description: 'Move an element to a new position. Use the exact Name or ID from the canvas state list.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element to move' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state (e.g., "Blue Circle 1" or the UUID)' },
             x: { type: 'number', description: 'New X position' },
             y: { type: 'number', description: 'New Y position' },
           },
@@ -133,11 +133,11 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'resizeElement',
-        description: 'Resize an element',
+        description: 'Resize an element. Use the exact Name or ID from the canvas state list.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state' },
             width: { type: 'number', description: 'New width (for rectangles/triangles)' },
             height: { type: 'number', description: 'New height (for rectangles/triangles)' },
             radius: { type: 'number', description: 'New radius (for circles)' },
@@ -152,11 +152,11 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'rotateElement',
-        description: 'Rotate an element',
+        description: 'Rotate an element. Use the exact Name or ID from the canvas state list.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state' },
             rotation: { type: 'number', description: 'Rotation angle in degrees (0-360)' },
           },
           required: ['id', 'rotation'],
@@ -167,11 +167,11 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'updateStyle',
-        description: 'Update the style properties of an element',
+        description: 'Update the style properties of an element. Use the exact Name or ID from the canvas state list.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state' },
             color: { type: 'string', description: 'New hex color code' },
             opacity: { type: 'number', description: 'New opacity (0-1)' },
             visible: { type: 'boolean', description: 'Visibility state' },
@@ -188,14 +188,14 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'arrangeElements',
-        description: 'Arrange multiple elements in a row or column',
+        description: 'Arrange multiple elements in a row or column. Use exact Names or IDs from canvas state for each element.',
         parameters: {
           type: 'object',
           properties: {
             ids: { 
               type: 'array', 
               items: { type: 'string' },
-              description: 'Array of element IDs to arrange' 
+              description: 'Array of element Names or IDs from canvas state (e.g., ["Blue Circle 1", "Red Rectangle", "Header Text"])' 
             },
             arrangement: { 
               type: 'string', 
@@ -241,11 +241,11 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'bringToFront',
-        description: 'Bring an element to the front (highest z-index)',
+        description: 'Bring an element to the front (highest z-index). Use exact Name or ID from canvas state.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state' },
           },
           required: ['id'],
         },
@@ -255,29 +255,47 @@ export function getToolDefinitions(): ChatCompletionTool[] {
       type: 'function',
       function: {
         name: 'sendToBack',
-        description: 'Send an element to the back (lowest z-index)',
+        description: 'Send an element to the back (lowest z-index). Use exact Name or ID from canvas state.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element' },
+            id: { type: 'string', description: 'Name or ID of the element from canvas state' },
           },
           required: ['id'],
         },
       },
     },
 
-    // Delete tool
+    // Delete tools
     {
       type: 'function',
       function: {
         name: 'deleteElement',
-        description: 'Delete an element from the canvas',
+        description: 'Delete a single element from the canvas. Use exact Name or ID from canvas state.',
         parameters: {
           type: 'object',
           properties: {
-            id: { type: 'string', description: 'ID of the element to delete' },
+            id: { type: 'string', description: 'Name or ID of the element to delete from canvas state' },
           },
           required: ['id'],
+        },
+      },
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'deleteMultipleElements',
+        description: 'Delete multiple elements from the canvas at once. Faster than calling deleteElement multiple times. For bulk operations like "delete all circles" or "delete those 5 rectangles".',
+        parameters: {
+          type: 'object',
+          properties: {
+            ids: { 
+              type: 'array', 
+              items: { type: 'string' },
+              description: 'Array of Names or IDs of elements to delete from canvas state' 
+            },
+          },
+          required: ['ids'],
         },
       },
     },

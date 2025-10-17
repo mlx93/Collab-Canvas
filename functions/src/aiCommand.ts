@@ -231,13 +231,69 @@ Positioning guidelines:
 - "on the right" → use viewport.centerX + viewport.visibleWidth/3, viewport.centerY
 - If no position specified → default to viewport center with slight offset
 
+CRITICAL: Shape Identification Rules
+
+**Shape Type Aliases:**
+- "square" or "box" = rectangle
+- "oval" = circle  
+- All other types: rectangle, circle, triangle, line, text
+
+**Selection Context:**
+- Canvas state includes selectedIds array showing which shapes are currently selected
+- If user says "the selected [shape]" or "selected shapes", ONLY use shapes from selectedIds
+- Example: "move the selected circle 100 pixels right" → find circle in selectedIds, move it
+
+**Shape Identification for Operations:**
+When you need to manipulate shapes (move, resize, rotate, delete, style):
+1. **ALWAYS use the ID field (UUID) in your operation parameters**, NOT the Name field
+   - Canvas state shows: Name: "Circle 1" | ID: abc-123-xyz
+   - ✅ Correct operation: { "id": "abc-123-xyz", "x": 300 }
+   - ❌ Wrong operation: { "id": "Circle 1", "x": 300 }
+
+2. **Use Name field ONLY for identification/clarification**, never in operation parameters
+   - Names help you identify which shape: "Circle 1 is the one at (300, 200)"
+   - But operation MUST use the ID: "abc-123-xyz"
+
+3. **If user references "the selected circle":**
+   - Check selectedIds array for circle types
+   - Use that shape's ID field in your operation
+
+4. **If user says "move the circle" and multiple circles exist:**
+   - Check for context clues (color, position, "first", "selected", etc.)
+   - If still ambiguous, return needsClarification with Name + position for each
+   - User picks one, then use that shape's ID field in operation
+
+5. **For "all circles" or "all rectangles":**
+   - Filter shapes by type field
+   - Collect all their ID fields (UUIDs)
+   - Use deleteMultipleElements with array of IDs: ["uuid1", "uuid2", "uuid3"]
+
+6. **NEVER use shape TYPE alone** ("circle", "rectangle") as an ID - this will ALWAYS fail
+
+Clarification Format:
+{
+  "operations": [],
+  "needsClarification": {
+    "question": "Which circle? I see:",
+    "options": ["Circle 1 at (300, 200)", "Circle 2 at (500, 400)"]
+  }
+}
+
+Example: If canvas state shows:
+  • Name: "Red Login Button" | Type: rectangle | Color: #ef4444
+  • Name: "Blue Circle 1" | Type: circle | Color: #3b82f6
+  • Name: "Header Text" | Type: text | Color: #1f2937
+
+When user says "move the red button to 500, 300":
+✅ Correct: Use "Red Login Button" as the ID
+❌ Wrong: Use "rectangle" or "button" as the ID
+
 Other guidelines:
 1. Use the provided tools to execute user commands
 2. Always provide descriptive shape names when creating elements
 3. Use sensible defaults for colors (e.g., #3b82f6 for blue, #ef4444 for red)
 4. For complex commands, break them into multiple tool calls
-5. If a command is ambiguous, ask for clarification
-6. Reference shapes by their name or ID (name is preferred for natural language)
+5. Reference shapes by their exact name or ID from the canvas state list
 
 Canvas details:
 - Canvas is 5000x5000 pixels (total space)
@@ -255,15 +311,26 @@ When creating complex layouts:
  * Build user message with canvas context
  */
 function buildUserMessage(prompt: string, canvasState: any): string {
+  const selectedIds = canvasState.selectedIds || [];
+  
+  // Format shape list with clear identification
   const shapeSummary = canvasState.shapes
-    .map((s: any) => `- ${s.name || s.type} (${s.type}): ${s.color} at (${Math.round(s.x)}, ${Math.round(s.y)})`)
+    .map((s: any) => {
+      const name = s.name || `${s.type} ${s.id.substring(0, 8)}`;
+      const position = `(${Math.round(s.x)}, ${Math.round(s.y)})`;
+      const isSelected = selectedIds.includes(s.id);
+      const selectedTag = isSelected ? ' [SELECTED]' : '';
+      
+      // CRITICAL: ID field comes first and is the UUID to use in operations
+      return `  • ID: ${s.id} | Name: "${name}" | Type: ${s.type} | Color: ${s.color} | Position: ${position}${selectedTag}`;
+    })
     .join('\n');
 
   const viewport = canvasState.viewport || {};
   
   return `Canvas state:
 Total canvas size: ${canvasState.canvasWidth}px × ${canvasState.canvasHeight}px
-Selected shapes: ${canvasState.selectedIds.length} shape(s)
+Selected shapes: ${selectedIds.length} shape(s) - marked with [SELECTED]
 
 Viewport (visible area):
 - Center: (${Math.round(viewport.centerX || 0)}, ${Math.round(viewport.centerY || 0)})
@@ -271,6 +338,7 @@ Viewport (visible area):
 - Zoom level: ${viewport.scale || 1}x
 
 Current shapes on canvas (${canvasState.shapes.length} total):
+CRITICAL: In your operations, use the ID field (the UUID), NOT the Name field!
 ${shapeSummary || 'No shapes yet'}
 
 User command: ${prompt}`;
@@ -294,7 +362,7 @@ function shouldUseServerExecution(plan: AIPlan, mode: string): boolean {
   }
 
   // Execute server-side if plan contains createGrid (typically many operations)
-  const hasGrid = plan.operations.some(op => op.name === 'createGrid');
+  const hasGrid = plan.operations.some((op: any) => op.name === 'createGrid');
   if (hasGrid) {
     return true;
   }
