@@ -10,7 +10,7 @@ import { AIPlan, AIOperation, CanvasSnapshot } from '../types/ai-tools';
 import { aiCanvasService, AIServiceError } from '../services/AICanvasService';
 import { executePlan, CanvasContextMethods } from '../utils/aiPlanExecutor';
 import { useCanvas } from './CanvasContext';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 /**
