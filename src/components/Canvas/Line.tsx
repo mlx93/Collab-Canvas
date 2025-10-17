@@ -10,7 +10,8 @@ import {
   clearActiveEdit, 
   subscribeToActiveEdit, 
   getUserCursorColor,
-  ActiveEdit 
+  ActiveEdit,
+  createActiveEditData
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
@@ -18,6 +19,7 @@ import {
   LivePosition
 } from '../../services/livePositions.service';
 import { throttle } from '../../utils/throttle';
+import { EditingIndicator } from '../Collaboration/EditingIndicator';
 
 export interface LineProps {
   line: LineShape;
@@ -30,6 +32,8 @@ export interface LineProps {
   onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
   onMultiDragEnd?: () => void;
   multiDragPosition?: { x: number; y: number; x2?: number; y2?: number };
+  onOptimisticActiveEdit?: (shapeId: string, activeEdit: any) => void;
+  onOptimisticClearActiveEdit?: (shapeId: string) => void;
 }
 
 const Line: React.FC<LineProps> = ({ 
@@ -42,7 +46,9 @@ const Line: React.FC<LineProps> = ({
   onMultiDragStart,
   onMultiDragUpdate,
   onMultiDragEnd,
-  multiDragPosition
+  multiDragPosition,
+  onOptimisticActiveEdit,
+  onOptimisticClearActiveEdit
 }) => {
   const { updateRectangle, viewport } = useCanvas();
   const { user } = useAuth();
@@ -56,17 +62,18 @@ const Line: React.FC<LineProps> = ({
   const [isResizingStart, setIsResizingStart] = useState(false);
   const [isResizingEnd, setIsResizingEnd] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ x?: number; y?: number; x2?: number; y2?: number } | null>(null);
+  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number; x2: number; y2: number } | null>(null);
   const [, forceUpdate] = useState({});
   
   // Collaboration state
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
   
-  // Throttled live position update (60 FPS)
+  // Throttled live position update (120 FPS for ultra-smooth indicators)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, x2?: number, y2?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, undefined, x2, y2);
-    }, 16)
+    }, 8)
   );
 
   // Force group position update when multiDragPosition changes (for multi-select dragging)
@@ -125,8 +132,8 @@ const Line: React.FC<LineProps> = ({
     };
   }, [line.id, user?.userId, activeEdit]);
 
-  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
-  const currentPos = livePosition && livePosition.userId !== user?.userId
+  // Shape position (for actual shape rendering) - excludes immediate drag position
+  const shapePos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, x2: livePosition.x2 || line.x2, y2: livePosition.y2 || line.y2 }
     : multiDragPosition && !isDragging
     ? { x: multiDragPosition.x, y: multiDragPosition.y, x2: multiDragPosition.x2 ?? line.x2, y2: multiDragPosition.y2 ?? line.y2 }
@@ -135,6 +142,11 @@ const Line: React.FC<LineProps> = ({
     : resizeDimensions && isResizingEnd
     ? { x: line.x, y: line.y, x2: resizeDimensions.x2 ?? line.x2, y2: resizeDimensions.y2 ?? line.y2 }
     : { x: line.x, y: line.y, x2: line.x2, y2: line.y2 };
+
+  // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
+  const indicatorPos = immediateDragPosition && isDragging
+    ? { x: immediateDragPosition.x, y: immediateDragPosition.y, x2: immediateDragPosition.x2, y2: immediateDragPosition.y2 }
+    : shapePos;
 
   // Calculate line midpoint for cursor positioning during drag
   // const midpointX = (currentPos.x + currentPos.x2) / 2;
@@ -153,6 +165,13 @@ const Line: React.FC<LineProps> = ({
     // Set active edit state
     const cursorColor = getUserCursorColor(user.userId);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'moving', cursorColor);
+      onOptimisticActiveEdit(line.id, activeEditData);
+    }
+    // Async update: sync to RTDB for other users
     setActiveEdit(line.id, user.userId, user.email, firstName, 'moving', cursorColor);
     
     // Start multi-drag if this shape is part of a multi-selection
@@ -164,6 +183,12 @@ const Line: React.FC<LineProps> = ({
   // Handle drag move
   const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     const stage = e.target.getStage();
+    const node = e.target;
+    const x = node.x();
+    const y = node.y();
+    
+    // Store immediate drag position for instant indicator updates
+    setImmediateDragPosition({ x, y, x2: line.x2, y2: line.y2 });
     
     // Update cursor to ACTUAL mouse position in canvas coordinates
     if (updateOwnCursor && stage) {
@@ -216,6 +241,7 @@ const Line: React.FC<LineProps> = ({
   // Handle drag end
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     setIsDragging(false);
+    setImmediateDragPosition(null);
     const group = groupRef.current;
     if (!group) return;
     
@@ -251,9 +277,15 @@ const Line: React.FC<LineProps> = ({
     // End multi-drag if this shape was part of a multi-selection
     if (onMultiDragEnd) {
       onMultiDragEnd();
+      // Don't clear active edit here - endMultiDrag will handle cleanup for all selected shapes
+    } else {
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(line.id);
+      }
+      // Async update: clear from RTDB for other users
+      clearActiveEdit(line.id);
     }
-    
-    clearActiveEdit(line.id);
   };
 
   // Handle start point resize
@@ -265,6 +297,13 @@ const Line: React.FC<LineProps> = ({
     
     const cursorColor = getUserCursorColor(user.userId);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'resizing', cursorColor);
+      onOptimisticActiveEdit(line.id, activeEditData);
+    }
+    // Async update: sync to RTDB for other users
     setActiveEdit(line.id, user.userId, user.email, firstName, 'resizing', cursorColor);
   };
 
@@ -320,6 +359,12 @@ const Line: React.FC<LineProps> = ({
     // Clear states after update
     setIsResizingStart(false);
     setResizeDimensions(null);
+    
+    // Optimistic update: immediately clear edit indicator locally
+    if (onOptimisticClearActiveEdit) {
+      onOptimisticClearActiveEdit(line.id);
+    }
+    // Async update: clear from RTDB for other users
     clearActiveEdit(line.id);
   };
 
@@ -332,6 +377,13 @@ const Line: React.FC<LineProps> = ({
     
     const cursorColor = getUserCursorColor(user.userId);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'resizing', cursorColor);
+      onOptimisticActiveEdit(line.id, activeEditData);
+    }
+    // Async update: sync to RTDB for other users
     setActiveEdit(line.id, user.userId, user.email, firstName, 'resizing', cursorColor);
   };
 
@@ -387,12 +439,35 @@ const Line: React.FC<LineProps> = ({
     // Clear states after update
     setIsResizingEnd(false);
     setResizeDimensions(null);
+    
+    // Optimistic update: immediately clear edit indicator locally
+    if (onOptimisticClearActiveEdit) {
+      onOptimisticClearActiveEdit(line.id);
+    }
+    // Async update: clear from RTDB for other users
     clearActiveEdit(line.id);
   };
 
-  // Don't render if renderOnlyIndicator is true (for indicators layer)
+  // Render only indicator (for indicators layer)
   if (renderOnlyIndicator) {
-    return null;
+    if (!showIndicator || !activeEdit || activeEdit.userId === user?.userId) {
+      return null;
+    }
+    
+    const indicatorPos = livePosition && livePosition.userId !== user?.userId
+      ? { x: livePosition.x, y: livePosition.y, width: Math.abs((livePosition.x2 || line.x2) - livePosition.x), height: Math.abs((livePosition.y2 || line.y2) - livePosition.y) }
+      : { x: line.x, y: line.y, width: Math.abs(line.x2 - line.x), height: Math.abs(line.y2 - line.y) };
+    
+    return (
+      <EditingIndicator
+        activeEdit={activeEdit}
+        rectangleX={indicatorPos.x}
+        rectangleY={indicatorPos.y}
+        rectangleWidth={indicatorPos.width}
+        rectangleHeight={indicatorPos.height}
+        scale={viewport.scale}
+      />
+    );
   }
 
   return (
@@ -411,7 +486,7 @@ const Line: React.FC<LineProps> = ({
         {/* Selection outline (thicker, behind) */}
         {isSelected && (
           <KonvaLine
-            points={[currentPos.x, currentPos.y, currentPos.x2, currentPos.y2]}
+            points={[shapePos.x, shapePos.y, shapePos.x2, shapePos.y2]}
             stroke="#1565C0"
             strokeWidth={Math.max(line.strokeWidth, 4) + 8}
             strokeScaleEnabled={false}
@@ -423,7 +498,7 @@ const Line: React.FC<LineProps> = ({
         {/* Main line (on top) */}
         <KonvaLine
           ref={lineRef}
-          points={[currentPos.x, currentPos.y, currentPos.x2, currentPos.y2]}
+          points={[shapePos.x, shapePos.y, shapePos.x2, shapePos.y2]}
           stroke={line.color}
           strokeWidth={Math.max(line.strokeWidth, 4)}
           opacity={line.opacity}
@@ -437,8 +512,8 @@ const Line: React.FC<LineProps> = ({
       {isSelected && (
         <Circle
           ref={startHandleRef}
-          x={currentPos.x}
-          y={currentPos.y}
+          x={shapePos.x}
+          y={shapePos.y}
           radius={6}
           fill="white"
           stroke="#1565C0"
@@ -471,8 +546,8 @@ const Line: React.FC<LineProps> = ({
       {isSelected && (
         <Circle
           ref={endHandleRef}
-          x={currentPos.x2}
-          y={currentPos.y2}
+          x={shapePos.x2}
+          y={shapePos.y2}
           radius={6}
           fill="white"
           stroke="#1565C0"
@@ -500,6 +575,8 @@ const Line: React.FC<LineProps> = ({
           }}
         />
       )}
+      
+      {/* Editing indicator is rendered in the indicators layer for proper z-index */}
     </>
   );
 };

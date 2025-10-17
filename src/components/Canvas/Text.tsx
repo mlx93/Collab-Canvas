@@ -9,7 +9,8 @@ import {
   clearActiveEdit, 
   subscribeToActiveEdit, 
   getUserCursorColor,
-  ActiveEdit
+  ActiveEdit,
+  createActiveEditData
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
@@ -31,6 +32,8 @@ export interface TextProps {
   onMultiDragEnd?: () => void;
   multiDragPosition?: { x: number; y: number };
   onEditingChange?: (editing: boolean, textData?: { x: number; y: number; width: number; height: number; text: string; fontSize: number; fontFamily: string; fontStyle: string; fontWeight: string; textColor?: string; backgroundColor?: string; editText: string; onChange: (text: string) => void; onSubmit: () => void; onCancel: () => void }) => void;
+  onOptimisticActiveEdit?: (shapeId: string, activeEdit: any) => void;
+  onOptimisticClearActiveEdit?: (shapeId: string) => void;
 }
 
 export const Text: React.FC<TextProps> = ({
@@ -44,7 +47,9 @@ export const Text: React.FC<TextProps> = ({
   onMultiDragUpdate,
   onMultiDragEnd,
   multiDragPosition,
-  onEditingChange
+  onEditingChange,
+  onOptimisticActiveEdit,
+  onOptimisticClearActiveEdit
 }) => {
   const textRef = useRef<Konva.Text>(null);
   const groupRef = useRef<Konva.Group>(null);
@@ -56,6 +61,7 @@ export const Text: React.FC<TextProps> = ({
   const [editText, setEditText] = useState(text.text);
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -73,11 +79,11 @@ export const Text: React.FC<TextProps> = ({
     }, 100)
   );
 
-  // Throttled live position update for smooth real-time streaming (16ms = 60 FPS)
+  // Throttled live position update for ultra-smooth real-time streaming (8ms = 120 FPS)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 16)
+    }, 8)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
@@ -88,8 +94,8 @@ export const Text: React.FC<TextProps> = ({
     }
   }, [multiDragPosition, isDragging]);
 
-  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
-  const currentPos = livePosition && livePosition.userId !== user?.userId
+  // Shape position (for actual shape rendering) - excludes immediate drag position
+  const shapePos = livePosition && livePosition.userId !== user?.userId
     ? { 
         x: livePosition.x, 
         y: livePosition.y, 
@@ -121,12 +127,23 @@ export const Text: React.FC<TextProps> = ({
         zIndex: text.zIndex
       };
 
-  const currentX = currentPos.x;
-  const currentY = currentPos.y;
+  // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
+  const indicatorPos = immediateDragPosition && isDragging
+    ? {
+        x: immediateDragPosition.x,
+        y: immediateDragPosition.y,
+        width: text.width,
+        height: text.height,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : text.zIndex
+      }
+    : shapePos;
+
+  const currentX = shapePos.x;
+  const currentY = shapePos.y;
   
-  // Calculate display dimensions (use currentPos which handles live position and resize)
-  const displayWidth = currentPos.width;
-  const displayHeight = currentPos.height;
+  // Calculate display dimensions (use shapePos which handles live position and resize)
+  const displayWidth = shapePos.width;
+  const displayHeight = shapePos.height;
 
   // Update resize handle position when selection changes or when resizing
   useEffect(() => {
@@ -190,7 +207,16 @@ export const Text: React.FC<TextProps> = ({
     newZIndexRef.current = maxZIndex + 1;
     
     if (user?.email) {
-      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'moving', getUserCursorColor(user.userId));
+      const cursorColor = getUserCursorColor(user.userId);
+      const firstName = user.firstName || 'User';
+      
+      // Optimistic update: immediately show edit indicator locally
+      if (onOptimisticActiveEdit) {
+        const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'moving', cursorColor);
+        onOptimisticActiveEdit(text.id, activeEditData);
+      }
+      // Async update: sync to RTDB for other users
+      setActiveEdit(text.id, user.userId, user.email, firstName, 'moving', cursorColor);
     }
     
     // Start multi-drag if this shape is part of a multi-selection
@@ -206,6 +232,9 @@ export const Text: React.FC<TextProps> = ({
     const stage = node.getStage();
     const newX = node.x();
     const newY = node.y();
+    
+    // Store immediate drag position for instant indicator updates
+    setImmediateDragPosition({ x: newX, y: newY });
     
     // Update resize handle position during drag (bottom-right corner)
     if (handleRef.current) {
@@ -250,6 +279,7 @@ export const Text: React.FC<TextProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (renderOnlyIndicator) return;
     setIsDragging(false);
+    setImmediateDragPosition(null);
     
     const newX = e.target.x();
     const newY = e.target.y();
@@ -263,11 +293,16 @@ export const Text: React.FC<TextProps> = ({
     // End multi-drag if this shape was part of a multi-selection
     if (onMultiDragEnd) {
       onMultiDragEnd();
-    }
-    
-    // Clear active edit
-    if (user?.email) {
-      clearActiveEdit(text.id);
+      // Don't clear active edit here - endMultiDrag will handle cleanup for all selected shapes
+    } else {
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(text.id);
+      }
+      // Async update: clear from RTDB for other users
+      if (user?.email) {
+        clearActiveEdit(text.id);
+      }
     }
   };
 
@@ -300,7 +335,16 @@ export const Text: React.FC<TextProps> = ({
     };
     
     if (user?.email) {
-      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'resizing', getUserCursorColor(user.userId));
+      const cursorColor = getUserCursorColor(user.userId);
+      const firstName = user.firstName || 'User';
+      
+      // Optimistic update: immediately show edit indicator locally
+      if (onOptimisticActiveEdit) {
+        const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'resizing', cursorColor);
+        onOptimisticActiveEdit(text.id, activeEditData);
+      }
+      // Async update: sync to RTDB for other users
+      setActiveEdit(text.id, user.userId, user.email, firstName, 'resizing', cursorColor);
     }
 
     // Handle mouse move and mouse up events
@@ -391,7 +435,11 @@ export const Text: React.FC<TextProps> = ({
       initialResizeState.current = null;
       newZIndexRef.current = null;
       
-      // Clear active edit
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(text.id);
+      }
+      // Async update: clear from RTDB for other users
       if (user?.email) {
         clearActiveEdit(text.id);
       }
@@ -412,7 +460,16 @@ export const Text: React.FC<TextProps> = ({
     setIsEditing(true);
     
     if (user?.email) {
-      setActiveEdit(text.id, user.userId, user.email, user.firstName || 'User', 'editing', getUserCursorColor(user.userId));
+      const cursorColor = getUserCursorColor(user.userId);
+      const firstName = user.firstName || 'User';
+      
+      // Optimistic update: immediately show edit indicator locally
+      if (onOptimisticActiveEdit) {
+        const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'editing', cursorColor);
+        onOptimisticActiveEdit(text.id, activeEditData);
+      }
+      // Async update: sync to RTDB for other users
+      setActiveEdit(text.id, user.userId, user.email, firstName, 'editing', cursorColor);
     }
     
     // Notify parent that editing started - this will be updated via useEffect below
@@ -488,7 +545,11 @@ export const Text: React.FC<TextProps> = ({
     // Update Firestore with final text (this will override any throttled updates)
     await updateRectangle(text.id, { text: finalText, lastModifiedBy: user?.email || text.createdBy });
     
-    // Clear active edit
+    // Optimistic update: immediately clear edit indicator locally
+    if (onOptimisticClearActiveEdit) {
+      onOptimisticClearActiveEdit(text.id);
+    }
+    // Async update: clear from RTDB for other users
     if (user?.email) {
       clearActiveEdit(text.id);
     }
@@ -504,7 +565,11 @@ export const Text: React.FC<TextProps> = ({
     setIsEditing(false);
     setEditText(text.text);
     
-    // Clear active edit
+    // Optimistic update: immediately clear edit indicator locally
+    if (onOptimisticClearActiveEdit) {
+      onOptimisticClearActiveEdit(text.id);
+    }
+    // Async update: clear from RTDB for other users
     if (user?.email) {
       clearActiveEdit(text.id);
     }

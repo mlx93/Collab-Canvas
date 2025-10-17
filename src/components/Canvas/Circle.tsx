@@ -10,7 +10,8 @@ import {
   clearActiveEdit, 
   subscribeToActiveEdit, 
   ActiveEdit,
-  getUserCursorColor 
+  getUserCursorColor,
+  createActiveEditData
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
@@ -31,6 +32,8 @@ export interface CircleProps {
   onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
   onMultiDragEnd?: () => void;
   multiDragPosition?: { x: number; y: number };
+  onOptimisticActiveEdit?: (shapeId: string, activeEdit: any) => void;
+  onOptimisticClearActiveEdit?: (shapeId: string) => void;
 }
 
 const MIN_RADIUS = 10;
@@ -46,12 +49,15 @@ const CircleComponent: React.FC<CircleProps> = ({
   onMultiDragStart,
   onMultiDragUpdate,
   onMultiDragEnd,
-  multiDragPosition
+  multiDragPosition,
+  onOptimisticActiveEdit,
+  onOptimisticClearActiveEdit
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isResizing, setIsResizing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -59,11 +65,11 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS for smoother dragging)
+  // Throttled function for live position updates (120 FPS for ultra-smooth indicators)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, radius: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
-    }, 16)
+    }, 8)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
@@ -114,27 +120,41 @@ const CircleComponent: React.FC<CircleProps> = ({
       return null;
     }
     
-    const currentPos = livePosition && livePosition.userId !== user?.userId
+    const indicatorPos = livePosition && livePosition.userId !== user?.userId
       ? { x: livePosition.x, y: livePosition.y, radius: livePosition.width }
       : { x: circle.x, y: circle.y, radius: circle.radius };
+    
+    console.log('Circle editing indicator:', { 
+      circleId: circle.id, 
+      livePosition, 
+      circleRadius: circle.radius, 
+      indicatorPos, 
+      editingIndicatorWidth: indicatorPos.radius * 2
+    });
     
     return (
       <EditingIndicator
         activeEdit={activeEdit}
-        rectangleX={currentPos.x}
-        rectangleY={currentPos.y - currentPos.radius}
-        rectangleWidth={currentPos.radius * 2}
+        rectangleX={indicatorPos.x}
+        rectangleY={indicatorPos.y - indicatorPos.radius}
+        rectangleWidth={indicatorPos.radius * 2}
+        rectangleHeight={indicatorPos.radius * 2}
         scale={viewport.scale}
       />
     );
   }
 
-  // Use live position if available, or multi-drag position, otherwise use circle's stored position
-  const currentPos = livePosition && livePosition.userId !== user?.userId
+  // Shape position (for actual shape rendering) - excludes immediate drag position
+  const shapePos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, radius: livePosition.width } // width represents radius for circles
     : multiDragPosition && !isDragging
     ? { x: multiDragPosition.x, y: multiDragPosition.y, radius: circle.radius }
     : { x: circle.x, y: circle.y, radius: circle.radius };
+
+  // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
+  const indicatorPos = immediateDragPosition && isDragging
+    ? { x: immediateDragPosition.x, y: immediateDragPosition.y, radius: circle.radius }
+    : shapePos;
 
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
@@ -146,6 +166,14 @@ const CircleComponent: React.FC<CircleProps> = ({
     
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'moving', cursorColor);
+      onOptimisticActiveEdit(circle.id, activeEditData);
+    }
+    
+    // Async update: sync to RTDB for other users
     setActiveEdit(circle.id, user.userId, user.email, firstName, 'moving', cursorColor);
     
     // Only select the shape if it's not already selected (preserves multi-selection)
@@ -165,6 +193,9 @@ const CircleComponent: React.FC<CircleProps> = ({
     const stage = node.getStage();
     const x = node.x();
     const y = node.y();
+    
+    // Store immediate drag position for instant indicator updates
+    setImmediateDragPosition({ x, y });
     
     // Update resize handle position during drag
     if (handleRef.current) {
@@ -200,6 +231,7 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
     setIsDragging(false);
+    setImmediateDragPosition(null);
     
     const node = e.target;
     const x = node.x();
@@ -214,10 +246,15 @@ const CircleComponent: React.FC<CircleProps> = ({
     // End multi-drag if this shape was part of a multi-selection
     if (onMultiDragEnd) {
       onMultiDragEnd();
+      // Don't clear active edit here - endMultiDrag will handle cleanup for all selected shapes
+    } else {
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(circle.id);
+      }
+      // Async update: clear from RTDB for other users
+      clearActiveEdit(circle.id);
     }
-    
-    // Clear active edit (no need to clear live position - it expires naturally)
-    clearActiveEdit(circle.id);
   };
 
 
@@ -316,9 +353,9 @@ const CircleComponent: React.FC<CircleProps> = ({
       {/* Main circle */}
       <KonvaCircle
         ref={circleRef}
-        x={currentPos.x}
-        y={currentPos.y}
-        radius={currentPos.radius}
+        x={shapePos.x}
+        y={shapePos.y}
+        radius={shapePos.radius}
         fill={circle.color}
         opacity={circle.opacity ?? 1}
         rotation={circle.rotation ?? 0}
@@ -338,8 +375,8 @@ const CircleComponent: React.FC<CircleProps> = ({
       {isSelected && !livePosition && (
         <KonvaCircle
           ref={handleRef}
-          x={currentPos.x + currentPos.radius}
-          y={currentPos.y}
+          x={shapePos.x + shapePos.radius}
+          y={shapePos.y}
           radius={8}
           fill="#2196F3"
           stroke="#FFFFFF"
@@ -352,13 +389,18 @@ const CircleComponent: React.FC<CircleProps> = ({
       
       {/* Editing indicator (who is editing this shape) */}
       {showIndicator && activeEdit && activeEdit.userId !== user?.userId && (
-        <EditingIndicator
-          activeEdit={activeEdit}
-          rectangleX={currentPos.x}
-          rectangleY={currentPos.y - currentPos.radius}
-          rectangleWidth={currentPos.radius * 2}
-          scale={viewport.scale}
-        />
+        <>
+          {console.log('Circle main editing indicator:', { 
+            circleId: circle.id, 
+            livePosition, 
+            circleRadius: circle.radius, 
+            shapePos, 
+            editingIndicatorWidth: shapePos.radius * 2,
+            rectangleX: shapePos.x,
+            rectangleY: shapePos.y - shapePos.radius
+          })}
+          {/* Editing indicator is rendered in the indicators layer for proper z-index */}
+        </>
       )}
     </>
   );

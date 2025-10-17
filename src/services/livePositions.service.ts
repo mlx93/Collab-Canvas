@@ -37,7 +37,7 @@ function getLivePositionRef(shapeId: string) {
 
 /**
  * Set live position for a shape during drag/resize
- * Should be called on dragMove/resizeMove (throttled to 16ms for 60 FPS)
+ * Should be called on dragMove/resizeMove (throttled to 8ms for 120 FPS)
  * Auto-clears on disconnect via onDisconnect hook
  * 
  * @param shapeId - ID of the shape being moved/resized
@@ -97,6 +97,7 @@ export async function setLivePosition(
 /**
  * Clear live position for a shape
  * Called when drag/resize ends (mouseup)
+ * Uses fire-and-forget for immediate response
  * 
  * @param shapeId - ID of the shape no longer being moved/resized
  */
@@ -104,9 +105,15 @@ export async function clearLivePosition(shapeId: string): Promise<void> {
   const livePositionRef = getLivePositionRef(shapeId);
 
   try {
-    await remove(livePositionRef);
-    // Cancel onDisconnect if manually clearing
-    await onDisconnect(livePositionRef).cancel();
+    // Don't await - fire and forget for immediate response
+    remove(livePositionRef).catch((error) => {
+      console.warn('[livePositions.service] RTDB clear failed (non-blocking):', error.message);
+    });
+    
+    // Cancel onDisconnect if manually clearing (don't await)
+    onDisconnect(livePositionRef).cancel().catch((error) => {
+      console.warn('[livePositions.service] onDisconnect cancel failed (non-blocking):', error.message);
+    });
   } catch (error) {
     console.error('Failed to clear live position:', error);
     // Don't throw - collaboration features are non-critical

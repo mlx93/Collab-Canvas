@@ -1,6 +1,6 @@
 // Canvas component with Konva.js - pan, zoom, and off-white background
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Stage, Layer, Rect, Text as KonvaText } from 'react-konva';
+import { Stage, Layer, Rect, Circle as KonvaCircle, Line as KonvaLine } from 'react-konva';
 import Konva from 'konva';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useCursors } from '../../hooks/useCursors';
@@ -13,8 +13,9 @@ import Line from './Line';
 import Text from './Text';
 import { CursorOverlay } from '../Collaboration/CursorOverlay';
 import { subscribeToLivePositions, LivePosition, setLivePosition } from '../../services/livePositions.service';
-import { subscribeToLiveSelections, setLiveSelection, LiveSelections } from '../../services/liveSelections.service';
-import { setActiveEdit, clearActiveEdit } from '../../services/activeEdits.service';
+import { subscribeToLiveSelections, LiveSelections } from '../../services/liveSelections.service';
+import { setActiveEdit, clearActiveEdit, subscribeToAllActiveEdits } from '../../services/activeEdits.service';
+import { SelectionIndicator } from '../Collaboration/SelectionIndicator';
 import { getCursorColorForUser } from '../../services/cursor.service';
 import {
   CANVAS_WIDTH,
@@ -25,7 +26,7 @@ import {
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
-  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateRectangle } = useCanvas();
+  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateRectangle, copyShapes, pasteShapes, updateCursorPosition, deleteSelected } = useCanvas();
   const { cursors, updateOwnCursor } = useCursors();
   const { user } = useAuth();
   const stageRef = useRef<Konva.Stage>(null);
@@ -35,10 +36,10 @@ export const Canvas: React.FC = () => {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [livePositions, setLivePositions] = useState<Record<string, LivePosition>>({});
   const [liveSelections, setLiveSelections] = useState<LiveSelections>({});
+  const [activeEdits, setActiveEdits] = useState<Record<string, any>>({});
   const multiDragOffsetsRef = useRef<Record<string, { x: number; y: number }>>({});
   const multiDragStartPositionsRef = useRef<Record<string, { x: number; y: number; x2?: number; y2?: number }>>({});
   const [multiDragPositions, setMultiDragPositions] = useState<Record<string, { x: number; y: number; x2?: number; y2?: number }>>({});
-  const frameCountRef = useRef<number>(0); // For throttling multi-select broadcasts
   const [isDragSelecting, setIsDragSelecting] = useState(false);
   const [dragSelectRect, setDragSelectRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [editingTextData, setEditingTextData] = useState<{
@@ -108,20 +109,6 @@ export const Canvas: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Broadcast current selection to other users
-  const broadcastSelection = useCallback(() => {
-    if (user && selectedIds.length > 0) {
-      setLiveSelection(
-        user.userId,
-        user.email,
-        user.firstName,
-        'multi-select',
-        0, 0, 0, 0, // No rectangle for multi-select
-        selectedIds
-      );
-    }
-  }, [user, selectedIds]);
-
   // Subscribe to live selections for drag-select visibility
   useEffect(() => {
     const unsubscribe = subscribeToLiveSelections((selections) => {
@@ -131,12 +118,30 @@ export const Canvas: React.FC = () => {
     return unsubscribe;
   }, []);
 
-  // Broadcast selection changes to other users
+  // Subscribe to active edits to know which shapes are being edited
   useEffect(() => {
-    if (selectedIds.length > 0) {
-      broadcastSelection();
-    }
-  }, [selectedIds, user, broadcastSelection]);
+    const unsubscribe = subscribeToAllActiveEdits((edits: Record<string, any>) => {
+      setActiveEdits(edits);
+    });
+    
+    return unsubscribe;
+  }, []);
+
+  // Optimistic active edit functions for immediate local updates
+  const optimisticallySetActiveEdit = useCallback((shapeId: string, activeEdit: any) => {
+    setActiveEdits(prev => ({
+      ...prev,
+      [shapeId]: activeEdit
+    }));
+  }, []);
+
+  const optimisticallyClearActiveEdit = useCallback((shapeId: string) => {
+    setActiveEdits(prev => {
+      const newEdits = { ...prev };
+      delete newEdits[shapeId];
+      return newEdits;
+    });
+  }, []);
 
   // Handle mouse wheel zoom
   const handleWheel = (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -206,11 +211,25 @@ export const Canvas: React.FC = () => {
             e.preventDefault();
             selectAll();
             break;
+          case 'c':
+            e.preventDefault();
+            copyShapes();
+            break;
+          case 'v':
+            e.preventDefault();
+            pasteShapes();
+            break;
           case 'escape':
             e.preventDefault();
             deselectAll();
             break;
         }
+      }
+      
+      // Handle Delete key
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        deleteSelected();
       }
 
       // Handle Escape key (without modifiers)
@@ -232,7 +251,7 @@ export const Canvas: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectAll, deselectAll]);
+  }, [selectAll, deselectAll, copyShapes, pasteShapes, deleteSelected]);
 
   // Multi-shape movement functions
   const startMultiDrag = useCallback((draggedShapeId: string, startX: number, startY: number) => {
@@ -280,7 +299,7 @@ export const Canvas: React.FC = () => {
         setActiveEdit(id, user.userId, user.email, firstName, 'moving', cursorColorData.cursorColor);
       });
     }
-  }, [selectedIds, rectangles]);
+  }, [selectedIds, rectangles, user]);
 
   const updateMultiDrag = useCallback((draggedShapeId: string, newX: number, newY: number) => {
     const offsets = multiDragOffsetsRef.current;
@@ -446,30 +465,21 @@ export const Canvas: React.FC = () => {
     const pos = stage.getPointerPosition();
     if (!pos) return;
 
+    // Update cursor position for paste operations
+    const canvasX = (pos.x - viewport.x) / viewport.scale;
+    const canvasY = (pos.y - viewport.y) / viewport.scale;
+    updateCursorPosition(canvasX, canvasY);
+
     // Handle drag-select
     if (isDragSelecting && dragSelectRect) {
-      // Convert current mouse position to canvas coordinates
-      const canvasX = (pos.x - viewport.x) / viewport.scale;
-      const canvasY = (pos.y - viewport.y) / viewport.scale;
+      // Use the already calculated canvas coordinates
       const width = canvasX - dragSelectRect.x;
       const height = canvasY - dragSelectRect.y;
       const newRect = { ...dragSelectRect, width, height };
       setDragSelectRect(newRect);
       
-      // Broadcast live selection to other users
-      if (user) {
-        setLiveSelection(
-          user.userId,
-          user.email,
-          user.firstName,
-          'drag-select',
-          newRect.x,
-          newRect.y,
-          newRect.width,
-          newRect.height,
-          selectedIds
-        );
-      }
+      // Note: Drag-select rectangle is handled by the selection broadcasting system
+      // No need to broadcast here as it's handled by the selection state changes
     }
     // Handle panning if dragging
     else if (isDragging && lastPosRef.current) {
@@ -489,9 +499,7 @@ export const Canvas: React.FC = () => {
     }
 
     // Update cursor position for multiplayer ONLY when not panning
-    // (convert screen coords to canvas coords)
-    const canvasX = (pos.x - viewport.x) / viewport.scale;
-    const canvasY = (pos.y - viewport.y) / viewport.scale;
+    // (reuse the already calculated canvas coordinates)
     // console.log('[Canvas] Updating cursor position:', canvasX, canvasY);
     updateOwnCursor(canvasX, canvasY);
   };
@@ -541,17 +549,8 @@ export const Canvas: React.FC = () => {
       setIsDragSelecting(false);
       setDragSelectRect(null);
       
-      // Broadcast final multi-selection to other users
-      if (user && shapesInRect.length > 0) {
-        setLiveSelection(
-          user.userId,
-          user.email,
-          user.firstName,
-          'multi-select',
-          0, 0, 0, 0, // No rectangle for multi-select
-          shapesInRect.map(shape => shape.id)
-        );
-      }
+      // Note: Multi-selection is handled by the selection broadcasting system
+      // The selectedIds state change will trigger the broadcast automatically
     } else {
       setIsDragging(false);
       lastPosRef.current = null;
@@ -672,6 +671,8 @@ export const Canvas: React.FC = () => {
                     onMultiDragUpdate={updateMultiDrag}
                     onMultiDragEnd={endMultiDrag}
                     multiDragPosition={multiDragPositions[shape.id]}
+                    onOptimisticActiveEdit={optimisticallySetActiveEdit}
+                    onOptimisticClearActiveEdit={optimisticallyClearActiveEdit}
                   />
                 );
               }
@@ -692,7 +693,7 @@ export const Canvas: React.FC = () => {
                     }}
                     showIndicator={false}
                     updateOwnCursor={updateOwnCursor}
-                    {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id] } as any)}
+                    {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id], onOptimisticActiveEdit: optimisticallySetActiveEdit, onOptimisticClearActiveEdit: optimisticallyClearActiveEdit } as any)}
                   />
                 );
               }
@@ -713,7 +714,7 @@ export const Canvas: React.FC = () => {
                     }}
                     showIndicator={false}
                     updateOwnCursor={updateOwnCursor}
-                    {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id] } as any)}
+                    {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id], onOptimisticActiveEdit: optimisticallySetActiveEdit, onOptimisticClearActiveEdit: optimisticallyClearActiveEdit } as any)}
                   />
                 );
               }
@@ -732,7 +733,7 @@ export const Canvas: React.FC = () => {
               }}
               showIndicator={false}
               updateOwnCursor={updateOwnCursor}
-              {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id] } as any)}
+              {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id], onOptimisticActiveEdit: optimisticallySetActiveEdit, onOptimisticClearActiveEdit: optimisticallyClearActiveEdit } as any)}
             />
           );
         }
@@ -752,7 +753,7 @@ export const Canvas: React.FC = () => {
               }}
               showIndicator={false}
               updateOwnCursor={updateOwnCursor}
-              {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id] } as any)}
+              {...({ onMultiDragStart: startMultiDrag, onMultiDragUpdate: updateMultiDrag, onMultiDragEnd: endMultiDrag, multiDragPosition: multiDragPositions[shape.id], onOptimisticActiveEdit: optimisticallySetActiveEdit, onOptimisticClearActiveEdit: optimisticallyClearActiveEdit } as any)}
               onEditingChange={(editing: boolean, data: any) => {
                 if (editing && data) {
                   setEditingTextData(data);
@@ -769,7 +770,7 @@ export const Canvas: React.FC = () => {
         </Layer>
 
         {/* Indicators Layer - Always on top of all shapes */}
-        <Layer listening={false}>
+        <Layer listening={false} zIndex={10000}>
           {rectangles.map((shape) => {
             // Render indicator based on shape type
             if (shape.type === 'rectangle') {
@@ -838,6 +839,230 @@ export const Canvas: React.FC = () => {
           })}
         </Layer>
 
+        {/* Other Users' Selection Indicators */}
+        <Layer listening={false} zIndex={9999}>
+          {Object.entries(liveSelections).map(([userId, selection]) => {
+            console.log('Processing liveSelections:', { userId, selection, currentUserId: user?.userId });
+            // Don't show our own selections
+            if (userId === user?.userId) return null;
+            
+            return selection.selectedIds.map((shapeId: string) => {
+              const shape = rectangles.find(s => s.id === shapeId);
+              if (!shape) return null;
+              
+              // Check if this shape is being actively edited and get live position
+              const livePosition = livePositions[shapeId];
+              const isBeingEdited = activeEdits[shapeId];
+              
+              // Show selection indicator even when editing - the editing indicator will show the action text
+              // but we still want to show the selection border
+              
+              // Use live position if available, otherwise use shape position
+              const currentX = livePosition ? livePosition.x : shape.x;
+              const currentY = livePosition ? livePosition.y : shape.y;
+              
+              // Validate coordinates - if they're invalid, skip rendering
+              if (currentX === undefined || currentY === undefined || currentX < 0 || currentY < 0) {
+                console.warn('Invalid coordinates for selection border:', { currentX, currentY, shape, livePosition });
+                return null;
+              }
+              
+              // Render selection indicator based on shape type
+              if (shape.type === 'rectangle') {
+                const currentWidth = livePosition ? livePosition.width : (shape as any).width;
+                const currentHeight = livePosition ? livePosition.height : (shape as any).height;
+                return (
+                  <Rect
+                    key={`selection-${userId}-${shapeId}`}
+                    x={currentX}
+                    y={currentY}
+                    width={currentWidth}
+                    height={currentHeight}
+                    stroke={selection.cursorColor}
+                    strokeWidth={3}
+                    listening={false}
+                  />
+                );
+              }
+              if (shape.type === 'circle') {
+                // For circles, prioritize shape radius over live position radius when not actively editing
+                // This prevents stale radius values from live position after editing is complete
+                const currentRadius = isBeingEdited && livePosition ? livePosition.width : (shape as any).radius;
+                console.log('Circle selection border:', { 
+                  shapeId, 
+                  currentX, 
+                  currentY, 
+                  currentRadius, 
+                  cursorColor: selection.cursorColor,
+                  shape: shape,
+                  livePosition: livePosition
+                });
+                // Ensure radius is valid - use fallback if invalid
+                if (!currentRadius || currentRadius <= 0) {
+                  console.warn('Invalid radius for circle selection border, using fallback:', { currentRadius, shape, livePosition });
+                  // Use a default radius of 20 if invalid
+                  const fallbackRadius = 20;
+                  return (
+                    <KonvaCircle
+                      key={`selection-${userId}-${shapeId}`}
+                      x={currentX}
+                      y={currentY}
+                      radius={fallbackRadius}
+                      stroke={selection.cursorColor}
+                      strokeWidth={3}
+                      listening={false}
+                    />
+                  );
+                }
+                return (
+                  <KonvaCircle
+                    key={`selection-${userId}-${shapeId}`}
+                    x={currentX}
+                    y={currentY}
+                    radius={currentRadius}
+                    stroke={selection.cursorColor}
+                    strokeWidth={3}
+                    listening={false}
+                  />
+                );
+              }
+              if (shape.type === 'triangle') {
+                const currentWidth = livePosition ? livePosition.width : (shape as any).width;
+                const currentHeight = livePosition ? livePosition.height : (shape as any).height;
+                // Triangle points (points up) - same as Triangle.tsx
+                const points = [
+                  currentX + currentWidth / 2, currentY,  // Top center
+                  currentX + currentWidth, currentY + currentHeight,  // Bottom right
+                  currentX, currentY + currentHeight  // Bottom left
+                ];
+                return (
+                  <KonvaLine
+                    key={`selection-${userId}-${shapeId}`}
+                    points={[...points, points[0], points[1]]} // Close the triangle
+                    stroke={selection.cursorColor}
+                    strokeWidth={3}
+                    listening={false}
+                  />
+                );
+              }
+              if (shape.type === 'line') {
+                const currentX2 = livePosition ? (livePosition as any).x2 : (shape as any).x2;
+                const currentY2 = livePosition ? (livePosition as any).y2 : (shape as any).y2;
+                return (
+                  <KonvaLine
+                    key={`selection-${userId}-${shapeId}`}
+                    points={[currentX, currentY, currentX2 || 0, currentY2 || 0]}
+                    stroke={selection.cursorColor}
+                    strokeWidth={3}
+                    listening={false}
+                  />
+                );
+              }
+              if (shape.type === 'text') {
+                const currentWidth = livePosition ? livePosition.width : (shape as any).width;
+                const currentHeight = livePosition ? livePosition.height : (shape as any).height;
+                return (
+                  <Rect
+                    key={`selection-${userId}-${shapeId}`}
+                    x={currentX}
+                    y={currentY}
+                    width={currentWidth}
+                    height={currentHeight}
+                    stroke={selection.cursorColor}
+                    strokeWidth={3}
+                    listening={false}
+                  />
+                );
+              }
+              return null;
+            });
+          }).flat()}
+          
+          {/* Selection Labels - Show who selected what */}
+          {Object.entries(liveSelections).map(([userId, selection]) => {
+            // Don't show our own selections
+            if (userId === user?.userId) return null;
+            
+            return selection.selectedIds.map((shapeId: string) => {
+              const shape = rectangles.find(s => s.id === shapeId);
+              if (!shape) return null;
+              
+              // Check if this shape is being actively edited and get live position
+              const livePosition = livePositions[shapeId];
+              const isBeingEdited = activeEdits[shapeId];
+              
+              console.log('Selection label check:', { 
+                shapeId, 
+                isBeingEdited, 
+                activeEdits: activeEdits,
+                livePosition: livePosition
+              });
+              
+              // Don't show selection label if shape is being actively edited (editing indicator takes priority)
+              if (isBeingEdited) return null;
+              
+              // Use live position if available, otherwise use shape position
+              const currentX = livePosition ? livePosition.x : shape.x;
+              let currentY = livePosition ? livePosition.y : shape.y;
+              
+              // For circles, position indicator above the circle (center Y - radius) to match EditingIndicator
+              if (shape.type === 'circle') {
+                const radius = livePosition ? livePosition.width / 2 : shape.radius;
+                currentY = currentY - radius;
+              }
+              
+              // Validate coordinates - if they're invalid, skip rendering
+              if (currentX === undefined || currentY === undefined || currentX < 0 || currentY < 0) {
+                console.warn('Invalid coordinates for selection indicator:', { currentX, currentY, shape, livePosition });
+                return null;
+              }
+              
+              // Use the new SelectionIndicator component
+              const getShapeWidth = (shape: any, livePos?: any) => {
+                switch (shape.type) {
+                  case 'circle':
+                    // For circles, prioritize shape radius over live position radius when not actively editing
+                    // This prevents stale radius values from live position after editing is complete
+                    const radius = isBeingEdited && livePos ? livePos.width : shape.radius;
+                    // Ensure radius is valid, fallback to 20 if invalid
+                    if (!radius || radius <= 0) {
+                      console.warn('Invalid radius for circle selection indicator:', { radius, shape, livePos });
+                      return 40; // Default diameter of 40px
+                    }
+                    return radius * 2;
+                  case 'line':
+                    const x2 = livePos ? livePos.x2 : shape.x2;
+                    return Math.abs((x2 || 0) - currentX);
+                  default:
+                    return livePos ? livePos.width : shape.width || 0;
+                }
+              };
+              
+              const shapeWidth = getShapeWidth(shape, livePosition);
+              console.log('SelectionIndicator coordinates:', { 
+                shapeId, 
+                currentX, 
+                currentY, 
+                shapeWidth, 
+                scale: viewport.scale,
+                shape: shape,
+                livePosition: livePosition
+              });
+              
+              return (
+                <SelectionIndicator
+                  key={`selection-label-${userId}-${shapeId}`}
+                  selection={selection}
+                  shapeX={currentX}
+                  shapeY={currentY}
+                  shapeWidth={shapeWidth}
+                  scale={viewport.scale}
+                />
+              );
+            });
+          }).flat()}
+        </Layer>
+
         {/* Drag-Select Rectangle */}
         {isDragSelecting && dragSelectRect && (
           <Layer listening={false}>
@@ -854,68 +1079,6 @@ export const Canvas: React.FC = () => {
           </Layer>
         )}
 
-        {/* Live Selections from Other Users */}
-        {Object.entries(liveSelections).map(([userId, selection]) => {
-          if (userId === user?.userId) return null; // Don't show own selection
-          
-          return (
-            <Layer key={userId} listening={false}>
-              {/* Only show rectangle for drag-select */}
-              {selection.selectionType === 'drag-select' && (
-                <Rect
-                  x={selection.x}
-                  y={selection.y}
-                  width={selection.width}
-                  height={selection.height}
-                  fill="rgba(255, 152, 0, 0.1)"
-                  stroke="#FF9800"
-                  strokeWidth={1}
-                  dash={[5, 5]}
-                />
-              )}
-              
-              {/* Show selection indicators for multi-select */}
-              {selection.selectionType === 'multi-select' && selection.selectedIds && 
-                selection.selectedIds.map((shapeId) => {
-                  const shape = rectangles.find(r => r.id === shapeId);
-                  if (!shape) return null;
-                  
-                  return (
-                    <Rect
-                      key={shapeId}
-                      x={shape.x - 2}
-                      y={shape.y - 2}
-                      width={(shape as any).width + 4}
-                      height={(shape as any).height + 4}
-                      fill="rgba(76, 175, 80, 0.1)"
-                      stroke="#4CAF50"
-                      strokeWidth={2}
-                      dash={[3, 3]}
-                    />
-                  );
-                })
-              }
-              
-              {/* User label */}
-              <Rect
-                x={selection.x}
-                y={selection.y - 20}
-                width={Math.max(100, selection.userName.length * 8 + 16)}
-                height={16}
-                fill="rgba(0, 0, 0, 0.7)"
-                cornerRadius={4}
-              />
-              <KonvaText
-                x={selection.x + 8}
-                y={selection.y - 16}
-                text={selection.userName}
-                fontSize={10}
-                fill="white"
-                listening={false}
-              />
-            </Layer>
-          );
-        })}
       </Stage>
 
       {/* Cursor Overlay - Multiplayer cursors */}

@@ -25,7 +25,7 @@ const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () 
 };
 
 export const PropertiesPanel: React.FC = () => {
-  const { rectangles, selectedIds, updateRectangle, deleteRectangle, setSelectedRectangle, setZIndex, bringToFront, sendToBack } = useCanvas();
+  const { rectangles, selectedIds, updateRectangle, deleteSelected, setZIndex, bringToFront, sendToBack } = useCanvas();
   const { user } = useAuth();
   const [isColorDropdownOpen, setIsColorDropdownOpen] = useState(false);
   const [isTextColorDropdownOpen, setIsTextColorDropdownOpen] = useState(false);
@@ -171,14 +171,13 @@ export const PropertiesPanel: React.FC = () => {
 
   // Handle delete
   const handleDelete = () => {
-    if (!selectedRectangle) return;
-    deleteRectangle(selectedRectangle.id);
-    setSelectedRectangle(null);
+    if (selectedIds.length === 0) return;
+    deleteSelected();
   };
 
   // Handle keyboard delete (Delete/Backspace) - MUST be before any conditional returns
   React.useEffect(() => {
-    if (!selectedRectangle) return; // Early exit inside hook is OK
+    if (selectedIds.length === 0) return; // Early exit inside hook is OK
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -188,15 +187,14 @@ export const PropertiesPanel: React.FC = () => {
           return; // Allow backspace in input fields
         }
         e.preventDefault();
-        // Delete inline to avoid dependency issues
-        deleteRectangle(selectedRectangle.id);
-        setSelectedRectangle(null);
+        // Use deleteSelected to handle all selected shapes
+        deleteSelected();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedRectangle, deleteRectangle, setSelectedRectangle]);
+  }, [selectedIds, deleteSelected]);
 
   // If nothing selected, show empty state
   if (selectedIds.length === 0) {
@@ -705,7 +703,7 @@ export const PropertiesPanel: React.FC = () => {
           onClick={handleDelete}
           className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors font-medium text-sm"
         >
-          Delete {selectedRectangle.type === 'text' ? 'Text Box' : 'Rectangle'}
+          Delete {selectedIds.length > 1 ? `${selectedIds.length} Shapes` : (selectedRectangle.type === 'text' ? 'Text Box' : 'Shape')}
         </button>
         <p className="text-xs text-gray-500 mt-2 text-center">
           Press Delete or Backspace key to delete

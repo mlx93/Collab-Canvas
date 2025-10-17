@@ -11,7 +11,8 @@ import {
   clearActiveEdit, 
   subscribeToActiveEdit, 
   getUserCursorColor,
-  ActiveEdit 
+  createActiveEditData,
+  ActiveEdit
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
@@ -32,25 +33,30 @@ interface RectangleProps {
   onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
   onMultiDragEnd?: () => void;
   multiDragPosition?: { x: number; y: number };
+  onOptimisticActiveEdit?: (shapeId: string, activeEdit: any) => void;
+  onOptimisticClearActiveEdit?: (shapeId: string) => void;
 }
 
 const RectangleComponent: React.FC<RectangleProps> = ({ 
   rectangle, 
   isSelected, 
   onSelect, 
-  showIndicator = true, 
-  renderOnlyIndicator = false, 
+  showIndicator = true,
+  renderOnlyIndicator = false,
   updateOwnCursor,
   onMultiDragStart,
   onMultiDragUpdate,
   onMultiDragEnd,
-  multiDragPosition
+  multiDragPosition,
+  onOptimisticActiveEdit,
+  onOptimisticClearActiveEdit
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ y: number; width: number; height: number } | null>(null);
+  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -58,11 +64,11 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS for smoother dragging)
+  // Throttled function for live position updates (120 FPS for ultra-smooth indicators)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 16)
+    }, 8)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
@@ -131,8 +137,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     };
   }, [rectangle.id, user?.userId, activeEdit]);
   
-  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
-  const currentPos = livePosition && livePosition.userId !== user?.userId
+  // Shape position (for actual shape rendering) - excludes immediate drag position
+  const shapePos = livePosition && livePosition.userId !== user?.userId
     ? { 
         x: livePosition.x, 
         y: livePosition.y, 
@@ -164,6 +170,17 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         zIndex: rectangle.zIndex 
       };
 
+  // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
+  const indicatorPos = immediateDragPosition && isDragging
+    ? {
+        x: immediateDragPosition.x,
+        y: immediateDragPosition.y,
+        width: rectangle.width,
+        height: rectangle.height,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : rectangle.zIndex
+      }
+    : shapePos;
+
   // Handle drag start
   const handleDragStart = () => {
     if (!user?.userId || !user?.email) return;
@@ -175,6 +192,14 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'moving', cursorColor);
+      onOptimisticActiveEdit(rectangle.id, activeEditData);
+    }
+    
+    // Async update: sync to RTDB for other users
     setActiveEdit(rectangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
     
     // Only select the shape if it's not already selected (preserves multi-selection)
@@ -195,6 +220,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     const stage = node.getStage();
     const x = node.x();
     const y = node.y();
+    
+    // Store immediate drag position for instant indicator updates
+    setImmediateDragPosition({ x, y });
     
     // Update resize handle position during drag (top-right corner)
     if (handleRef.current) {
@@ -239,6 +267,7 @@ const RectangleComponent: React.FC<RectangleProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
     setIsDragging(false);
+    setImmediateDragPosition(null);
     
     const node = e.target;
     const x = node.x();
@@ -253,10 +282,15 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     // End multi-drag if this shape was part of a multi-selection
     if (onMultiDragEnd) {
       onMultiDragEnd();
+      // Don't clear active edit here - endMultiDrag will handle cleanup for all selected shapes
+    } else {
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(rectangle.id);
+      }
+      // Async update: clear from RTDB for other users
+      clearActiveEdit(rectangle.id);
     }
-    
-    // Clear active edit (no need to clear live position - it expires naturally)
-    clearActiveEdit(rectangle.id);
   };
 
   // Handle resize via bottom-right handle
@@ -268,10 +302,19 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     const maxZIndex = rectangles.length > 0 ? Math.max(...rectangles.map(r => r.zIndex)) : 0;
     newZIndexRef.current = maxZIndex + 1;
     
-    // Set active edit state in RTDB
+    // Set active edit state
     if (user) {
       const cursorColor = getUserCursorColor(user.email);
-      setActiveEdit(rectangle.id, user.userId, user.email, user.firstName, 'resizing', cursorColor);
+      const firstName = user.firstName || user.email.split('@')[0];
+      
+      // Optimistic update: immediately show edit indicator locally
+      if (onOptimisticActiveEdit) {
+        const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'resizing', cursorColor);
+        onOptimisticActiveEdit(rectangle.id, activeEditData);
+      }
+      
+      // Async update: sync to RTDB for other users
+      setActiveEdit(rectangle.id, user.userId, user.email, firstName, 'resizing', cursorColor);
     }
     
     // Attach mouse move and mouse up listeners to the stage
@@ -359,7 +402,12 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       // Clear z-index ref
       newZIndexRef.current = null;
       
-      // Clear active edit state after Firestore propagates
+      // Clear active edit state
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(rectangle.id);
+      }
+      // Async update: clear from RTDB for other users
       clearActiveEdit(rectangle.id);
       setIsResizing(false);
     };
@@ -373,9 +421,9 @@ const RectangleComponent: React.FC<RectangleProps> = ({
     return activeEdit && showIndicator ? (
       <EditingIndicator
         activeEdit={activeEdit}
-        rectangleX={currentPos.x}
-        rectangleY={currentPos.y}
-        rectangleWidth={currentPos.width}
+        rectangleX={indicatorPos.x}
+        rectangleY={indicatorPos.y}
+        rectangleWidth={indicatorPos.width}
         scale={viewport.scale}
       />
     ) : null;
@@ -387,10 +435,10 @@ const RectangleComponent: React.FC<RectangleProps> = ({
       {/* Main Rectangle */}
       <Rect
         ref={shapeRef}
-        x={currentPos.x}
-        y={currentPos.y}
-        width={currentPos.width}
-        height={currentPos.height}
+        x={shapePos.x}
+        y={shapePos.y}
+        width={shapePos.width}
+        height={shapePos.height}
         fill={rectangle.color}
         opacity={rectangle.opacity ?? 1} // Default to 1 for existing rectangles
         rotation={rectangle.rotation ?? 0} // Default to 0 for existing rectangles
@@ -416,8 +464,8 @@ const RectangleComponent: React.FC<RectangleProps> = ({
         <>
           <Circle
             ref={handleRef}
-            x={currentPos.x + currentPos.width}
-            y={currentPos.y}
+            x={shapePos.x + shapePos.width}
+            y={shapePos.y}
             radius={10} // Larger radius for easier grabbing
             fill="#1565C0" // Blue fill for better visibility
             stroke="white"

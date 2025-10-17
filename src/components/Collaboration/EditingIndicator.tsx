@@ -2,12 +2,14 @@
 import React from 'react';
 import { Text, Rect, Group } from 'react-konva';
 import { ActiveEdit } from '../../services/activeEdits.service';
+import { calculateIndicatorPosition, calculateTextWidth } from '../../utils/indicatorPositioning';
 
 interface EditingIndicatorProps {
   activeEdit: ActiveEdit;
   rectangleX: number;
   rectangleY: number;
   rectangleWidth: number;
+  rectangleHeight?: number; // Optional height for non-square shapes
   scale: number; // Viewport scale for size adjustment
 }
 
@@ -16,6 +18,7 @@ export const EditingIndicator: React.FC<EditingIndicatorProps> = ({
   rectangleX,
   rectangleY,
   rectangleWidth,
+  rectangleHeight = rectangleWidth,
   scale,
 }) => {
   // Get action display text
@@ -39,18 +42,18 @@ export const EditingIndicator: React.FC<EditingIndicatorProps> = ({
     : activeEdit.email.split('@')[0]; // Use email username part as fallback
   const displayText = `${displayName} is ${actionText.toLowerCase()}`;
   
+  // Use shared positioning utility for consistency
+  const position = calculateIndicatorPosition(rectangleX, rectangleY, rectangleWidth, rectangleHeight, scale);
+  const actualWidth = calculateTextWidth(displayText, scale);
+  
   // Badge dimensions (adjusted for scale to remain visible)
   const fontSize = 12 / scale;
   const padding = 6 / scale;
   const badgeHeight = fontSize + (padding * 2);
   
-  // Estimate text width (rough approximation)
-  const estimatedTextWidth = displayText.length * (fontSize * 0.6);
-  const badgeWidth = estimatedTextWidth + (padding * 2);
-  
-  // Position badge above the rectangle, centered
-  const badgeX = rectangleX + (rectangleWidth / 2) - (badgeWidth / 2);
-  const badgeY = rectangleY - badgeHeight - (10 / scale); // 10px gap
+  // Use actual text width for precise positioning
+  const badgeX = rectangleX + (rectangleWidth / 2) - (actualWidth / 2);
+  const badgeY = position.y;
 
   return (
     <Group>
@@ -58,7 +61,7 @@ export const EditingIndicator: React.FC<EditingIndicatorProps> = ({
       <Rect
         x={badgeX}
         y={badgeY}
-        width={badgeWidth}
+        width={actualWidth}
         height={badgeHeight}
         fill="#D3D3D3"
         cornerRadius={4 / scale}
@@ -68,7 +71,7 @@ export const EditingIndicator: React.FC<EditingIndicatorProps> = ({
         shadowOffsetX={0}
         shadowOffsetY={2 / scale}
         stroke={activeEdit.cursorColor}
-        strokeWidth={2 / scale}
+        strokeWidth={3 / scale}
       />
       
       {/* Badge text */}

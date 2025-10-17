@@ -156,6 +156,18 @@ export const LeftToolbar: React.FC = () => {
             <span>Multi-Select:</span>
             <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">⇧+Click</kbd>
           </div>
+          <div className="flex justify-between items-center">
+            <span>Copy:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">⌘C</kbd>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Paste:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">⌘V</kbd>
+          </div>
+          <div className="flex justify-between items-center">
+            <span>Delete:</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Del</kbd>
+          </div>
         </div>
       </div>
     </div>

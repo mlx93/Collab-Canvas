@@ -127,4 +127,5 @@ export interface CanvasState {
   loading: boolean;
   error: string | null;
   stageSize: { width: number; height: number };
+  cursorPosition: { x: number; y: number } | null; // Current cursor position for paste operations
 }

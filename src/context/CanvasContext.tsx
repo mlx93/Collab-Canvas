@@ -6,8 +6,11 @@ import { autoUpdateZIndex, manualSetZIndex } from '../services/zIndex.service';
 import { useAuth } from '../hooks/useAuth';
 import * as canvasService from '../services/canvas.service';
 import { updateZIndex } from '../services/canvas.service';
-import { setSelection, clearSelection } from '../services/selection.service';
+import { setLiveSelection, clearLiveSelection } from '../services/liveSelections.service';
+import { getCursorColorForUser } from '../services/cursor.service';
 import { clearActiveEdit } from '../services/activeEdits.service';
+import { clipboardService } from '../services/clipboard.service';
+import toast from 'react-hot-toast';
 
 interface CanvasContextType {
   // State
@@ -18,6 +21,7 @@ interface CanvasContextType {
   loading: boolean;
   error: string | null;
   stageSize: { width: number; height: number };
+  cursorPosition: { x: number; y: number } | null;
   
   // Viewport operations
   setViewport: (viewport: Viewport) => void;
@@ -45,12 +49,20 @@ interface CanvasContextType {
   sendToBack: (id: string) => void;
   setZIndex: (id: string, zIndex: number) => void;
   
+  // Copy/Paste operations
+  copyShapes: () => void;
+  pasteShapes: () => void;
+  
+  // Delete operations
+  deleteSelected: () => void;
+  
   // Tool operations
   setTool: (tool: Tool) => void;
   
   // Utility
   clearError: () => void;
   setStageSize: (size: { width: number; height: number }) => void;
+  updateCursorPosition: (x: number, y: number) => void;
 }
 
 export const CanvasContext = createContext<CanvasContextType | undefined>(undefined);
@@ -68,7 +80,8 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     currentTool: 'select',
     loading: true, // Start with loading true while fetching from Firestore
     error: null,
-    stageSize: { width: 800, height: 600 } // Default size, will be updated by Canvas component
+    stageSize: { width: 800, height: 600 }, // Default size, will be updated by Canvas component
+    cursorPosition: null // Initialize cursor position as null
   });
 
   // Subscribe to Firestore real-time updates
@@ -796,9 +809,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Sync selection state to RTDB (ephemeral)
     if (user) {
       if (id === null) {
-        clearSelection(user.userId);
+        clearLiveSelection(user.userId);
       } else {
-        setSelection(user.userId, id);
+        const cursorColorData = getCursorColorForUser(user.email);
+        setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [id], cursorColorData.cursorColor);
       }
     }
   };
@@ -807,41 +821,54 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   const selectShape = (id: string) => {
     setCanvasState(prev => {
       if (prev.selectedIds.includes(id)) return prev; // Already selected
-      return { ...prev, selectedIds: [...prev.selectedIds, id] };
+      const newSelectedIds = [...prev.selectedIds, id];
+      
+      // Sync selection state to RTDB (ephemeral)
+      if (user) {
+        const cursorColorData = getCursorColorForUser(user.email);
+        setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], newSelectedIds, cursorColorData.cursorColor);
+      }
+      
+      return { ...prev, selectedIds: newSelectedIds };
     });
-    
-    // Sync selection state to RTDB (ephemeral)
-    if (user) {
-      setSelection(user.userId, id);
-    }
   };
 
   const deselectShape = (id: string) => {
-    setCanvasState(prev => ({
-      ...prev,
-      selectedIds: prev.selectedIds.filter(selectedId => selectedId !== id)
-    }));
-    
-    // Sync selection state to RTDB (ephemeral)
-    if (user) {
-      clearSelection(user.userId);
-    }
+    setCanvasState(prev => {
+      const newSelectedIds = prev.selectedIds.filter(selectedId => selectedId !== id);
+      
+      // Sync selection state to RTDB (ephemeral)
+      if (user) {
+        if (newSelectedIds.length === 0) {
+          clearLiveSelection(user.userId);
+        } else {
+          const cursorColorData = getCursorColorForUser(user.email);
+          setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], newSelectedIds, cursorColorData.cursorColor);
+        }
+      }
+      
+      return {
+        ...prev,
+        selectedIds: newSelectedIds
+      };
+    });
   };
 
   const selectAll = () => {
-    setCanvasState(prev => ({
-      ...prev,
-      selectedIds: prev.rectangles.map(shape => shape.id)
-    }));
-    
-    // Sync selection state to RTDB (ephemeral)
-    if (user) {
-      // For multi-selection, we'll sync the first selected item
-      const firstShape = canvasState.rectangles[0];
-      if (firstShape) {
-        setSelection(user.userId, firstShape.id);
+    setCanvasState(prev => {
+      const newSelectedIds = prev.rectangles.map(shape => shape.id);
+      
+      // Sync selection state to RTDB (ephemeral)
+      if (user && newSelectedIds.length > 0) {
+        const cursorColorData = getCursorColorForUser(user.email);
+        setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], newSelectedIds, cursorColorData.cursorColor);
       }
-    }
+      
+      return {
+        ...prev,
+        selectedIds: newSelectedIds
+      };
+    });
   };
 
   const deselectAll = () => {
@@ -849,7 +876,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     
     // Sync selection state to RTDB (ephemeral)
     if (user) {
-      clearSelection(user.userId);
+      clearLiveSelection(user.userId);
     }
   };
 
@@ -862,10 +889,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       
       // Sync selection state to RTDB (ephemeral) - use the new state
       if (user) {
-        if (isSelected) {
-          clearSelection(user.userId);
+        if (newSelectedIds.length === 0) {
+          clearLiveSelection(user.userId);
         } else {
-          setSelection(user.userId, id);
+          const cursorColorData = getCursorColorForUser(user.email);
+          setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], newSelectedIds, cursorColorData.cursorColor);
         }
       }
       
@@ -874,6 +902,97 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: newSelectedIds
       };
     });
+  };
+
+  // Copy/Paste operations
+  const copyShapes = () => {
+    const selected = canvasState.rectangles.filter(r => canvasState.selectedIds.includes(r.id));
+    if (selected.length === 0) {
+      toast.error('No shapes selected to copy');
+      return;
+    }
+    
+    clipboardService.copyShapes(selected);
+    toast.success(`Copied ${selected.length} shape(s)`);
+  };
+
+  const pasteShapes = async () => {
+    if (!clipboardService.hasClipboard()) {
+      toast.error('Nothing to paste');
+      return;
+    }
+    
+    if (!user) {
+      toast.error('Must be logged in to paste');
+      return;
+    }
+    
+    // Use cursor position if available, otherwise use default offset
+    const cursorX = canvasState.cursorPosition?.x;
+    const cursorY = canvasState.cursorPosition?.y;
+    const newShapes = clipboardService.pasteShapes(cursorX, cursorY);
+    
+    // Calculate max z-index for new shapes
+    const maxZIndex = canvasState.rectangles.length > 0 
+      ? Math.max(...canvasState.rectangles.map(r => r.zIndex)) 
+      : 0;
+    
+    // Set proper metadata for new shapes
+    const shapesWithMetadata = newShapes.map((shape, index) => ({
+      ...shape,
+      zIndex: maxZIndex + 1 + index, // Each pasted shape gets a higher z-index
+      createdBy: user.email,
+      lastModifiedBy: user.email
+    }));
+    
+    // Optimistic update
+    setCanvasState(prev => ({
+      ...prev,
+      rectangles: [...prev.rectangles, ...shapesWithMetadata],
+      selectedIds: shapesWithMetadata.map(s => s.id)
+    }));
+    
+    // Persist to Firestore
+    try {
+      for (const shape of shapesWithMetadata) {
+        await canvasService.createRectangle(shape as any); // TODO: Update service to accept Shape
+      }
+      toast.success(`Pasted ${shapesWithMetadata.length} shape(s)`);
+    } catch (error) {
+      console.error('Failed to paste shapes:', error);
+      toast.error('Failed to paste shapes');
+      // Revert optimistic update on failure
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => !shapesWithMetadata.some(s => s.id === r.id)),
+        selectedIds: []
+      }));
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (canvasState.selectedIds.length === 0) {
+      toast.error('No shapes selected to delete');
+      return;
+    }
+    
+    if (!user) {
+      toast.error('Must be logged in to delete shapes');
+      return;
+    }
+    
+    const selectedCount = canvasState.selectedIds.length;
+    
+    // Delete all selected shapes
+    const deletePromises = canvasState.selectedIds.map(id => deleteRectangle(id));
+    
+    try {
+      await Promise.all(deletePromises);
+      toast.success(`Deleted ${selectedCount} shape(s)`);
+    } catch (error) {
+      console.error('Failed to delete selected shapes:', error);
+      toast.error('Failed to delete some shapes');
+    }
   };
 
   // Z-index operations
@@ -979,6 +1098,10 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     });
   };
 
+  const updateCursorPosition = (x: number, y: number) => {
+    setCanvasState(prev => ({ ...prev, cursorPosition: { x, y } }));
+  };
+
   const value: CanvasContextType = {
     // State
     rectangles: canvasState.rectangles,
@@ -988,6 +1111,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     loading: canvasState.loading,
     error: canvasState.error,
     stageSize: canvasState.stageSize,
+    cursorPosition: canvasState.cursorPosition,
     
     // Viewport operations
     setViewport,
@@ -1017,12 +1141,20 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     sendToBack,
     setZIndex,
     
+    // Copy/Paste operations
+    copyShapes,
+    pasteShapes,
+    
+    // Delete operations
+    deleteSelected,
+    
     // Tool operations
     setTool,
     
     // Utility
     clearError,
-    setStageSize
+    setStageSize,
+    updateCursorPosition
   };
 
   return <CanvasContext.Provider value={value}>{children}</CanvasContext.Provider>;

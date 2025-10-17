@@ -9,7 +9,8 @@ import {
   clearActiveEdit, 
   subscribeToActiveEdit, 
   ActiveEdit,
-  getUserCursorColor 
+  getUserCursorColor,
+  createActiveEditData
 } from '../../services/activeEdits.service';
 import {
   setLivePosition,
@@ -30,6 +31,8 @@ export interface TriangleProps {
   onMultiDragUpdate?: (shapeId: string, x: number, y: number) => void;
   onMultiDragEnd?: () => void;
   multiDragPosition?: { x: number; y: number };
+  onOptimisticActiveEdit?: (shapeId: string, activeEdit: any) => void;
+  onOptimisticClearActiveEdit?: (shapeId: string) => void;
 }
 
 const MIN_SIZE = 20;
@@ -45,13 +48,16 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   onMultiDragStart,
   onMultiDragUpdate,
   onMultiDragEnd,
-  multiDragPosition
+  multiDragPosition,
+  onOptimisticActiveEdit,
+  onOptimisticClearActiveEdit
 }) => {
   const { updateRectangle, viewport, rectangles } = useCanvas();
   const { user } = useAuth();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [resizeDimensions, setResizeDimensions] = useState<{ width: number; height: number } | null>(null);
+  const [immediateDragPosition, setImmediateDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [, forceUpdate] = useState({});
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
@@ -60,11 +66,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const livePositionTimestampRef = useRef<number>(0);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (60 FPS for smoother dragging)
+  // Throttled function for live position updates (120 FPS for ultra-smooth indicators)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 16)
+    }, 8)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
@@ -142,23 +148,23 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       return null;
     }
     
-    const currentPos = livePosition && livePosition.userId !== user?.userId
+    const indicatorPos = livePosition && livePosition.userId !== user?.userId
       ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
       : { x: triangle.x, y: triangle.y, width: triangle.width, height: triangle.height };
     
     return (
       <EditingIndicator
         activeEdit={activeEdit}
-        rectangleX={currentPos.x}
-        rectangleY={currentPos.y}
-        rectangleWidth={currentPos.width}
+        rectangleX={indicatorPos.x}
+        rectangleY={indicatorPos.y}
+        rectangleWidth={indicatorPos.width}
         scale={viewport.scale}
       />
     );
   }
 
-  // Use live position if available, or multi-drag position, or resize dimensions if actively resizing
-  const currentPos = livePosition && livePosition.userId !== user?.userId
+  // Shape position (for actual shape rendering) - excludes immediate drag position
+  const shapePos = livePosition && livePosition.userId !== user?.userId
     ? { x: livePosition.x, y: livePosition.y, width: livePosition.width, height: livePosition.height }
     : multiDragPosition && !isDragging
     ? { x: multiDragPosition.x, y: multiDragPosition.y, width: triangle.width, height: triangle.height }
@@ -166,11 +172,16 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     ? { x: triangle.x, y: triangle.y, width: resizeDimensions.width, height: resizeDimensions.height }
     : { x: triangle.x, y: triangle.y, width: triangle.width, height: triangle.height };
 
+  // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
+  const indicatorPos = immediateDragPosition && isDragging
+    ? { x: immediateDragPosition.x, y: immediateDragPosition.y, width: triangle.width, height: triangle.height }
+    : shapePos;
+
   // Calculate triangle points (points up)
   const points = [
-    currentPos.width / 2, 0,  // Top center
-    currentPos.width, currentPos.height,  // Bottom right
-    0, currentPos.height  // Bottom left
+    shapePos.width / 2, 0,  // Top center
+    shapePos.width, shapePos.height,  // Bottom right
+    0, shapePos.height  // Bottom left
   ];
 
   const handleDragStart = () => {
@@ -183,6 +194,13 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     
     const cursorColor = getUserCursorColor(user.email);
     const firstName = user.firstName || user.email.split('@')[0];
+    
+    // Optimistic update: immediately show edit indicator locally
+    if (onOptimisticActiveEdit) {
+      const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'moving', cursorColor);
+      onOptimisticActiveEdit(triangle.id, activeEditData);
+    }
+    // Async update: sync to RTDB for other users
     setActiveEdit(triangle.id, user.userId, user.email, firstName, 'moving', cursorColor);
     
     // Only select the shape if it's not already selected (preserves multi-selection)
@@ -202,6 +220,9 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     const stage = node.getStage();
     const x = node.x();
     const y = node.y();
+    
+    // Store immediate drag position for instant indicator updates
+    setImmediateDragPosition({ x, y });
     
     // Update resize handle position during drag
     if (handleRef.current) {
@@ -237,6 +258,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const handleDragEnd = async (e: Konva.KonvaEventObject<DragEvent>) => {
     if (!user?.userId) return;
     setIsDragging(false);
+    setImmediateDragPosition(null);
     
     const node = e.target;
     const x = node.x();
@@ -250,10 +272,15 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     // End multi-drag if this shape was part of a multi-selection
     if (onMultiDragEnd) {
       onMultiDragEnd();
+      // Don't clear active edit here - endMultiDrag will handle cleanup for all selected shapes
+    } else {
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(triangle.id);
+      }
+      // Async update: clear from RTDB for other users
+      clearActiveEdit(triangle.id);
     }
-    
-    // Clear active edit (no need to clear live position - it expires naturally)
-    clearActiveEdit(triangle.id);
   };
 
   const handleClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -273,6 +300,13 @@ const TriangleComponent: React.FC<TriangleProps> = ({
     if (user) {
       const cursorColor = getUserCursorColor(user.email);
       const firstName = user.firstName || user.email.split('@')[0];
+      
+      // Optimistic update: immediately show edit indicator locally
+      if (onOptimisticActiveEdit) {
+        const activeEditData = createActiveEditData(user.userId, user.email, firstName, 'resizing', cursorColor);
+        onOptimisticActiveEdit(triangle.id, activeEditData);
+      }
+      // Async update: sync to RTDB for other users
       setActiveEdit(triangle.id, user.userId, user.email, firstName, 'resizing', cursorColor);
     }
     
@@ -353,6 +387,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       // Clear z-index ref
       newZIndexRef.current = null;
       
+      // Optimistic update: immediately clear edit indicator locally
+      if (onOptimisticClearActiveEdit) {
+        onOptimisticClearActiveEdit(triangle.id);
+      }
+      // Async update: clear from RTDB for other users
       clearActiveEdit(triangle.id);
       setIsResizing(false);
     };
@@ -366,8 +405,8 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       {/* Main triangle */}
       <KonvaShape
         ref={triangleRef}
-        x={currentPos.x}
-        y={currentPos.y}
+        x={shapePos.x}
+        y={shapePos.y}
         fill={triangle.color}
         opacity={triangle.opacity ?? 1}
         rotation={triangle.rotation ?? 0}
@@ -399,8 +438,8 @@ const TriangleComponent: React.FC<TriangleProps> = ({
       {isSelected && !livePosition && (
         <KonvaCircle
           ref={handleRef}
-          x={currentPos.x + currentPos.width}
-          y={currentPos.y + currentPos.height}
+          x={shapePos.x + shapePos.width}
+          y={shapePos.y + shapePos.height}
           radius={8}
           fill="#2196F3"
           stroke="#FFFFFF"
@@ -411,16 +450,7 @@ const TriangleComponent: React.FC<TriangleProps> = ({
         />
       )}
       
-      {/* Editing indicator */}
-      {showIndicator && activeEdit && activeEdit.userId !== user?.userId && (
-        <EditingIndicator
-          activeEdit={activeEdit}
-          rectangleX={currentPos.x}
-          rectangleY={currentPos.y}
-          rectangleWidth={currentPos.width}
-          scale={viewport.scale}
-        />
-      )}
+      {/* Editing indicator is rendered in the indicators layer for proper z-index */}
     </>
   );
 };

@@ -36,6 +36,34 @@ function getActiveEditRef(shapeId: string) {
 }
 
 /**
+ * Create active edit data structure for optimistic updates
+ * This allows immediate local state updates before RTDB sync
+ * 
+ * @param userId - Current user's ID
+ * @param email - Current user's email
+ * @param firstName - Current user's first name for display
+ * @param action - Type of edit action
+ * @param cursorColor - User's cursor color for visual indicator
+ * @returns ActiveEdit data structure
+ */
+export function createActiveEditData(
+  userId: string,
+  email: string,
+  firstName: string,
+  action: EditAction,
+  cursorColor: string
+): ActiveEdit {
+  return {
+    userId,
+    email,
+    firstName,
+    action,
+    cursorColor,
+    startedAt: Date.now(),
+  };
+}
+
+/**
  * Set active edit state for a shape
  * Auto-clears on disconnect via onDisconnect hook
  * 
@@ -56,14 +84,7 @@ export async function setActiveEdit(
 ): Promise<void> {
   const editRef = getActiveEditRef(shapeId);
   
-  const editData: ActiveEdit = {
-    userId,
-    email,
-    firstName,
-    action,
-    cursorColor,
-    startedAt: Date.now(),
-  };
+  const editData = createActiveEditData(userId, email, firstName, action, cursorColor);
 
   try {
     // Set the active edit
@@ -80,6 +101,7 @@ export async function setActiveEdit(
 /**
  * Clear active edit state for a shape
  * Called when user finishes editing (mouseup, blur, etc)
+ * Uses fire-and-forget for immediate response
  * 
  * @param shapeId - ID of the shape no longer being edited
  */
@@ -87,9 +109,15 @@ export async function clearActiveEdit(shapeId: string): Promise<void> {
   const editRef = getActiveEditRef(shapeId);
   
   try {
-    await remove(editRef);
-    // Also cancel the onDisconnect (in case user manually ended edit)
-    await onDisconnect(editRef).cancel();
+    // Don't await - fire and forget for immediate response
+    remove(editRef).catch((error) => {
+      console.warn('[activeEdits.service] RTDB clear failed (non-blocking):', error.message);
+    });
+    
+    // Also cancel the onDisconnect (don't await)
+    onDisconnect(editRef).cancel().catch((error) => {
+      console.warn('[activeEdits.service] onDisconnect cancel failed (non-blocking):', error.message);
+    });
   } catch (error) {
     console.error('Failed to clear active edit:', error);
     // Don't throw - collaboration features are non-critical

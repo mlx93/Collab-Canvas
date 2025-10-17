@@ -15,6 +15,14 @@ export const ShortcutsLegend: React.FC = () => {
       ]
     },
     {
+      category: 'Copy/Paste',
+      items: [
+        { key: '⌘C', description: 'Copy Selected' },
+        { key: '⌘V', description: 'Paste Shapes' },
+        { key: 'Del', description: 'Delete Selected' },
+      ]
+    },
+    {
       category: 'Movement',
       items: [
         { key: 'Drag', description: 'Move Shape(s)' },

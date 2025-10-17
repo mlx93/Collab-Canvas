@@ -39,6 +39,14 @@
           ".write": "auth != null"
         }
       }
+    },
+    "liveSelections": {
+      "$canvasId": {
+        ".read": "auth != null",
+        "$userId": {
+          ".write": "auth != null && auth.uid == $userId"
+        }
+      }
     }
   }
 }
