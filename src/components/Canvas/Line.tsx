@@ -69,11 +69,11 @@ const Line: React.FC<LineProps> = ({
   const [activeEdit, setActiveEditState] = useState<ActiveEdit | null>(null);
   const [livePosition, setLivePositionState] = useState<LivePosition | null>(null);
   
-  // Throttled live position update (120 FPS for ultra-smooth indicators)
+  // Throttled live position update (250 FPS for near-perfect synchronization)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, x2?: number, y2?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, undefined, x2, y2);
-    }, 8)
+    }, 4)
   );
 
   // Force group position update when multiDragPosition changes (for multi-select dragging)

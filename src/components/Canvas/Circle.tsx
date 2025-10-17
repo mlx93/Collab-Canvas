@@ -65,11 +65,11 @@ const CircleComponent: React.FC<CircleProps> = ({
   const handleRef = useRef<Konva.Circle>(null);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (120 FPS for ultra-smooth indicators)
+  // Throttled function for live position updates (250 FPS for near-perfect synchronization)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, radius: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, radius, radius, zIndex); // width/height both set to radius for circles
-    }, 8)
+    }, 4)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
@@ -146,14 +146,34 @@ const CircleComponent: React.FC<CircleProps> = ({
 
   // Shape position (for actual shape rendering) - excludes immediate drag position
   const shapePos = livePosition && livePosition.userId !== user?.userId
-    ? { x: livePosition.x, y: livePosition.y, radius: livePosition.width } // width represents radius for circles
+    ? { 
+        x: livePosition.x, 
+        y: livePosition.y, 
+        radius: livePosition.width, // width represents radius for circles
+        zIndex: livePosition.zIndex !== undefined ? livePosition.zIndex : circle.zIndex 
+      }
     : multiDragPosition && !isDragging
-    ? { x: multiDragPosition.x, y: multiDragPosition.y, radius: circle.radius }
-    : { x: circle.x, y: circle.y, radius: circle.radius };
+    ? {
+        x: multiDragPosition.x,
+        y: multiDragPosition.y,
+        radius: circle.radius,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : circle.zIndex
+      }
+    : { 
+        x: circle.x, 
+        y: circle.y, 
+        radius: circle.radius,
+        zIndex: circle.zIndex 
+      };
 
   // Indicator position (for editing indicators) - includes immediate drag position for smooth movement
   const indicatorPos = immediateDragPosition && isDragging
-    ? { x: immediateDragPosition.x, y: immediateDragPosition.y, radius: circle.radius }
+    ? { 
+        x: immediateDragPosition.x, 
+        y: immediateDragPosition.y, 
+        radius: circle.radius,
+        zIndex: newZIndexRef.current !== null ? newZIndexRef.current : circle.zIndex
+      }
     : shapePos;
 
   const handleDragStart = () => {

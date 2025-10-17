@@ -52,6 +52,7 @@ interface CanvasContextType {
   // Copy/Paste operations
   copyShapes: () => void;
   pasteShapes: () => void;
+  duplicateShapes: () => void;
   
   // Delete operations
   deleteSelected: () => void;
@@ -365,6 +366,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
+    // Broadcast selection to other users
+    if (user) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+    }
+
     // Sync to Firestore in background
     try {
       // Add the required fields before persisting
@@ -462,6 +469,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newTriangle.id]
       };
     });
+
+    // Broadcast selection to other users
+    if (user) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+    }
 
     try {
       const fullTriangle = {
@@ -614,6 +627,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       };
     });
 
+    // Broadcast selection to other users
+    if (user) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+    }
+
     try {
       const fullLine = {
         ...line,
@@ -656,6 +675,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newText.id]
       };
     });
+
+    // Broadcast selection to other users
+    if (user) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+    }
 
     try {
       const fullText = {
@@ -703,6 +728,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         selectedIds: [newRectangle.id] // Auto-select newly created rectangle
       };
     });
+
+    // Broadcast selection to other users
+    if (user) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], [tempId], cursorColorData.cursorColor);
+    }
 
     // Sync to Firestore in background
     try {
@@ -951,6 +982,12 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       rectangles: [...prev.rectangles, ...shapesWithMetadata],
       selectedIds: shapesWithMetadata.map(s => s.id)
     }));
+
+    // Broadcast selection to other users
+    if (user && shapesWithMetadata.length > 0) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], shapesWithMetadata.map(s => s.id), cursorColorData.cursorColor);
+    }
     
     // Persist to Firestore
     try {
@@ -965,6 +1002,62 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setCanvasState(prev => ({
         ...prev,
         rectangles: prev.rectangles.filter(r => !shapesWithMetadata.some(s => s.id === r.id)),
+        selectedIds: []
+      }));
+    }
+  };
+
+  const duplicateShapes = async () => {
+    const selected = canvasState.rectangles.filter(r => canvasState.selectedIds.includes(r.id));
+    if (selected.length === 0) {
+      toast.error('No shapes selected to duplicate');
+      return;
+    }
+    
+    if (!user) {
+      toast.error('Must be logged in to duplicate');
+      return;
+    }
+    
+    // Create duplicates with +20px offset and new IDs
+    const duplicates = selected.map((shape, index) => ({
+      ...shape,
+      id: 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
+      x: shape.x + 20,
+      y: shape.y + 20,
+      zIndex: (canvasState.rectangles.length > 0 ? Math.max(...canvasState.rectangles.map(r => r.zIndex)) : 0) + 1 + index,
+      createdBy: user.email,
+      createdAt: new Date(),
+      lastModifiedBy: user.email,
+      lastModified: new Date()
+    }));
+    
+    // Optimistic update
+    setCanvasState(prev => ({
+      ...prev,
+      rectangles: [...prev.rectangles, ...duplicates],
+      selectedIds: duplicates.map(s => s.id)
+    }));
+
+    // Broadcast selection to other users
+    if (user && duplicates.length > 0) {
+      const cursorColorData = getCursorColorForUser(user.email);
+      setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], duplicates.map(s => s.id), cursorColorData.cursorColor);
+    }
+    
+    // Persist to Firestore
+    try {
+      for (const shape of duplicates) {
+        await canvasService.createRectangle(shape as any); // TODO: Update service to accept Shape
+      }
+      toast.success(`Duplicated ${duplicates.length} shape(s)`);
+    } catch (error) {
+      console.error('Failed to duplicate shapes:', error);
+      toast.error('Failed to duplicate shapes');
+      // Revert optimistic update on failure
+      setCanvasState(prev => ({
+        ...prev,
+        rectangles: prev.rectangles.filter(r => !duplicates.some(s => s.id === r.id)),
         selectedIds: []
       }));
     }
@@ -1144,6 +1237,7 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Copy/Paste operations
     copyShapes,
     pasteShapes,
+    duplicateShapes,
     
     // Delete operations
     deleteSelected,

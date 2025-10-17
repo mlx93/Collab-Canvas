@@ -8,7 +8,7 @@
  */
 export function throttle<T extends (...args: any[]) => void>(
   func: T,
-  delay: number = 8 // 120 FPS (1000ms / 120 ≈ 8ms) for ultra-smooth indicators
+  delay: number = 4 // 250 FPS (1000ms / 250 = 4ms) for near-perfect synchronization
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
   let timeoutId: NodeJS.Timeout | null = null;

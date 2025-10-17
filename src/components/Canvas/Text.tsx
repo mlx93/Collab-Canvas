@@ -79,11 +79,11 @@ export const Text: React.FC<TextProps> = ({
     }, 100)
   );
 
-  // Throttled live position update for ultra-smooth real-time streaming (8ms = 120 FPS)
+  // Throttled live position update for near-perfect real-time streaming (4ms = 250 FPS)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 8)
+    }, 4)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)

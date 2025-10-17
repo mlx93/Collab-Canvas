@@ -26,7 +26,7 @@ import {
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
-  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateRectangle, copyShapes, pasteShapes, updateCursorPosition, deleteSelected } = useCanvas();
+  const { viewport, setViewport, panViewport, zoomViewport, rectangles, selectedIds, setSelectedRectangle, selectAll, deselectAll, toggleSelection, setStageSize: updateContextStageSize, updateRectangle, copyShapes, pasteShapes, duplicateShapes, updateCursorPosition, deleteSelected } = useCanvas();
   const { cursors, updateOwnCursor } = useCursors();
   const { user } = useAuth();
   const stageRef = useRef<Konva.Stage>(null);
@@ -219,6 +219,10 @@ export const Canvas: React.FC = () => {
             e.preventDefault();
             pasteShapes();
             break;
+          case 'd':
+            e.preventDefault();
+            duplicateShapes();
+            break;
           case 'escape':
             e.preventDefault();
             deselectAll();
@@ -251,7 +255,7 @@ export const Canvas: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [selectAll, deselectAll, copyShapes, pasteShapes, deleteSelected]);
+  }, [selectAll, deselectAll, copyShapes, pasteShapes, duplicateShapes, deleteSelected]);
 
   // Multi-shape movement functions
   const startMultiDrag = useCallback((draggedShapeId: string, startX: number, startY: number) => {

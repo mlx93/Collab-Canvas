@@ -1,5 +1,5 @@
 // Live Positions service for RTDB (ephemeral real-time position streaming)
-// Streams intermediate positions during drag/resize for smooth real-time rendering (60 FPS)
+// Streams intermediate positions during drag/resize for smooth real-time rendering (250 FPS)
 // This allows other users to see shapes moving smoothly, not just final results
 import {
   ref,
@@ -37,7 +37,7 @@ function getLivePositionRef(shapeId: string) {
 
 /**
  * Set live position for a shape during drag/resize
- * Should be called on dragMove/resizeMove (throttled to 8ms for 120 FPS)
+ * Should be called on dragMove/resizeMove (throttled to 4ms for 250 FPS)
  * Auto-clears on disconnect via onDisconnect hook
  * 
  * @param shapeId - ID of the shape being moved/resized

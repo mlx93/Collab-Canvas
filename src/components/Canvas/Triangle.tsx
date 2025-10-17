@@ -66,11 +66,11 @@ const TriangleComponent: React.FC<TriangleProps> = ({
   const livePositionTimestampRef = useRef<number>(0);
   const newZIndexRef = useRef<number | null>(null); // Store calculated z-index for this edit session
   
-  // Throttled function for live position updates (120 FPS for ultra-smooth indicators)
+  // Throttled function for live position updates (250 FPS for near-perfect synchronization)
   const throttledLivePositionUpdate = useRef(
     throttle((shapeId: string, userId: string, x: number, y: number, width: number, height: number, zIndex?: number) => {
       setLivePosition(shapeId, userId, x, y, width, height, zIndex);
-    }, 8)
+    }, 4)
   );
 
   // Force node position update when multiDragPosition changes (for multi-select dragging)
