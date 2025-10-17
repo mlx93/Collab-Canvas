@@ -149,8 +149,8 @@ export function AIProvider({ children }: AIProviderProps) {
       }
 
       // Determine execution mode
-      const shouldExecuteServerSide = plan.operations.length >= 6 || 
-        plan.operations.some(op => op.name === 'createGrid');
+      // TEMPORARY: Force all operations to server-side until client-side ID sync is fixed
+      const shouldExecuteServerSide = true; // was: plan.operations.length >= 6 || plan.operations.some(op => op.name === 'createGrid');
 
       let resultMessage = '';
       if (shouldExecuteServerSide) {
