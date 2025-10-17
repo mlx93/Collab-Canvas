@@ -1,0 +1,4 @@
+17:08:50.310 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO akka.event.slf4j.Slf4jLogger - Slf4jLogger started
+17:08:50.637 [main] INFO com.firebase.server.forge.App$ - Listening at 127.0.0.1:9000
+17:09:02.291 [NamespaceSystem-akka.actor.default-dispatcher-5] INFO com.firebase.core.namespace.NamespaceActor - collab-canvas-mlx93-staging-default-rtdb successfully activated FBKV (SurveyIdle(0)) wait: 109ms, init: 0ms
+17:09:02.408 [NamespaceSystem-blocking-namespace-operation-dispatcher-7] INFO com.firebase.core.namespace.StateManager - Namespace collab-canvas-mlx93-staging-default-rtdb status Active to Active

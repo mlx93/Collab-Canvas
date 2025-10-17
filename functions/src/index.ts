@@ -5,6 +5,8 @@
  * It provides two modes:
  * - Plan mode: Returns an execution plan for the client to execute
  * - Execute mode: Executes operations server-side for complex multi-step commands
+ * 
+ * Version: 1.1.0 - Fixed serverTimestamp implementation
  */
 
 import * as functions from 'firebase-functions';

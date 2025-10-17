@@ -47,10 +47,30 @@ export function AICommandInput({ className = '' }: AICommandInputProps) {
 
   /**
    * Explicitly handle paste events for compatibility with voice-to-text
+   * Voice-to-text systems may not trigger onChange properly, so we handle paste explicitly
    */
-  const handlePaste = (e: React.ClipboardEvent) => {
-    // Allow default paste behavior
-    // This ensures compatibility with voice-to-text and other paste mechanisms
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault(); // Prevent default to handle manually
+    
+    // Get pasted text from clipboard
+    const pastedText = e.clipboardData.getData('text');
+    
+    // Get current cursor position
+    const input = inputRef.current;
+    if (!input) return;
+    
+    const start = input.selectionStart || 0;
+    const end = input.selectionEnd || 0;
+    
+    // Insert pasted text at cursor position
+    const newValue = prompt.substring(0, start) + pastedText + prompt.substring(end);
+    setPrompt(newValue);
+    
+    // Set cursor position after pasted text
+    setTimeout(() => {
+      input.selectionStart = input.selectionEnd = start + pastedText.length;
+      input.focus();
+    }, 0);
   };
 
   /**

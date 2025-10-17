@@ -201,6 +201,16 @@ export const Canvas: React.FC = () => {
   // Handle multi-selection keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore shortcuts when typing in input fields (for AI assistant, etc.)
+      const target = e.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.isContentEditable;
+      
+      if (isInputField) {
+        return; // Let input fields handle their own keyboard events
+      }
+
       // Track modifier keys
       if (e.key === 'Shift') {
         setIsShiftPressed(true);
