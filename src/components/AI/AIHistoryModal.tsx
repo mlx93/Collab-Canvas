@@ -34,8 +34,8 @@ export function AIHistoryModal({ isOpen, onClose }: AIHistoryModalProps) {
         onClick={onClose}
       />
 
-      {/* Modal - Bottom Left Position */}
-      <div className="fixed bottom-24 left-20 z-50 w-96 max-h-[70vh] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col">
+      {/* Modal - Right Side Above History Icon */}
+      <div className="fixed bottom-20 right-6 z-50 w-[450px] max-h-[70vh] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
@@ -75,16 +75,19 @@ export function AIHistoryModal({ isOpen, onClose }: AIHistoryModalProps) {
 
 /**
  * History Content Component
- * Displays the list of commands
+ * Displays the list of commands with detailed operation info
  */
 function AIHistoryContent() {
-  // For now, we'll use a simple localStorage-based history
-  // Later this can be enhanced to use AIContext state
   const [history, setHistory] = React.useState<Array<{
     prompt: string;
     timestamp: number;
     success: boolean;
     result?: string;
+    operations?: Array<{
+      operation: string;
+      shapeNames: string[];
+      details?: string;
+    }>;
   }>>([]);
 
   useEffect(() => {
@@ -118,28 +121,57 @@ function AIHistoryContent() {
           key={history.length - idx - 1}
           className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors"
         >
-          {/* Timestamp */}
+          {/* Timestamp and Status */}
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs text-gray-500">
               {new Date(item.timestamp).toLocaleString()}
             </span>
-            <span className={`text-xs px-2 py-0.5 rounded ${
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${
               item.success 
                 ? 'bg-green-100 text-green-700' 
                 : 'bg-red-100 text-red-700'
             }`}>
-              {item.success ? 'Success' : 'Failed'}
+              {item.success ? '✓ Success' : '✗ Failed'}
             </span>
           </div>
           
           {/* Command */}
-          <div className="text-sm text-gray-900 font-medium mb-1">
-            {item.prompt}
+          <div className="text-sm text-gray-900 font-semibold mb-2">
+            "{item.prompt}"
           </div>
           
-          {/* Result */}
+          {/* Operations Details */}
+          {item.operations && item.operations.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              {item.operations.map((op, opIdx) => (
+                <div key={opIdx} className="bg-blue-50 rounded px-2 py-1.5">
+                  <div className="text-xs font-medium text-blue-900 mb-0.5">
+                    {op.details}
+                  </div>
+                  {op.shapeNames.length > 0 && (
+                    <div className="text-xs text-blue-700 flex flex-wrap gap-1">
+                      {op.shapeNames.slice(0, 5).map((name, nameIdx) => (
+                        <span key={nameIdx} className="bg-blue-100 px-1.5 py-0.5 rounded">
+                          {name}
+                        </span>
+                      ))}
+                      {op.shapeNames.length > 5 && (
+                        <span className="text-blue-600 italic">
+                          +{op.shapeNames.length - 5} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Result/Error Message */}
           {item.result && (
-            <div className="text-xs text-gray-600">
+            <div className={`text-xs ${
+              item.success ? 'text-gray-600' : 'text-red-600'
+            }`}>
               {item.result}
             </div>
           )}

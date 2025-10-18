@@ -51,9 +51,137 @@ interface AIProviderProps {
 }
 
 /**
+ * Helper function to build operation summary for history
+ */
+function buildOperationSummary(
+  operations: any[], 
+  shapes: any[]
+): Array<{
+  operation: string;
+  shapeNames: string[];
+  details?: string;
+}> {
+  const summary: Array<{
+    operation: string;
+    shapeNames: string[];
+    details?: string;
+  }> = [];
+
+  // Group operations by type
+  const opGroups: Record<string, any[]> = {};
+  operations.forEach(op => {
+    if (!opGroups[op.name]) {
+      opGroups[op.name] = [];
+    }
+    opGroups[op.name].push(op);
+  });
+
+  // Build summary for each operation type
+  for (const [opName, ops] of Object.entries(opGroups)) {
+    const shapeNames: string[] = [];
+    let details = '';
+
+    switch (opName) {
+      case 'createRectangle':
+      case 'createCircle':
+      case 'createTriangle':
+      case 'createLine':
+      case 'createText':
+        const shapeType = opName.replace('create', '');
+        details = `Created ${ops.length} ${shapeType.toLowerCase()}${ops.length > 1 ? 's' : ''}`;
+        ops.forEach(op => {
+          if (op.args.name) shapeNames.push(op.args.name);
+        });
+        break;
+
+      case 'moveElement':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = `Moved ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'deleteElement':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = `Deleted ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'deleteMultipleElements':
+        ops.forEach(op => {
+          op.args.ids?.forEach((id: string) => {
+            const shape = shapes.find(s => s.id === id);
+            if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+          });
+        });
+        details = `Deleted ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'updateStyle':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = `Changed style of ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'resizeElement':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = `Resized ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'rotateElement':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = `Rotated ${shapeNames.length} shape${shapeNames.length > 1 ? 's' : ''}`;
+        break;
+
+      case 'bringToFront':
+      case 'sendToBack':
+        ops.forEach(op => {
+          const shape = shapes.find(s => s.id === op.args.id);
+          if (shape) shapeNames.push(shape.name || shape.id.substring(0, 8));
+        });
+        details = opName === 'bringToFront' 
+          ? `Brought ${shapeNames.length} to front` 
+          : `Sent ${shapeNames.length} to back`;
+        break;
+
+      default:
+        details = `${opName} (${ops.length} operation${ops.length > 1 ? 's' : ''})`;
+    }
+
+    summary.push({
+      operation: opName,
+      shapeNames,
+      details,
+    });
+  }
+
+  return summary;
+}
+
+/**
  * Helper function to save command history to localStorage
  */
-function saveCommandToHistory(prompt: string, success: boolean, result?: string) {
+function saveCommandToHistory(
+  prompt: string, 
+  success: boolean, 
+  result?: string,
+  operations?: Array<{
+    operation: string;
+    shapeNames: string[];
+    details?: string;
+  }>
+) {
   try {
     const history = JSON.parse(localStorage.getItem('ai_command_history') || '[]');
     history.push({
@@ -61,6 +189,7 @@ function saveCommandToHistory(prompt: string, success: boolean, result?: string)
       timestamp: Date.now(),
       success,
       result,
+      operations: operations || [],
     });
     // Keep only last 50 commands
     if (history.length > 50) {
@@ -336,8 +465,11 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       }
 
+      // Build operation summary for history
+      const operationSummary = buildOperationSummary(plan.operations, canvasContext.rectangles);
+
       // Save to history
-      saveCommandToHistory(prompt, true, resultMessage);
+      saveCommandToHistory(prompt, true, resultMessage, operationSummary);
 
       // Clear progress
       setProgress(null);
@@ -347,8 +479,11 @@ export function AIProvider({ children }: AIProviderProps) {
       const error = err as Error;
       setError(error);
 
+      // Try to extract some operation info even on failure
+      const operationSummary = lastPlan ? buildOperationSummary(lastPlan.operations, canvasContext.rectangles) : undefined;
+
       // Save failed command to history
-      saveCommandToHistory(prompt, false, error.message);
+      saveCommandToHistory(prompt, false, error.message, operationSummary);
 
       // Show user-friendly error message
       if (err instanceof AIServiceError) {
