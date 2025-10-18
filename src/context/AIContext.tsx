@@ -314,6 +314,9 @@ export function AIProvider({ children }: AIProviderProps) {
           selectShape: (id: string) => {
             canvasContext.selectShape(id);
           },
+          deselectAll: () => {
+            canvasContext.deselectAll();
+          },
           rectangles: canvasContext.rectangles,
         };
 

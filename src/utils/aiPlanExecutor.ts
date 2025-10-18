@@ -21,6 +21,7 @@ export interface CanvasContextMethods {
   bringToFront: (id: string) => void;
   sendToBack: (id: string) => void;
   selectShape: (id: string) => void;
+  deselectAll: () => void;
   rectangles: any[];
 }
 
@@ -456,14 +457,21 @@ async function executeDeleteMultipleElements(args: any, context: CanvasContextMe
   
   console.log(`Deleting ${resolvedIds.length} shapes in bulk:`, resolvedIds);
   
-  // Select all shapes at once, then delete
-  // Note: This assumes CanvasContext supports selecting multiple shapes
-  // If not, we'll delete them one by one
+  // CRITICAL FIX: Select ALL shapes first, THEN delete all at once
+  // Clear current selection first
+  context.deselectAll();
+  
+  // Select all shapes to be deleted
   for (const resolvedId of resolvedIds) {
     context.selectShape(resolvedId);
-    await context.deleteSelected();
-    // Small delay to let state update
-    await new Promise(resolve => setTimeout(resolve, 10));
   }
+  
+  // Small delay to let selection state update
+  await new Promise(resolve => setTimeout(resolve, 50));
+  
+  // Now delete all selected shapes at once
+  await context.deleteSelected();
+  
+  console.log(`✅ Successfully deleted ${resolvedIds.length} shapes`);
 }
 

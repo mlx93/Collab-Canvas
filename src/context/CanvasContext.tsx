@@ -1504,6 +1504,22 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       await clearActiveEdit(id);
     }
 
+    // CRITICAL FIX: Broadcast z-index change to live positions for instant visual update
+    // The Canvas component uses livePositions for z-index sorting (see Canvas.tsx line 714)
+    if (user?.userId) {
+      const width = (targetRect as any).width || (targetRect as any).radius;
+      const height = (targetRect as any).height;
+      setLivePosition(
+        id,
+        user.userId,
+        targetRect.x,
+        targetRect.y,
+        width || 0,
+        height || 0,
+        newZIndex
+      );
+    }
+
     // Use updateShape for consistency with layers panel - this will update local state and Firestore
     try {
       await updateShape(id, { zIndex: newZIndex });
@@ -1531,6 +1547,22 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
     // Clear any active edit FIRST to prevent conflicts
     if (user?.userId) {
       await clearActiveEdit(id);
+    }
+
+    // CRITICAL FIX: Broadcast z-index change to live positions for instant visual update
+    // The Canvas component uses livePositions for z-index sorting (see Canvas.tsx line 714)
+    if (user?.userId) {
+      const width = (targetRect as any).width || (targetRect as any).radius;
+      const height = (targetRect as any).height;
+      setLivePosition(
+        id,
+        user.userId,
+        targetRect.x,
+        targetRect.y,
+        width || 0,
+        height || 0,
+        newZIndex
+      );
     }
 
     // Use updateShape for consistency with layers panel - this will update local state and Firestore

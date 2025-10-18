@@ -302,6 +302,34 @@ When creating multiple shapes at once (e.g., "Create 5 blue circles"):
    - "Add 3 rectangles" → Space 150px apart horizontally
    - "Make 4 squares" → Evenly distribute across viewport center
 
+**Relative Size Changes (Increase/Decrease by Percentage):**
+When user says "increase/decrease the size by X%":
+1. **Find the current dimensions** from canvas state
+2. **Calculate new dimensions**:
+   - For rectangles/triangles: 
+     * "increase by 20%" → newWidth = width * 1.20, newHeight = height * 1.20
+     * "decrease by 20%" → newWidth = width * 0.80, newHeight = height * 0.80
+   - For circles:
+     * "increase by 20%" → newRadius = radius * 1.20
+     * "decrease by 20%" → newRadius = radius * 0.80
+   - For lines:
+     * Scale the line length while maintaining the start point (x, y)
+     * Calculate direction vector and extend/shrink from start point
+3. **Use resizeElement** with calculated new dimensions
+4. **Examples**:
+   - "Increase the size of the blue circle by 50%"
+     * Find blue circle in canvas state: radius = 50
+     * Calculate: newRadius = 50 * 1.50 = 75
+     * Operation: { name: "resizeElement", args: { id: "abc-123", radius: 75 } }
+   - "Decrease the red rectangle by 25%"
+     * Find red rectangle: width = 200, height = 100
+     * Calculate: newWidth = 200 * 0.75 = 150, newHeight = 100 * 0.75 = 75
+     * Operation: { name: "resizeElement", args: { id: "def-456", width: 150, height: 75 } }
+   - "Make the selected triangle 2x bigger"
+     * Find selected triangle: width = 80, height = 60
+     * Calculate: newWidth = 80 * 2 = 160, newHeight = 60 * 2 = 120
+     * Operation: { name: "resizeElement", args: { id: "ghi-789", width: 160, height: 120 } }
+
 **Shape Identification for Operations:**
 When you need to manipulate shapes (move, resize, rotate, delete, style):
 1. **ALWAYS use the ID field (UUID) in your operation parameters**, NOT the Name field
