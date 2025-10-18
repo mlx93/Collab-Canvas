@@ -1112,9 +1112,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       ? Math.max(...canvasState.rectangles.map(r => r.zIndex)) 
       : 0;
     
-    // Set proper metadata for new shapes
-    const shapesWithMetadata = newShapes.map((shape, index) => removeUndefinedFields({
+    // Pre-generate Firestore IDs to avoid temp ID sync issues with z-index updates
+    const shapesWithIds = newShapes.map((shape) => ({
+      shape,
+      firestoreId: canvasService.generateShapeId()
+    }));
+    
+    // Set proper metadata for new shapes with pre-generated Firestore IDs
+    const shapesWithMetadata = shapesWithIds.map(({ shape, firestoreId }, index) => removeUndefinedFields({
       ...shape,
+      id: firestoreId, // Use pre-generated Firestore ID to avoid "shape not found" errors
       zIndex: maxZIndex + 1 + index, // Each pasted shape gets a higher z-index
       createdBy: user.email,
       lastModifiedBy: user.email
@@ -1133,10 +1140,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], shapesWithMetadata.map(s => s.id), cursorColorData.cursorColor);
     }
     
-    // Persist to Firestore
+    // Persist to Firestore using pre-generated IDs
     try {
       for (const shape of shapesWithMetadata) {
-        await canvasService.createRectangle(shape as any); // TODO: Update service to accept Shape
+        const { id, ...shapeData } = shape as any;
+        await canvasService.createRectangleWithId(id, shapeData);
       }
       toast.success(`Pasted ${shapesWithMetadata.length} shape(s)`);
     } catch (error) {
@@ -1162,10 +1170,16 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       return;
     }
     
-    // Create duplicates with +20px offset and new IDs
-    const duplicates = selected.map((shape, index) => removeUndefinedFields({
+    // Pre-generate Firestore IDs to avoid temp ID sync issues with z-index updates
+    const duplicatesWithIds = selected.map((shape) => ({
+      shape,
+      firestoreId: canvasService.generateShapeId()
+    }));
+    
+    // Create duplicates with +20px offset and pre-generated Firestore IDs
+    const duplicates = duplicatesWithIds.map(({ shape, firestoreId }, index) => removeUndefinedFields({
       ...shape,
-      id: 'temp-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
+      id: firestoreId, // Use pre-generated Firestore ID to avoid "shape not found" errors
       x: shape.x + 20,
       y: shape.y + 20,
       zIndex: (canvasState.rectangles.length > 0 ? Math.max(...canvasState.rectangles.map(r => r.zIndex)) : 0) + 1 + index,
@@ -1188,10 +1202,11 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], duplicates.map(s => s.id), cursorColorData.cursorColor);
     }
     
-    // Persist to Firestore
+    // Persist to Firestore using pre-generated IDs
     try {
       for (const shape of duplicates) {
-        await canvasService.createRectangle(shape as any); // TODO: Update service to accept Shape
+        const { id, ...shapeData } = shape as any;
+        await canvasService.createRectangleWithId(id, shapeData);
       }
       toast.success(`Duplicated ${duplicates.length} shape(s)`);
     } catch (error) {
