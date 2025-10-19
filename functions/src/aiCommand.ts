@@ -105,7 +105,7 @@ export async function aiCommandHandler(
     }
 
     // PHASE 2: Try pattern cache first (100x speedup for common patterns!)
-    const cachedOperations = tryMatchPattern(prompt, canvasState.viewport);
+    const cachedOperations = tryMatchPattern(prompt, canvasState.viewport, canvasState);
     let plan: AIPlan;
     
     if (cachedOperations) {
@@ -247,9 +247,28 @@ function buildSystemMessage(): string {
 
 **Operations**:
 - Colors: Use hex codes - blue=#3B82F6, red=#EF4444, green=#10B981, yellow=#F59E0B, orange=#F97316, purple=#8B5CF6
-- Size changes: "increase 20%" → multiply by 1.20, "decrease 20%" → multiply by 0.80
 - Layering: bringToFront, sendToBack
 - Style: updateStyle(id, { color, opacity, visible, locked, name })
+
+**Size Changes - CRITICAL FORMULAS**:
+Percentage increases (BIGGER):
+- "increase by 20%" → NEW = CURRENT × 1.20 (NOT 0.20!)
+- "increase by 50%" → NEW = CURRENT × 1.50
+- "increase by 100%" → NEW = CURRENT × 2.00
+
+Percentage decreases (SMALLER):
+- "decrease by 20%" → NEW = CURRENT × 0.80 (NOT 1.20!)
+- "decrease by 50%" → NEW = CURRENT × 0.50
+- "decrease by 75%" → NEW = CURRENT × 0.25
+
+Multipliers:
+- "2x larger" or "twice as large" → NEW = CURRENT × 2.0
+- "3x larger" → NEW = CURRENT × 3.0
+- "half the size" → NEW = CURRENT × 0.5
+
+Examples:
+• Circle radius=50, "increase by 20%": NEW = 50 × 1.20 = 60 ✅
+• Rectangle width=100, "decrease by 30%": NEW = 100 × 0.70 = 70 ✅ (NOT 100 × 0.30 = 30 ❌)
 
 **Clarification**: If ambiguous, return:
 {

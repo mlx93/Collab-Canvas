@@ -161,7 +161,7 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
     return shapeByNameCaseInsensitive.id;
   }
 
-  // Strategy 4: Fuzzy match - check if identifier contains shape type + color
+  // Strategy 4: ENHANCED Fuzzy match with smart auto-selection
   // Example: "blue rectangle", "red circle", "green triangle"
   const colorPatterns = {
     'red': /#(ef4444|dc2626|b91c1c|991b1b|7f1d1d|f87171|fca5a5)/i,
@@ -174,25 +174,76 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
     'gray': /#(6b7280|4b5563|374151|1f2937|111827|9ca3af|d1d5db)/i,
   };
 
+  // Extract color and type from identifier
+  let matchedColor: string | null = null;
+  let matchedType: string | null = null;
+
+  // Find color in identifier
   for (const [colorName, colorPattern] of Object.entries(colorPatterns)) {
     if (lowerIdentifier.includes(colorName)) {
-      // Found a color in the identifier, now look for matching shapes
-      const matchingShapes = allShapes.filter(shape => {
-        const hasMatchingColor = colorPattern.test(shape.color);
-        
-        // Check if identifier contains the shape type
-        const hasMatchingType = lowerIdentifier.includes(shape.type);
-        
-        return hasMatchingColor && hasMatchingType;
-      });
+      matchedColor = colorName;
+      break;
+    }
+  }
 
-      if (matchingShapes.length === 1) {
-        console.log(`✅ AI used fuzzy match "${identifier}", resolved to "${matchingShapes[0].name}" (ID: ${matchingShapes[0].id})`);
-        return matchingShapes[0].id;
-      } else if (matchingShapes.length > 1) {
-        console.warn(`⚠️ Multiple shapes match "${identifier}": ${matchingShapes.map(s => s.name).join(', ')}. Using first match.`);
-        return matchingShapes[0].id;
-      }
+  // Find type in identifier
+  const types = ['rectangle', 'circle', 'triangle', 'line', 'text'];
+  for (const type of types) {
+    if (lowerIdentifier.includes(type) || 
+        (type === 'rectangle' && lowerIdentifier.includes('square'))) {
+      matchedType = type;
+      break;
+    }
+  }
+
+  // If both color and type found, do smart matching
+  if (matchedColor && matchedType) {
+    const colorPattern = colorPatterns[matchedColor as keyof typeof colorPatterns];
+    const matchingShapes = allShapes.filter(shape => 
+      colorPattern.test(shape.color) && shape.type === matchedType
+    );
+
+    if (matchingShapes.length === 1) {
+      // ✅ PERFECT: Only one match, auto-select it
+      console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name}" (ONLY ${matchedColor} ${matchedType})`);
+      return matchingShapes[0].id;
+    } else if (matchingShapes.length > 1) {
+      // ⚠️ AMBIGUOUS: Multiple matches
+      console.warn(`⚠️ AMBIGUOUS: "${identifier}" matches ${matchingShapes.length} shapes:`);
+      matchingShapes.forEach((s, i) => {
+        console.warn(`  ${i + 1}. "${s.name}" at (${s.x}, ${s.y})`);
+      });
+      // Return first match but log warning
+      console.warn(`  ⚠️ Using first match: "${matchingShapes[0].name}"`);
+      return matchingShapes[0].id;
+    } else {
+      // ❌ NOT FOUND
+      throw new Error(`No ${matchedColor} ${matchedType} found on canvas`);
+    }
+  }
+
+  // Try just color match if type not specified
+  if (matchedColor && !matchedType) {
+    const colorPattern = colorPatterns[matchedColor as keyof typeof colorPatterns];
+    const matchingShapes = allShapes.filter(shape => colorPattern.test(shape.color));
+    
+    if (matchingShapes.length === 1) {
+      console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name}" (ONLY ${matchedColor} shape)`);
+      return matchingShapes[0].id;
+    } else if (matchingShapes.length > 1) {
+      console.warn(`⚠️ Multiple ${matchedColor} shapes found (${matchingShapes.length}). Need type specification.`);
+    }
+  }
+
+  // Try just type match if color not specified
+  if (!matchedColor && matchedType) {
+    const matchingShapes = allShapes.filter(shape => shape.type === matchedType);
+    
+    if (matchingShapes.length === 1) {
+      console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name}" (ONLY ${matchedType})`);
+      return matchingShapes[0].id;
+    } else if (matchingShapes.length > 1) {
+      console.warn(`⚠️ Multiple ${matchedType}s found (${matchingShapes.length}). Need color specification.`);
     }
   }
 
@@ -260,13 +311,79 @@ async function executeOperation(
 
     case 'bringToFront': {
       const resolvedId = resolveShapeId((args as any).id, context);
+      
+      // STEP 1: Find and validate shape exists
+      const shapeBefore = context.rectangles.find(r => r.id === resolvedId);
+      if (!shapeBefore) {
+        throw new Error(`Shape not found: ${(args as any).id}`);
+      }
+      
+      const zIndexBefore = shapeBefore.zIndex;
+      const maxZIndexBefore = Math.max(...context.rectangles.map(r => r.zIndex));
+      
+      console.log(`📊 Bringing to front: "${(shapeBefore as any).name || resolvedId}"`);
+      console.log(`  Current z-index: ${zIndexBefore}, Max z-index: ${maxZIndexBefore}`);
+      
+      // STEP 2: Execute bring to front
       context.bringToFront(resolvedId);
+      
+      // STEP 3: Wait for state update (CRITICAL!)
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // STEP 4: Verify z-index actually changed
+      const shapeAfter = context.rectangles.find(r => r.id === resolvedId);
+      if (!shapeAfter) {
+        throw new Error(`Shape disappeared after bringToFront: ${(args as any).id}`);
+      }
+      
+      const zIndexAfter = shapeAfter.zIndex;
+      
+      console.log(`  New z-index: ${zIndexAfter}`);
+      
+      // STEP 5: Validate success
+      if (zIndexAfter <= zIndexBefore) {
+        console.error('❌ Z-index did not increase!');
+        throw new Error(`Failed to bring shape to front: z-index remained ${zIndexAfter}`);
+      }
+      
+      console.log(`✅ Successfully brought "${(shapeBefore as any).name || resolvedId}" to front (${zIndexBefore} → ${zIndexAfter})`);
+      
       return [];
     }
 
     case 'sendToBack': {
       const resolvedId = resolveShapeId((args as any).id, context);
+      
+      const shapeBefore = context.rectangles.find(r => r.id === resolvedId);
+      if (!shapeBefore) {
+        throw new Error(`Shape not found: ${(args as any).id}`);
+      }
+      
+      const zIndexBefore = shapeBefore.zIndex;
+      const minZIndexBefore = Math.min(...context.rectangles.map(r => r.zIndex));
+      
+      console.log(`📊 Sending to back: "${(shapeBefore as any).name || resolvedId}"`);
+      console.log(`  Current z-index: ${zIndexBefore}, Min z-index: ${minZIndexBefore}`);
+      
       context.sendToBack(resolvedId);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      const shapeAfter = context.rectangles.find(r => r.id === resolvedId);
+      if (!shapeAfter) {
+        throw new Error(`Shape disappeared after sendToBack: ${(args as any).id}`);
+      }
+      
+      const zIndexAfter = shapeAfter.zIndex;
+      
+      console.log(`  New z-index: ${zIndexAfter}`);
+      
+      if (zIndexAfter >= zIndexBefore) {
+        console.error('❌ Z-index did not decrease!');
+        throw new Error(`Failed to send shape to back: z-index remained ${zIndexAfter}`);
+      }
+      
+      console.log(`✅ Successfully sent "${(shapeBefore as any).name || resolvedId}" to back (${zIndexBefore} → ${zIndexAfter})`);
+      
       return [];
     }
 
@@ -509,11 +626,40 @@ async function executeCreateGrid(args: any, context: CanvasContextMethods): Prom
  * Execute deleteElement
  */
 async function executeDeleteElement(args: any, context: CanvasContextMethods): Promise<void> {
-  // Resolve the ID (might be a name)
+  // STEP 1: Resolve the ID (might be a name or fuzzy match)
   const resolvedId = resolveShapeId(args.id, context);
-  // Select the shape first, then delete
+  
+  // STEP 2: Validate shape exists
+  const shape = context.rectangles.find(r => r.id === resolvedId);
+  if (!shape) {
+    console.error(`[deleteElement] Shape not found: ${args.id}`);
+    throw new Error(`Shape not found: ${args.id}`);
+  }
+  
+  console.log(`🗑️ Deleting shape: "${(shape as any).name || resolvedId}"`);
+  
+  // STEP 3: Clear current selection
+  context.deselectAll();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // STEP 4: Select the shape to delete
   context.selectShape(resolvedId);
+  
+  // STEP 5: Wait for selection state to update (CRITICAL!)
+  await new Promise(resolve => setTimeout(resolve, 200));
+  
+  // STEP 6: Execute deletion
   await context.deleteSelected();
+  
+  // STEP 7: Verify deletion succeeded
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const stillExists = context.rectangles.find(r => r.id === resolvedId);
+  if (stillExists) {
+    console.error(`[deleteElement] Shape still exists after delete: ${resolvedId}`);
+    throw new Error(`Failed to delete shape: ${(shape as any).name || resolvedId}`);
+  }
+  
+  console.log(`✅ Successfully deleted: "${(shape as any).name || resolvedId}"`);
 }
 
 /**
@@ -523,30 +669,70 @@ async function executeDeleteMultipleElements(args: any, context: CanvasContextMe
   const { ids } = args;
   
   if (!Array.isArray(ids) || ids.length === 0) {
-    console.warn('deleteMultipleElements called with no IDs');
-    return;
+    console.error('❌ No shape IDs provided for deletion');
+    throw new Error('No shapes specified for deletion');
   }
 
-  // Resolve all IDs (might be names)
-  const resolvedIds = ids.map((id: string) => resolveShapeId(id, context)).filter(Boolean);
+  console.log(`🗑️ Attempting to delete ${ids.length} shapes...`);
   
-  console.log(`Deleting ${resolvedIds.length} shapes in bulk:`, resolvedIds);
+  // STEP 1: Resolve and validate all IDs
+  const resolvedIds: string[] = [];
+  const failedIds: string[] = [];
   
-  // CRITICAL FIX: Select ALL shapes first, THEN delete all at once
-  // Clear current selection first
+  for (const id of ids) {
+    try {
+      const resolvedId = resolveShapeId(id, context);
+      const shape = context.rectangles.find(r => r.id === resolvedId);
+      
+      if (shape) {
+        resolvedIds.push(resolvedId);
+        console.log(`  ✅ Found: "${(shape as any).name || resolvedId}"`);
+      } else {
+        failedIds.push(id);
+        console.warn(`  ⚠️ Not found: ${id}`);
+      }
+    } catch (error) {
+      failedIds.push(id);
+      console.error(`  ❌ Error resolving: ${id}`, error);
+    }
+  }
+  
+  if (resolvedIds.length === 0) {
+    throw new Error(`None of the specified shapes were found. Tried: ${ids.join(', ')}`);
+  }
+  
+  if (failedIds.length > 0) {
+    console.warn(`⚠️ Could not find ${failedIds.length} shapes: ${failedIds.join(', ')}`);
+  }
+  
+  // STEP 2: Clear current selection
+  console.log('📋 Clearing selection...');
   context.deselectAll();
+  await new Promise(resolve => setTimeout(resolve, 100));
   
-  // Select all shapes to be deleted
+  // STEP 3: Select all shapes to be deleted
+  console.log(`📋 Selecting ${resolvedIds.length} shapes...`);
   for (const resolvedId of resolvedIds) {
     context.selectShape(resolvedId);
   }
   
-  // Small delay to let selection state update
-  await new Promise(resolve => setTimeout(resolve, 50));
+  // STEP 4: Wait for selection state to update (CRITICAL - increased to 200ms)
+  await new Promise(resolve => setTimeout(resolve, 200));
   
-  // Now delete all selected shapes at once
+  // STEP 5: Execute deletion
+  console.log('🗑️ Executing delete...');
   await context.deleteSelected();
   
-  console.log(`✅ Successfully deleted ${resolvedIds.length} shapes`);
+  // STEP 6: Wait and verify
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  const remainingShapes = context.rectangles.filter(r => resolvedIds.includes(r.id));
+  
+  if (remainingShapes.length === 0) {
+    console.log(`✅ Successfully deleted ${resolvedIds.length} shapes`);
+  } else {
+    console.error(`❌ Delete incomplete: ${remainingShapes.length} shapes still exist`);
+    throw new Error(`Failed to delete ${remainingShapes.length} shapes`);
+  }
 }
 

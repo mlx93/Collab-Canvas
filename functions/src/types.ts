@@ -20,6 +20,7 @@ export interface AIToolSchemas {
   bringToFront: { id: string };
   sendToBack: { id: string };
   deleteElement: { id: string };
+  deleteMultipleElements: { ids: string[] };
   getCanvasState: {};
 }
 

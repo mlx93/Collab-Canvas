@@ -1513,87 +1513,74 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
   // Z-index operations
   const bringToFront = async (id: string) => {
     const targetRect = canvasState.rectangles.find((rect: Shape) => rect.id === id);
-    if (!targetRect) return;
+    if (!targetRect) {
+      console.error('[bringToFront] Shape not found:', id);
+      toast.error('Shape not found');
+      return;
+    }
 
     const maxZIndex = Math.max(...canvasState.rectangles.map((r: Shape) => r.zIndex), 0);
-    if (targetRect.zIndex === maxZIndex) return; // Already at front
+    if (targetRect.zIndex === maxZIndex) {
+      toast('Shape is already at front');
+      return;
+    }
 
     const newZIndex = maxZIndex + 1;
+
+    console.log(`[bringToFront] "${(targetRect as any).name || id}": ${targetRect.zIndex} → ${newZIndex}`);
 
     // Clear any active edit FIRST to prevent conflicts
     if (user?.userId) {
       await clearActiveEdit(id);
     }
 
-    // CRITICAL FIX: Broadcast z-index change to live positions for instant visual update
-    // The Canvas component uses livePositions for z-index sorting (see Canvas.tsx line 714)
-    if (user?.userId) {
-      const width = (targetRect as any).width || (targetRect as any).radius;
-      const height = (targetRect as any).height;
-      setLivePosition(
-        id,
-        user.userId,
-        targetRect.x,
-        targetRect.y,
-        width || 0,
-        height || 0,
-        newZIndex
-      );
-    }
-
-    // Use updateShape for consistency with layers panel - this will update local state and Firestore
+    // Use batchSetZIndex for consistency with layers panel (this works perfectly!)
     try {
-      await updateShape(id, { zIndex: newZIndex });
+      await batchSetZIndex({ [id]: newZIndex });
       toast.success('Brought to front');
     } catch (error) {
       console.error('[bringToFront] Failed to update z-index:', error);
       toast.error('Failed to bring to front');
-      return;
     }
   };
 
   const sendToBack = async (id: string) => {
     const targetRect = canvasState.rectangles.find((rect: Shape) => rect.id === id);
-    if (!targetRect) return;
+    if (!targetRect) {
+      console.error('[sendToBack] Shape not found:', id);
+      toast.error('Shape not found');
+      return;
+    }
 
     // Find the actual minimum z-index among all shapes (no fallback to 0)
     const zIndices = canvasState.rectangles.map((r: Shape) => r.zIndex);
-    if (zIndices.length === 0) return; // No shapes to work with
+    if (zIndices.length === 0) {
+      console.error('[sendToBack] No shapes on canvas');
+      return;
+    }
     
     const minZIndex = Math.min(...zIndices);
-    if (targetRect.zIndex === minZIndex) return; // Already at back
+    if (targetRect.zIndex === minZIndex) {
+      toast('Shape is already at back');
+      return;
+    }
 
     const newZIndex = minZIndex - 1;
+
+    console.log(`[sendToBack] "${(targetRect as any).name || id}": ${targetRect.zIndex} → ${newZIndex}`);
 
     // Clear any active edit FIRST to prevent conflicts
     if (user?.userId) {
       await clearActiveEdit(id);
     }
 
-    // CRITICAL FIX: Broadcast z-index change to live positions for instant visual update
-    // The Canvas component uses livePositions for z-index sorting (see Canvas.tsx line 714)
-    if (user?.userId) {
-      const width = (targetRect as any).width || (targetRect as any).radius;
-      const height = (targetRect as any).height;
-      setLivePosition(
-        id,
-        user.userId,
-        targetRect.x,
-        targetRect.y,
-        width || 0,
-        height || 0,
-        newZIndex
-      );
-    }
-
-    // Use updateShape for consistency with layers panel - this will update local state and Firestore
+    // Use batchSetZIndex for consistency with layers panel (this works perfectly!)
     try {
-      await updateShape(id, { zIndex: newZIndex });
+      await batchSetZIndex({ [id]: newZIndex });
       toast.success('Sent to back');
     } catch (error) {
       console.error('[sendToBack] Failed to update z-index:', error);
       toast.error('Failed to send to back');
-      return;
     }
   };
 

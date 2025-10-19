@@ -10,7 +10,8 @@ import { AIOperation } from './types';
 interface PatternTemplate {
   pattern: RegExp;
   description: string;
-  generator: (matches: RegExpMatchArray, viewport: any) => AIOperation[];
+  generator: (matches: RegExpMatchArray, viewport: any, canvasState?: any) => AIOperation[];
+  requiresCanvasState?: boolean; // Some patterns need canvas state to work
 }
 
 /**
@@ -289,8 +290,115 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
         return operation;
       });
     }
+  },
+  
+  // DELETE PATTERNS (Require canvas state)
+  {
+    pattern: /^delete all (square|rectangle|circle|triangle|line|text)s?$/i,
+    description: "Delete all shapes of a specific type",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const shapeType = matches[1].toLowerCase();
+      const normalizedType = shapeType === 'square' ? 'rectangle' : shapeType;
+      
+      const shapesToDelete = canvasState.shapes.filter((s: any) => 
+        s.type === normalizedType
+      );
+      
+      console.log(`  [Delete Cache] Found ${shapesToDelete.length} ${normalizedType}(s) to delete`);
+      
+      if (shapesToDelete.length === 0) {
+        return []; // No shapes to delete
+      }
+      
+      return [{
+        name: 'deleteMultipleElements',
+        args: {
+          ids: shapesToDelete.map((s: any) => s.id)
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^delete (\d+) of the (\d+) (\w+) (square|rectangle|circle|triangle)s?$/i,
+    description: "Delete N of M colored shapes",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const count = parseInt(matches[1], 10);
+      const color = matches[3].toLowerCase();
+      const shapeType = matches[4].toLowerCase();
+      const normalizedType = shapeType === 'square' ? 'rectangle' : shapeType;
+      
+      // Find matching shapes by color and type
+      const matchingShapes = canvasState.shapes.filter((s: any) => {
+        const matchesType = s.type === normalizedType;
+        const matchesColor = isColorMatch(s.color, color);
+        return matchesType && matchesColor;
+      });
+      
+      // Take first N shapes
+      const shapesToDelete = matchingShapes.slice(0, count);
+      
+      console.log(`  [Delete Cache] Deleting ${shapesToDelete.length} ${color} ${normalizedType}(s)`);
+      
+      if (shapesToDelete.length === 0) {
+        return [];
+      }
+      
+      return [{
+        name: 'deleteMultipleElements',
+        args: {
+          ids: shapesToDelete.map((s: any) => s.id)
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^delete (?:the )?selected (?:shape|shapes?|rectangle|circle|triangle)?$/i,
+    description: "Delete selected shapes",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.selectedIds) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      console.log(`  [Delete Cache] Deleting ${selectedIds.length} selected shape(s)`);
+      
+      if (selectedIds.length === 0) {
+        return [];
+      }
+      
+      return [{
+        name: 'deleteMultipleElements',
+        args: {
+          ids: selectedIds
+        }
+      }];
+    }
   }
 ];
+
+/**
+ * Helper to match color patterns in hex codes
+ */
+function isColorMatch(hexColor: string, colorName: string): boolean {
+  const colorPatterns: Record<string, RegExp> = {
+    'red': /#(ef4444|dc2626|b91c1c)/i,
+    'blue': /#(3b82f6|2563eb|1d4ed8)/i,
+    'green': /#(10b981|059669|047857)/i,
+    'yellow': /#(f59e0b|d97706|b45309)/i,
+    'orange': /#(f97316|ea580c|c2410c)/i,
+    'purple': /#(8b5cf6|7c3aed|6d28d9)/i,
+  };
+  
+  const pattern = colorPatterns[colorName.toLowerCase()];
+  return pattern ? pattern.test(hexColor) : false;
+}
 
 /**
  * Try to match user prompt to a cached pattern
@@ -298,15 +406,21 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
  */
 export function tryMatchPattern(
   prompt: string,
-  viewport: any
+  viewport: any,
+  canvasState?: any
 ): AIOperation[] | null {
   const trimmedPrompt = prompt.trim();
   
   for (const template of PATTERN_TEMPLATES) {
+    // Skip templates that require canvas state if we don't have it
+    if (template.requiresCanvasState && !canvasState) {
+      continue;
+    }
+    
     const match = trimmedPrompt.match(template.pattern);
     if (match) {
       console.log(`[Pattern Cache HIT] ${template.description}: "${prompt}"`);
-      const operations = template.generator(match, viewport);
+      const operations = template.generator(match, viewport, canvasState);
       console.log(`[Pattern Cache] Generated ${operations.length} operations`);
       return operations;
     }
