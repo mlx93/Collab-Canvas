@@ -105,19 +105,21 @@ export async function aiCommandHandler(
     }
 
     // PHASE 2: Try pattern cache first (100x speedup for common patterns!)
+    console.log(`[AI] Checking pattern cache for prompt: "${prompt}"`);
     const cachedOperations = tryMatchPattern(prompt, canvasState.viewport, canvasState);
     let plan: AIPlan;
     
     if (cachedOperations) {
       // Cache hit! Skip OpenAI entirely
       console.log(`[AI] Pattern cache HIT - bypassing OpenAI for instant response`);
+      console.log(`[AI] Generated ${cachedOperations.length} cached operation(s)`);
       plan = {
         operations: cachedOperations,
         rationale: 'Used cached pattern template for instant response'
       };
     } else {
       // Cache miss - use OpenAI
-      console.log(`[AI] Pattern cache MISS - calling OpenAI`);
+      console.log(`[AI] Pattern cache MISS - calling OpenAI for prompt: "${prompt}"`);
       
       // Initialize OpenAI
       const openai = getOpenAIClient();
@@ -289,7 +291,14 @@ Examples:
 • Circle radius=50, "increase by 20%": NEW = 50 × 1.20 = 60 ✅
 • Rectangle width=100, "decrease by 30%": NEW = 100 × 0.70 = 70 ✅ (NOT 100 × 0.30 = 30 ❌)
 
-**Clarification**: If ambiguous, return:
+**Clarification**: Only ask if TRULY ambiguous:
+- Multiple shapes with same name → ask which one
+- "delete some" or "delete a few" → ask how many
+- "the blue circle" when 3+ exist → ask which one
+- DO NOT ask for: "delete the red circles" when all should be deleted
+- DO NOT ask for: "delete all X" - just delete all matching shapes
+
+Return:
 {
   "operations": [],
   "needsClarification": {

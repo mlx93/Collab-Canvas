@@ -304,7 +304,7 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
   
   // DELETE PATTERNS (Require canvas state)
   {
-    pattern: /^delete all (square|rectangle|circle|triangle|line|text)s?$/i,
+    pattern: /^(?:please |can you |could you )?(?:delete|remove) all (?:the )?(square|rectangle|circle|triangle|line|text)s?$/i,
     description: "Delete all shapes of a specific type",
     requiresCanvasState: true,
     generator: (matches, viewport, canvasState) => {
@@ -333,8 +333,8 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
   },
   
   {
-    pattern: /^delete (?:the |all )?(\w+) (square|rectangle|circle|triangle|line|text)s?$/i,
-    description: "Delete all colored shapes (e.g., 'delete the red squares' or 'delete all blue circles')",
+    pattern: /^(?:please |can you |could you )?(?:delete|remove) (?:the |all |these |those )?(\w+) (square|rectangle|circle|triangle|line|text)s?$/i,
+    description: "Delete all colored shapes (e.g., 'delete the red squares' or 'remove all blue circles')",
     requiresCanvasState: true,
     generator: (matches, viewport, canvasState) => {
       if (!canvasState || !canvasState.shapes) return [];
@@ -360,6 +360,44 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
       
       if (shapesToDelete.length === 0) {
         return []; // No shapes to delete
+      }
+      
+      return [{
+        name: 'deleteMultipleElements',
+        args: {
+          ids: shapesToDelete.map((s: any) => s.id)
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^(?:please |can you |could you )?(?:delete|remove) (?:the |all )?(\d+) (\w+)? ?(square|rectangle|circle|triangle|line|text)s?$/i,
+    description: "Delete N shapes (e.g., 'delete 50 red circles' or 'delete 10 circles')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const count = parseInt(matches[1], 10);
+      const color = matches[2] ? matches[2].toLowerCase() : null;
+      const shapeType = matches[3].toLowerCase();
+      const normalizedType = shapeType === 'square' ? 'rectangle' : shapeType;
+      
+      // Find matching shapes
+      let matchingShapes = canvasState.shapes.filter((s: any) => {
+        const matchesType = s.type === normalizedType;
+        if (!color) return matchesType;
+        const matchesColor = isColorMatch(s.color, color);
+        return matchesType && matchesColor;
+      });
+      
+      // Take first N shapes
+      const shapesToDelete = matchingShapes.slice(0, count);
+      
+      console.log(`  [Delete Cache] Deleting ${shapesToDelete.length} ${color || ''} ${normalizedType}(s)`);
+      
+      if (shapesToDelete.length === 0) {
+        return [];
       }
       
       return [{
