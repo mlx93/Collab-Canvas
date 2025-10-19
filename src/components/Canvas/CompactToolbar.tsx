@@ -1,11 +1,10 @@
 // Compact vertical toolbar with icon-based shape creation
 import React, { useState, useRef } from 'react';
 import { useCanvas } from '../../hooks/useCanvas';
-import { ShortcutsLegend } from './ShortcutsLegend';
 import { CompactColorPicker } from './CompactColorPicker';
 
 export const CompactToolbar: React.FC = () => {
-  const { addRectangle, addCircle, addTriangle, addLine, addText, selectedIds, updateShape, defaultColor, defaultOpacity, setDefaultColor } = useCanvas();
+  const { addRectangle, addCircle, addTriangle, addLine, addText, selectedIds, rectangles, updateShape, defaultColor, defaultOpacity, setDefaultColor, viewport } = useCanvas();
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
@@ -132,12 +131,18 @@ export const CompactToolbar: React.FC = () => {
           `}
           title={tool.label}
         >
-          {/* Shape icons - all CSS-styled and grey */}
+          {/* Shape icons - styled with default color */}
           {tool.id === 'rectangle' && (
-            <div className="w-6 h-6 bg-gray-600 rounded-sm" />
+            <div 
+              className="w-6 h-6 rounded-sm transition-colors" 
+              style={{ backgroundColor: defaultColor }}
+            />
           )}
           {tool.id === 'circle' && (
-            <div className="w-6 h-6 rounded-full bg-gray-600" />
+            <div 
+              className="w-6 h-6 rounded-full transition-colors" 
+              style={{ backgroundColor: defaultColor }}
+            />
           )}
           {tool.id === 'triangle' && (
             <div 
@@ -145,18 +150,24 @@ export const CompactToolbar: React.FC = () => {
               style={{
                 borderLeft: '12px solid transparent',
                 borderRight: '12px solid transparent',
-                borderBottom: '20px solid rgb(75, 85, 99)', // gray-600
+                borderBottom: `20px solid ${defaultColor}`,
               }}
             />
           )}
         {tool.id === 'line' && (
           <div 
-            className="w-7 h-0.5 bg-gray-600 rotate-45" 
+            className="w-7 h-0.5 rotate-45 transition-colors" 
+            style={{ backgroundColor: defaultColor }}
           />
         )}
         {tool.id === 'text' && (
           <div className="w-6 h-6 flex items-center justify-center">
-            <span className="text-gray-600 font-bold text-lg">T</span>
+            <span 
+              className="font-bold text-lg transition-colors" 
+              style={{ color: defaultColor }}
+            >
+              T
+            </span>
           </div>
         )}
           {/* Tooltip */}
@@ -173,13 +184,8 @@ export const CompactToolbar: React.FC = () => {
       <button
         ref={colorPickerRef}
         onClick={handleColorPickerToggle}
-        onMouseEnter={() => {
-          if (!showColorPicker) {
-            handleColorPickerToggle();
-          }
-        }}
-        className="w-10 h-10 rounded flex items-center justify-center text-lg hover:bg-gray-100 transition-colors text-blue-600 cursor-pointer"
-        title="Color Picker (P)"
+        className="w-10 h-10 rounded flex items-center justify-center text-lg hover:bg-indigo-50 hover:scale-110 transition-all text-indigo-600 cursor-pointer"
+        title="Color Picker (P) - Click to open"
       >
         🎨
       </button>
@@ -187,15 +193,27 @@ export const CompactToolbar: React.FC = () => {
       {/* Divider */}
       <div className="w-8 h-px bg-gray-300 my-1" />
 
-      {/* Keyboard Shortcuts Legend */}
-      <ShortcutsLegend />
+      {/* Zoom Display */}
+      <div className="w-10 h-10 rounded flex items-center justify-center bg-gray-50 border border-gray-200">
+        <span className="text-xs font-mono font-semibold text-gray-700">
+          {Math.round(viewport.scale * 100)}%
+        </span>
+      </div>
 
       {/* Compact Color Picker Modal */}
       {showColorPicker && (
         <CompactColorPicker
           onClose={() => setShowColorPicker(false)}
-          initialColor={selectedIds.length > 0 ? "#000000" : defaultColor}
-          initialOpacity={selectedIds.length > 0 ? 1 : defaultOpacity}
+          initialColor={
+            selectedIds.length > 0
+              ? (rectangles.find(r => r.id === selectedIds[0])?.color || defaultColor)
+              : defaultColor
+          }
+          initialOpacity={
+            selectedIds.length > 0
+              ? (rectangles.find(r => r.id === selectedIds[0])?.opacity || defaultOpacity)
+              : defaultOpacity
+          }
           onColorChange={handleColorChange}
           position={colorPickerPosition}
         />

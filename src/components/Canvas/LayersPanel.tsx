@@ -208,7 +208,7 @@ export function LayersPanel() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Require 8px movement before drag starts (allows click to work)
+        distance: 5, // Require 5px movement before drag starts (smoother drag experience)
       },
     }),
     useSensor(KeyboardSensor, {
@@ -319,8 +319,9 @@ export function LayersPanel() {
         <p className="text-xs text-gray-500 mt-1">
           {rectangles.length} {rectangles.length === 1 ? 'shape' : 'shapes'} • Drag to reorder
         </p>
-        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
-          💡 <strong>Tip:</strong> Double-click to select shapes
+        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 leading-relaxed">
+          <div>💡 Double-click to select/unselect</div>
+          <div className="mt-0.5">Double-click name to rename</div>
         </div>
       </div>
 

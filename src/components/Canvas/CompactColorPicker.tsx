@@ -15,6 +15,7 @@ export function CompactColorPicker({
   onColorChange,
   position = { x: 0, y: 0 }
 }: CompactColorPickerProps) {
+  const [isReady, setIsReady] = useState(false);
   const [color, setColor] = useState(initialColor);
   const [opacity, setOpacity] = useState(initialOpacity);
   const [hue, setHue] = useState(0);
@@ -63,12 +64,19 @@ export function CompactColorPicker({
     return { h: h * 360, s: s * 100, l: l * 100 };
   };
 
-  // Initialize HSL values from initial color
+  // Initialize HSL values from initial color and mark as ready after a brief delay
   useEffect(() => {
     const hsl = hexToHsl(initialColor);
     setHue(hsl.h);
     setSaturation(hsl.s);
     setLightness(hsl.l);
+    
+    // Small delay to ensure color is fully initialized before displaying
+    const timer = setTimeout(() => {
+      setIsReady(true);
+    }, 50);
+    
+    return () => clearTimeout(timer);
   }, [initialColor]);
 
   // Update color when HSL changes
@@ -79,6 +87,8 @@ export function CompactColorPicker({
 
   // Draw gradient canvas
   useEffect(() => {
+    if (!isReady) return; // Wait until color is initialized
+    
     const canvas = gradientRef.current;
     if (!canvas) return;
 
@@ -98,10 +108,12 @@ export function CompactColorPicker({
         ctx.fillRect(x, y, 1, 1);
       }
     }
-  }, [hue]);
+  }, [hue, isReady]);
 
   // Draw hue slider
   useEffect(() => {
+    if (!isReady) return; // Wait until color is initialized
+    
     const canvas = hueRef.current;
     if (!canvas) return;
 
@@ -118,7 +130,7 @@ export function CompactColorPicker({
       ctx.fillStyle = hex;
       ctx.fillRect(x, 0, 1, height);
     }
-  }, []);
+  }, [isReady]);
 
   const handleGradientClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = gradientRef.current;
@@ -128,16 +140,28 @@ export function CompactColorPicker({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const s = Math.max(0, Math.min(100, (x / canvas.width) * 100));
-    const l = Math.max(0, Math.min(100, 100 - (y / canvas.height) * 100));
+    const s = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    const l = Math.max(0, Math.min(100, 100 - (y / rect.height) * 100));
 
     setSaturation(s);
     setLightness(l);
   };
 
   const handleGradientMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Always update on mouse move when mouse is down (more seamless)
     if (e.buttons === 1) {
-      handleGradientClick(e);
+      const canvas = gradientRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+      const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+
+      const s = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      const l = Math.max(0, Math.min(100, 100 - (y / rect.height) * 100));
+
+      setSaturation(s);
+      setLightness(l);
     }
   };
 
@@ -147,14 +171,22 @@ export function CompactColorPicker({
 
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const h = Math.max(0, Math.min(360, (x / canvas.width) * 360));
+    const h = Math.max(0, Math.min(360, (x / rect.width) * 360));
 
     setHue(h);
   };
 
   const handleHueMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // Always update on mouse move when mouse is down (more seamless)
     if (e.buttons === 1) {
-      handleHueClick(e);
+      const canvas = hueRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+
+      const h = Math.max(0, Math.min(360, (x / rect.width) * 360));
+      setHue(h);
     }
   };
 
@@ -207,9 +239,14 @@ export function CompactColorPicker({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose, hue, saturation, lightness]);
 
+  // Don't render until color is fully initialized (prevents flicker)
+  if (!isReady) {
+    return null;
+  }
+
   return (
     <div 
-      className="absolute bg-white rounded-lg shadow-2xl border border-gray-200 p-3 w-80 z-50"
+      className="absolute bg-white rounded-lg shadow-2xl border border-gray-200 p-3 w-64 z-50 animate-in fade-in duration-150"
       style={{
         left: position.x,
         top: position.y,
@@ -241,9 +278,10 @@ export function CompactColorPicker({
         <div className="relative">
           <canvas
             ref={gradientRef}
-            width={160}
-            height={120}
-            className="border border-gray-300 rounded cursor-crosshair select-none"
+            width={224}
+            height={160}
+            className="border border-gray-300 rounded cursor-crosshair select-none w-full"
+            style={{ width: '100%', height: '160px', display: 'block' }}
             onClick={handleGradientClick}
             onMouseMove={handleGradientMouseMove}
             onMouseDown={handleGradientClick}
@@ -252,8 +290,8 @@ export function CompactColorPicker({
           <div
             className="absolute w-3 h-3 border-2 border-white rounded-full pointer-events-none transition-all duration-100"
             style={{
-              left: (saturation / 100) * 160 - 6,
-              top: ((100 - lightness) / 100) * 120 - 6,
+              left: `calc(${saturation}% - 6px)`,
+              top: `calc(${100 - lightness}% - 6px)`,
               boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.3)'
             }}
           />
@@ -265,9 +303,10 @@ export function CompactColorPicker({
         <div className="relative">
           <canvas
             ref={hueRef}
-            width={160}
+            width={224}
             height={16}
-            className="border border-gray-300 rounded cursor-pointer select-none"
+            className="border border-gray-300 rounded cursor-pointer select-none w-full"
+            style={{ width: '100%', height: '16px', display: 'block' }}
             onClick={handleHueClick}
             onMouseMove={handleHueMouseMove}
             onMouseDown={handleHueClick}
@@ -277,7 +316,7 @@ export function CompactColorPicker({
           <div
             className="absolute w-2 h-4 border-2 border-white rounded pointer-events-none transition-all duration-100 top-1"
             style={{
-              left: (hue / 360) * 160 - 4,
+              left: `calc(${(hue / 360) * 100}% - 4px)`,
               boxShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 0 6px rgba(0,0,0,0.3)'
             }}
           />

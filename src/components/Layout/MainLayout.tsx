@@ -79,13 +79,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         {/* Right Panels - fixed position overlay, doesn't affect canvas size */}
         {/* Layers Panel - Only visible when properties panel is visible AND user has toggled it on */}
         {layers && showLayers && hasSelection && (
-          <div className="fixed right-0 top-16 bottom-0 z-30">
+          <div className="fixed right-0 top-16 bottom-0 z-30 animate-in slide-in-from-right duration-150">
             {layers}
           </div>
         )}
         
         {/* Properties Panel - shows when there's a selection, positioned left of layers panel if layers visible */}
-        <div className={`fixed top-16 bottom-0 transition-all duration-300 z-20 ${
+        <div className={`fixed top-16 bottom-0 transition-all duration-150 ease-out z-20 ${
           hasSelection ? 'translate-x-0' : 'translate-x-full'
         } ${showLayers && hasSelection ? 'right-80' : 'right-0'}`}>
           <div className="w-72 bg-white border-l border-gray-200 shadow-lg overflow-y-auto h-full">

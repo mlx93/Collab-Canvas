@@ -1149,6 +1149,19 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           return canvasService.createRectangleWithId(id, shapeData);
         })
       );
+      
+      // Add undo tracking for paste operation
+      if (user) {
+        pushUndo({
+          type: 'create',
+          timestamp: Date.now(),
+          userId: user.userId,
+          shapeIds: shapesWithMetadata.map(s => s.id),
+          before: null,
+          after: shapesWithMetadata
+        });
+      }
+      
       toast.success(`Pasted ${shapesWithMetadata.length} shape(s)`);
     } catch (error) {
       toast.error('Failed to paste shapes');
@@ -1214,6 +1227,19 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
           return canvasService.createRectangleWithId(id, shapeData);
         })
       );
+      
+      // Add undo tracking for duplicate operation
+      if (user) {
+        pushUndo({
+          type: 'create',
+          timestamp: Date.now(),
+          userId: user.userId,
+          shapeIds: duplicates.map(s => s.id),
+          before: null,
+          after: duplicates
+        });
+      }
+      
       toast.success(`Duplicated ${duplicates.length} shape(s)`);
     } catch (error) {
       toast.error('Failed to duplicate shapes');
@@ -1365,7 +1391,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         case 'reorder':
           // Restore previous state
           if (action.before && !Array.isArray(action.before)) {
-            await updateShape(action.before.id, action.before as any, false); // Don't track undo for this update
+            // Remove undefined fields before updating (Firestore doesn't accept undefined values)
+            const cleanedShape = removeUndefinedFields(action.before);
+            await updateShape(cleanedShape.id, cleanedShape as any, false); // Don't track undo for this update
           }
           break;
       }
@@ -1499,7 +1527,9 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
         case 'reorder':
           // Redo modify/move/reorder = apply the after state
           if (action.after && !Array.isArray(action.after)) {
-            await updateShape(action.after.id, action.after as any, false); // Don't track undo for this update
+            // Remove undefined fields before updating (Firestore doesn't accept undefined values)
+            const cleanedShape = removeUndefinedFields(action.after);
+            await updateShape(cleanedShape.id, cleanedShape as any, false); // Don't track undo for this update
           }
           break;
       }

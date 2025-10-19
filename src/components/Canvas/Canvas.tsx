@@ -561,8 +561,8 @@ export const Canvas: React.FC = () => {
       const dx = pos.x - lastPosRef.current.x;
       const dy = pos.y - lastPosRef.current.y;
 
-      // Use panViewport to update based on delta (handles state correctly)
-      panViewport(dx, dy);
+      // Apply 1.2x multiplier for smoother panning
+      panViewport(dx * 1.2, dy * 1.2);
 
       // Update last position for next delta calculation
       lastPosRef.current = { x: pos.x, y: pos.y };

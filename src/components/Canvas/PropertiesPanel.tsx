@@ -5,6 +5,7 @@ import { useCanvas } from '../../hooks/useCanvas';
 import { useAuth } from '../../hooks/useAuth';
 import { setActiveEdit, clearActiveEdit, getUserCursorColor } from '../../services/activeEdits.service';
 import { CompactColorPicker } from './CompactColorPicker';
+import { PropertySection } from './PropertySection';
 
 // Enhanced color palette with translucent options
 const TEXT_COLOR_PALETTE = {
@@ -34,6 +35,7 @@ export const PropertiesPanel: React.FC = () => {
   const [isBorderColorDropdownOpen, setIsBorderColorDropdownOpen] = useState(false);
   const [showFloatingColorPicker, setShowFloatingColorPicker] = useState(false);
   const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const colorPickerRef = useRef<HTMLButtonElement>(null);
   // const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Not currently used
   
@@ -194,7 +196,7 @@ export const PropertiesPanel: React.FC = () => {
   // Handle delete
   const handleDelete = () => {
     if (selectedIds.length === 0) return;
-    deleteSelected();
+    setShowDeleteConfirm(true);
   };
 
   // Handle keyboard delete (Shift+Delete/Backspace) - MUST be before any conditional returns
@@ -245,96 +247,109 @@ export const PropertiesPanel: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="mb-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Properties</h3>
-            <button
-              onClick={() => {
-                // Toggle layers panel - this will be connected to MainLayout state
-                const event = new CustomEvent('toggleLayers');
-                window.dispatchEvent(event);
-              }}
-              className="text-gray-600 hover:text-gray-900 text-sm font-medium flex items-center gap-1"
-              title="Toggle Layers Panel"
-            >
-              <span>Layers</span>
-              <span id="layers-arrow">→</span>
-            </button>
-          </div>
-          {isMultiSelection && (
-            <p className="text-xs text-blue-600 mt-1">
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* Header */}
+      <div className="px-4 py-4 bg-white border-b border-gray-200">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-base font-semibold text-gray-800">Properties</h3>
+          <button
+            onClick={() => {
+              // Toggle layers panel - this will be connected to MainLayout state
+              const event = new CustomEvent('toggleLayers');
+              window.dispatchEvent(event);
+            }}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all flex items-center gap-1"
+            title="Toggle Layers Panel"
+          >
+            <span>Layers</span>
+            <span id="layers-arrow">→</span>
+          </button>
+        </div>
+        {isMultiSelection && (
+          <div className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+            <p className="text-xs text-indigo-700 font-medium">
               {selectedIds.length} shapes selected (showing first)
             </p>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-      {/* Enhanced Color Picker - Only show for non-text shapes */}
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+
+      {/* APPEARANCE SECTION - For non-text shapes */}
       {selectedRectangle.type !== 'text' && (
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-2">
-            Color
-          </label>
+        <PropertySection title="Appearance" icon="🎨" defaultExpanded={true}>
           <div className="relative">
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Color & Opacity
+            </label>
             <button
               ref={colorPickerRef}
               onClick={handleColorPickerToggle}
-              onMouseEnter={() => {
-                if (!showFloatingColorPicker) {
-                  handleColorPickerToggle();
-                }
-              }}
-              className="w-full h-10 rounded-md border-2 border-gray-300 hover:border-blue-500 transition-colors flex items-center justify-between px-3 cursor-pointer"
+              type="button"
+              className="w-full h-12 rounded-lg border-2 border-gray-200 hover:border-indigo-400 hover:shadow-md transition-all flex items-center justify-between px-4 cursor-pointer"
               style={{ 
                 backgroundColor: selectedRectangle.color,
                 opacity: selectedRectangle.opacity || 1
               }}
             >
-              <span className="text-white text-xs font-medium bg-black bg-opacity-50 px-2 py-0.5 rounded">
+              <span className="text-white text-sm font-medium bg-black bg-opacity-50 px-3 py-1 rounded-md">
                 {getColorName(selectedRectangle.color)}
               </span>
-              <span className="text-xs">🎨</span>
+              <span className="text-lg">🎨</span>
             </button>
+            
+            {/* Color Picker Dropdown */}
+            {showFloatingColorPicker && (
+              <div className="absolute top-full mt-2 z-50" style={{ left: '-16px' }}>
+                <CompactColorPicker
+                  onClose={() => setShowFloatingColorPicker(false)}
+                  initialColor={selectedRectangle?.color || '#000000'}
+                  initialOpacity={selectedRectangle?.opacity || 1}
+                  onColorChange={handleEnhancedColorChange}
+                  position={{ x: 0, y: 0 }}
+                />
+              </div>
+            )}
           </div>
-        </div>
+        </PropertySection>
       )}
 
 
-      {/* Shape-specific size properties */}
+      {/* SIZE SECTION - Rectangle */}
       {selectedRectangle.type === 'rectangle' && (
-        <>
-          {/* Width Display (Read-only) */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Width
-            </label>
-            <input
-              type="text"
-              value={`${Math.round(selectedRectangle.width)}px`}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-            />
+        <PropertySection title="Size" icon="📏" defaultExpanded={false}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Width
+              </label>
+              <input
+                type="text"
+                value={`${Math.round(selectedRectangle.width)}px`}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Height
+              </label>
+              <input
+                type="text"
+                value={`${Math.round(selectedRectangle.height)}px`}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+              />
+            </div>
           </div>
-
-          {/* Height Display (Read-only) */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Height
-            </label>
-            <input
-              type="text"
-              value={`${Math.round(selectedRectangle.height)}px`}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-            />
-          </div>
-        </>
+        </PropertySection>
       )}
       
+      {/* SIZE SECTION - Circle */}
       {selectedRectangle.type === 'circle' && (
-        <>
-          {/* Radius Display (Read-only) */}
+        <PropertySection title="Size" icon="📏" defaultExpanded={false}>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">
               Radius
@@ -343,46 +358,45 @@ export const PropertiesPanel: React.FC = () => {
               type="text"
               value={`${Math.round(selectedRectangle.radius)}px`}
               readOnly
-              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
             />
           </div>
-        </>
+        </PropertySection>
       )}
       
+      {/* SIZE SECTION - Triangle */}
       {selectedRectangle.type === 'triangle' && (
-        <>
-          {/* Width Display (Read-only) */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Width
-            </label>
-            <input
-              type="text"
-              value={`${Math.round(selectedRectangle.width)}px`}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-            />
+        <PropertySection title="Size" icon="📏" defaultExpanded={false}>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Width
+              </label>
+              <input
+                type="text"
+                value={`${Math.round(selectedRectangle.width)}px`}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-2">
+                Height
+              </label>
+              <input
+                type="text"
+                value={`${Math.round(selectedRectangle.height)}px`}
+                readOnly
+                className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+              />
+            </div>
           </div>
-
-          {/* Height Display (Read-only) */}
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-2">
-              Height
-            </label>
-            <input
-              type="text"
-              value={`${Math.round(selectedRectangle.height)}px`}
-              readOnly
-              className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-            />
-          </div>
-        </>
+        </PropertySection>
       )}
 
-      {/* Line-specific properties */}
+      {/* LINE PROPERTIES */}
       {selectedRectangle.type === 'line' && (
-        <>
-          {/* Stroke Width */}
+        <PropertySection title="Stroke" icon="✏️" defaultExpanded={true}>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-2">
               Stroke Width
@@ -396,10 +410,10 @@ export const PropertiesPanel: React.FC = () => {
                 const strokeWidth = Math.max(1, Math.min(20, parseInt(e.target.value) || 2));
                 updateShape(selectedRectangle.id, { strokeWidth });
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
           </div>
-        </>
+        </PropertySection>
       )}
 
       {/* Text-specific properties */}
@@ -665,101 +679,132 @@ export const PropertiesPanel: React.FC = () => {
         </>
       )}
 
-      {/* X Position Display (Read-only) */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          X Position
-        </label>
-        <input
-          type="text"
-          value={`${Math.round(selectedRectangle.x)}px`}
-          readOnly
-          className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-        />
-      </div>
-
-      {/* Y Position Display (Read-only) */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Y Position
-        </label>
-        <input
-          type="text"
-          value={`${Math.round(selectedRectangle.y)}px`}
-          readOnly
-          className="w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-sm text-gray-700 cursor-not-allowed"
-        />
-      </div>
-
-      {/* Z-Index Input (Editable) - Available for all shapes */}
-      <div>
-        <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
-          Z-Index (Layer Order)
-        </label>
-        <input
-          id="zindex"
-          type="text"
-          value={zIndexInput}
-          onChange={handleZIndexChange}
-          onBlur={handleZIndexBlur}
-          placeholder="Enter z-index"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="off"
-          spellCheck="false"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        />
-        <p className="text-xs text-gray-500 mt-1">Lower = back, higher = front</p>
-      </div>
-
-      {/* Z-Index Control Buttons - Available for all shapes */}
-      <div>
-        <label className="block text-xs font-medium text-gray-600 mb-2">
-          Layer Controls
-        </label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => selectedRectangle && bringToFront(selectedRectangle.id)}
-            className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs rounded-md transition-colors"
-            title="Bring to front"
-          >
-            ↑ Front
-          </button>
-          <button
-            onClick={() => selectedRectangle && sendToBack(selectedRectangle.id)}
-            className="flex-1 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-md transition-colors"
-            title="Send to back"
-          >
-            ↓ Back
-          </button>
+      {/* POSITION SECTION */}
+      <PropertySection title="Position" icon="📍" defaultExpanded={false}>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              X Position
+            </label>
+            <input
+              type="text"
+              value={`${Math.round(selectedRectangle.x)}px`}
+              readOnly
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-2">
+              Y Position
+            </label>
+            <input
+              type="text"
+              value={`${Math.round(selectedRectangle.y)}px`}
+              readOnly
+              className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm text-gray-700 cursor-not-allowed"
+            />
+          </div>
         </div>
-      </div>
+      </PropertySection>
+
+      {/* LAYER SECTION */}
+      <PropertySection title="Layer" icon="📑" defaultExpanded={true}>
+        <div>
+          <label htmlFor="zindex" className="block text-xs font-medium text-gray-600 mb-2">
+            Z-Index
+          </label>
+          <input
+            id="zindex"
+            type="text"
+            value={zIndexInput}
+            onChange={handleZIndexChange}
+            onBlur={handleZIndexBlur}
+            placeholder="Enter z-index"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          />
+          <p className="text-xs text-gray-500 mt-1">Lower = back, higher = front</p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-2">
+            Quick Actions
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => selectedRectangle && bringToFront(selectedRectangle.id)}
+              className="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-xs rounded-lg transition-all hover:shadow-md font-medium"
+              title="Bring to front"
+            >
+              ↑ To Front
+            </button>
+            <button
+              onClick={() => selectedRectangle && sendToBack(selectedRectangle.id)}
+              className="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white text-xs rounded-lg transition-all hover:shadow-md font-medium"
+              title="Send to back"
+            >
+              ↓ To Back
+            </button>
+          </div>
+        </div>
+      </PropertySection>
 
       </div>
       
       {/* Sticky Delete Button at Bottom */}
-      <div className="p-4 border-t border-gray-200 bg-white">
+      <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
         <button
           onClick={handleDelete}
-          className="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md transition-colors font-medium text-sm"
+          className="w-full bg-red-50 hover:bg-red-100 text-red-600 border-2 border-red-200 hover:border-red-300 py-3 px-4 rounded-lg transition-all font-medium text-sm"
         >
-          Delete {selectedIds.length > 1 ? `${selectedIds.length} Shapes` : (selectedRectangle.type === 'text' ? 'Text Box' : 'Shape')}
+          🗑️ Delete {selectedIds.length > 1 ? `${selectedIds.length} Shapes` : (selectedRectangle.type === 'text' ? 'Text' : 'Shape')}
         </button>
         <p className="text-xs text-gray-500 mt-2 text-center">
-          Press Shift+Delete or Shift+Backspace to delete
+          Shift+Delete or Shift+Backspace
         </p>
       </div>
 
-      {/* Compact Color Picker Modal */}
-      {showFloatingColorPicker && (
-        <CompactColorPicker
-          onClose={() => setShowFloatingColorPicker(false)}
-          initialColor={selectedRectangle?.color || '#000000'}
-          initialOpacity={selectedRectangle?.opacity || 1}
-          onColorChange={handleEnhancedColorChange}
-          position={colorPickerPosition}
-        />
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-40 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm mx-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-2xl">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete {selectedIds.length > 1 ? 'Shapes' : 'Shape'}?</h3>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete {selectedIds.length > 1 ? `${selectedIds.length} shapes` : `this ${selectedRectangle.type === 'text' ? 'text' : 'shape'}`}?
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  deleteSelected();
+                  setShowDeleteConfirm(false);
+                }}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium text-sm transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
     </div>
   );
 };
