@@ -333,6 +333,45 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
   },
   
   {
+    pattern: /^delete (?:the |all )?(\w+) (square|rectangle|circle|triangle|line|text)s?$/i,
+    description: "Delete all colored shapes (e.g., 'delete the red squares' or 'delete all blue circles')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const color = matches[1].toLowerCase();
+      const shapeType = matches[2].toLowerCase();
+      const normalizedType = shapeType === 'square' ? 'rectangle' : shapeType;
+      
+      // Check if first word is actually a color
+      const validColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'black', 'white'];
+      if (!validColors.includes(color)) {
+        return []; // Not a color, skip this pattern
+      }
+      
+      // Find all matching shapes by color and type
+      const shapesToDelete = canvasState.shapes.filter((s: any) => {
+        const matchesType = s.type === normalizedType;
+        const matchesColor = isColorMatch(s.color, color);
+        return matchesType && matchesColor;
+      });
+      
+      console.log(`  [Delete Cache] Found ${shapesToDelete.length} ${color} ${normalizedType}(s) to delete`);
+      
+      if (shapesToDelete.length === 0) {
+        return []; // No shapes to delete
+      }
+      
+      return [{
+        name: 'deleteMultipleElements',
+        args: {
+          ids: shapesToDelete.map((s: any) => s.id)
+        }
+      }];
+    }
+  },
+  
+  {
     pattern: /^delete (\d+) of the (\d+) (\w+) (square|rectangle|circle|triangle)s?$/i,
     description: "Delete N of M colored shapes",
     requiresCanvasState: true,
