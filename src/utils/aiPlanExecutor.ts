@@ -33,7 +33,7 @@ export interface CanvasContextMethods {
 export async function executePlan(
   operations: AIOperation[],
   canvasContext: CanvasContextMethods,
-  onProgress?: (current: number, total: number, operation: AIOperation) => void,
+  onProgress?: (current: number, total: number, operationIndex: number, operation: AIOperation) => void,
   enableStreaming: boolean = true  // New parameter for streaming feedback
 ): Promise<string[]> {
   const createdIds: string[] = [];
@@ -43,9 +43,9 @@ export async function executePlan(
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
 
-    // Notify progress to update state
+    // Notify progress to update state (now includes operationIndex)
     if (onProgress) {
-      onProgress(i + 1, operations.length, operation);
+      onProgress(i + 1, operations.length, i, operation);
     }
 
     try {

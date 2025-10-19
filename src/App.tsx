@@ -16,7 +16,7 @@ import { Canvas } from './components/Canvas/Canvas';
 import { CompactToolbar } from './components/Canvas/CompactToolbar';
 import { PropertiesPanel } from './components/Canvas/PropertiesPanel';
 import { LayersPanel } from './components/Canvas/LayersPanel';
-import { AIPanel } from './components/AI/AIPanel';
+import { AIChatPanel } from './components/AI/AIChatPanel';
 import './App.css';
 
 // Inner component that has access to canvas context
@@ -31,14 +31,8 @@ const CanvasLayout: React.FC = () => {
       canvas={
         <>
           <Canvas />
-          {/* AI Panel - Fixed at bottom with high z-index for accessibility */}
-          <div className="fixed bottom-4 left-16 right-4 z-50 pointer-events-none">
-            <div className="max-w-2xl mx-auto pointer-events-auto">
-              <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4">
-                <AIPanel />
-              </div>
-            </div>
-          </div>
+          {/* AI Chat Panel - Fixed at bottom-left */}
+          <AIChatPanel />
         </>
       }
       properties={<PropertiesPanel />}

@@ -14,6 +14,29 @@ import { useAuth } from '../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 /**
+ * Operation Result Type
+ */
+export interface OperationResult {
+  operation: AIOperation;
+  status: 'pending' | 'executing' | 'success' | 'error';
+  error?: string;
+  createdIds?: string[];
+}
+
+/**
+ * Chat Message Type
+ */
+export interface ChatMessage {
+  id: string;
+  type: 'user' | 'ai' | 'system';
+  content: string;
+  timestamp: number;
+  operations?: AIOperation[];
+  operationResults?: OperationResult[];
+  rationale?: string;
+}
+
+/**
  * AI Context Type
  */
 interface AIContextType {
@@ -31,6 +54,12 @@ interface AIContextType {
     options: string[];
     originalPrompt: string;
   } | null;
+
+  // Chat state
+  chatMessages: ChatMessage[];
+  addChatMessage: (message: ChatMessage) => void;
+  updateOperationStatus: (messageId: string, operationIndex: number, statusUpdate: Partial<OperationResult>) => void;
+  clearChat: () => void;
 
   // Methods
   executeCommand: (prompt: string, clarificationResponse?: string) => Promise<void>;
@@ -75,6 +104,13 @@ function saveCommandToHistory(prompt: string, success: boolean, result?: string)
 /**
  * AI Provider
  */
+/**
+ * Helper function to generate unique IDs
+ */
+function generateId(): string {
+  return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
 export function AIProvider({ children }: AIProviderProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [lastPlan, setLastPlan] = useState<AIPlan | null>(null);
@@ -89,6 +125,7 @@ export function AIProvider({ children }: AIProviderProps) {
     options: string[];
     originalPrompt: string;
   } | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const canvasContext = useCanvas();
   const { user } = useAuth();
@@ -106,6 +143,41 @@ export function AIProvider({ children }: AIProviderProps) {
   const cancelClarification = useCallback(() => {
     setClarification(null);
     setIsProcessing(false);
+  }, []);
+
+  /**
+   * Add a chat message
+   */
+  const addChatMessage = useCallback((message: ChatMessage) => {
+    setChatMessages(prev => [...prev, message]);
+  }, []);
+
+  /**
+   * Update operation status for a specific message
+   */
+  const updateOperationStatus = useCallback((
+    messageId: string,
+    operationIndex: number,
+    statusUpdate: Partial<OperationResult>
+  ) => {
+    setChatMessages(prev => prev.map(msg => {
+      if (msg.id !== messageId || !msg.operationResults) return msg;
+      
+      const updatedResults = [...msg.operationResults];
+      updatedResults[operationIndex] = {
+        ...updatedResults[operationIndex],
+        ...statusUpdate
+      };
+      
+      return { ...msg, operationResults: updatedResults };
+    }));
+  }, []);
+
+  /**
+   * Clear all chat messages
+   */
+  const clearChat = useCallback(() => {
+    setChatMessages([]);
   }, []);
 
   /**
@@ -183,6 +255,15 @@ export function AIProvider({ children }: AIProviderProps) {
       return;
     }
 
+    // 1. Add user message to chat
+    const userMessageId = generateId();
+    addChatMessage({
+      id: userMessageId,
+      type: 'user',
+      content: prompt,
+      timestamp: Date.now(),
+    });
+
     setIsProcessing(true);
     setError(null);
     setProgress(null);
@@ -216,6 +297,21 @@ export function AIProvider({ children }: AIProviderProps) {
       // Clear any previous clarification
       setClarification(null);
 
+      // 2. Add AI message with operations
+      const aiMessageId = generateId();
+      addChatMessage({
+        id: aiMessageId,
+        type: 'ai',
+        content: plan.rationale || 'Executing your request...',
+        timestamp: Date.now(),
+        operations: plan.operations,
+        operationResults: plan.operations.map(op => ({
+          operation: op,
+          status: 'pending' as const,
+        })),
+        rationale: plan.rationale,
+      });
+
       // Determine execution mode
       // Simple/medium operations (<= 50): Client-side for speed (~100-2000ms)
       // Complex operations (> 50 or grids): Server-side for atomicity
@@ -228,6 +324,23 @@ export function AIProvider({ children }: AIProviderProps) {
         // Server-side execution for complex operations
         const result = await aiCanvasService.requestExecute(prompt, canvasSnapshot);
         resultMessage = `Created ${result.executionSummary.shapeIds.length} shapes`;
+        
+        // Mark all operations as success
+        plan.operations.forEach((op, index) => {
+          updateOperationStatus(aiMessageId, index, {
+            status: 'success',
+            createdIds: result.executionSummary?.shapeIds || [],
+          });
+        });
+
+        // Success message
+        addChatMessage({
+          id: generateId(),
+          type: 'system',
+          content: `✅ Successfully created ${result.executionSummary?.shapeIds?.length || 0} shape(s)`,
+          timestamp: Date.now(),
+        });
+
         toast.success(resultMessage);
       } else {
         // Client-side execution for simple operations
@@ -328,18 +441,44 @@ export function AIProvider({ children }: AIProviderProps) {
         const createdIds = await executePlan(
           plan.operations,
           contextMethods,
-          (current, total, operation) => {
+          (current, total, operationIndex, operation) => {
+            // Update operation status to "executing"
+            updateOperationStatus(aiMessageId, operationIndex, {
+              status: 'executing',
+            });
+            
+            // Update progress indicator
             setProgress({ current, total, operation });
           },
           true  // Enable streaming feedback
         );
 
+        // Mark all operations as success
+        plan.operations.forEach((op, index) => {
+          updateOperationStatus(aiMessageId, index, {
+            status: 'success',
+            createdIds: createdIds.length > 0 ? [createdIds[index]] : [],
+          });
+        });
+
         // Show success message
         if (createdIds.length > 0) {
           resultMessage = `Created ${createdIds.length} shape(s)`;
+          addChatMessage({
+            id: generateId(),
+            type: 'system',
+            content: `✅ Successfully created ${createdIds.length} shape(s)`,
+            timestamp: Date.now(),
+          });
           toast.success(resultMessage);
         } else if (plan.operations.length > 0) {
           resultMessage = 'Command executed successfully';
+          addChatMessage({
+            id: generateId(),
+            type: 'system',
+            content: `✅ Successfully completed ${plan.operations.length} operation(s)`,
+            timestamp: Date.now(),
+          });
           toast.success(resultMessage);
         }
       }
@@ -354,6 +493,14 @@ export function AIProvider({ children }: AIProviderProps) {
       
       const error = err as Error;
       setError(error);
+
+      // Error message in chat
+      addChatMessage({
+        id: generateId(),
+        type: 'system',
+        content: `❌ Error: ${error.message || 'Failed to execute command'}`,
+        timestamp: Date.now(),
+      });
 
       // Save failed command to history
       saveCommandToHistory(prompt, false, error.message);
@@ -373,7 +520,7 @@ export function AIProvider({ children }: AIProviderProps) {
     } finally {
       setIsProcessing(false);
     }
-  }, [canvasContext, getCanvasSnapshot, user]);
+  }, [canvasContext, getCanvasSnapshot, user, addChatMessage, updateOperationStatus]);
 
   const value: AIContextType = {
     isProcessing,
@@ -381,6 +528,10 @@ export function AIProvider({ children }: AIProviderProps) {
     error,
     progress,
     clarification,
+    chatMessages,
+    addChatMessage,
+    updateOperationStatus,
+    clearChat,
     executeCommand,
     clearError,
     cancelClarification,
