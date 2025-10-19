@@ -131,12 +131,21 @@ function getOperationDisplayName(operation: AIOperation): string {
 }
 
 /**
+ * Helper to get ALL shapes from context
+ * Note: Despite the name, context.rectangles contains ALL shape types
+ * (rectangles, circles, triangles, lines, texts). They're distinguished by the 'type' property.
+ */
+function getAllShapes(context: CanvasContextMethods) {
+  return context.rectangles; // This array contains all shape types
+}
+
+/**
  * Resolve a shape identifier to its actual UUID
  * The AI might reference shapes by name or by ID, we need to handle both.
  * Also supports fuzzy matching by type and color as a fallback.
  */
 function resolveShapeId(identifier: string, context: CanvasContextMethods): string {
-  const allShapes = context.rectangles;
+  const allShapes = getAllShapes(context);
   
   // Strategy 1: Check if it's already a valid UUID
   const shapeById = allShapes.find(r => r.id === identifier);
@@ -629,14 +638,15 @@ async function executeDeleteElement(args: any, context: CanvasContextMethods): P
   // STEP 1: Resolve the ID (might be a name or fuzzy match)
   const resolvedId = resolveShapeId(args.id, context);
   
-  // STEP 2: Validate shape exists
-  const shape = context.rectangles.find(r => r.id === resolvedId);
+  // STEP 2: Validate shape exists (check ALL shape types)
+  const allShapes = getAllShapes(context);
+  const shape = allShapes.find(s => s.id === resolvedId);
   if (!shape) {
     console.error(`[deleteElement] Shape not found: ${args.id}`);
     throw new Error(`Shape not found: ${args.id}`);
   }
   
-  console.log(`🗑️ Deleting shape: "${(shape as any).name || resolvedId}"`);
+  console.log(`🗑️ Deleting shape: "${(shape as any).name || resolvedId}" (type: ${shape.type})`);
   
   // STEP 3: Clear current selection
   context.deselectAll();
@@ -651,9 +661,12 @@ async function executeDeleteElement(args: any, context: CanvasContextMethods): P
   // STEP 6: Execute deletion
   await context.deleteSelected();
   
-  // STEP 7: Verify deletion succeeded
-  await new Promise(resolve => setTimeout(resolve, 100));
-  const stillExists = context.rectangles.find(r => r.id === resolvedId);
+  // STEP 7: Wait for deletion to propagate (increased from 100ms to 300ms)
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  // STEP 8: Verify deletion succeeded (check ALL shape types)
+  const allShapesAfter = getAllShapes(context);
+  const stillExists = allShapesAfter.find(s => s.id === resolvedId);
   if (stillExists) {
     console.error(`[deleteElement] Shape still exists after delete: ${resolvedId}`);
     throw new Error(`Failed to delete shape: ${(shape as any).name || resolvedId}`);
@@ -675,18 +688,19 @@ async function executeDeleteMultipleElements(args: any, context: CanvasContextMe
 
   console.log(`🗑️ Attempting to delete ${ids.length} shapes...`);
   
-  // STEP 1: Resolve and validate all IDs
+  // STEP 1: Resolve and validate all IDs (check ALL shape types)
   const resolvedIds: string[] = [];
   const failedIds: string[] = [];
+  const allShapes = getAllShapes(context);
   
   for (const id of ids) {
     try {
       const resolvedId = resolveShapeId(id, context);
-      const shape = context.rectangles.find(r => r.id === resolvedId);
+      const shape = allShapes.find(s => s.id === resolvedId);
       
       if (shape) {
         resolvedIds.push(resolvedId);
-        console.log(`  ✅ Found: "${(shape as any).name || resolvedId}"`);
+        console.log(`  ✅ Found: "${(shape as any).name || resolvedId}" (type: ${shape.type})`);
       } else {
         failedIds.push(id);
         console.warn(`  ⚠️ Not found: ${id}`);
@@ -723,10 +737,12 @@ async function executeDeleteMultipleElements(args: any, context: CanvasContextMe
   console.log('🗑️ Executing delete...');
   await context.deleteSelected();
   
-  // STEP 6: Wait and verify
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // STEP 6: Wait for deletion to propagate (increased from 100ms to 300ms)
+  await new Promise(resolve => setTimeout(resolve, 300));
   
-  const remainingShapes = context.rectangles.filter(r => resolvedIds.includes(r.id));
+  // STEP 7: Verify deletion (check ALL shape types)
+  const allShapesAfter = getAllShapes(context);
+  const remainingShapes = allShapesAfter.filter(s => resolvedIds.includes(s.id));
   
   if (remainingShapes.length === 0) {
     console.log(`✅ Successfully deleted ${resolvedIds.length} shapes`);

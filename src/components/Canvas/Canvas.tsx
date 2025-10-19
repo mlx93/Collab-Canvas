@@ -186,17 +186,23 @@ export const Canvas: React.FC = () => {
       if (e.shiftKey) {
         if (e.key === '+' || e.key === '=') {
           e.preventDefault();
-          zoomViewport(0.1);
+          // Zoom towards center of viewport to prevent unwanted panning
+          const centerX = stageSize.width / 2;
+          const centerY = stageSize.height / 2;
+          zoomViewport(0.1, centerX, centerY);
         } else if (e.key === '-' || e.key === '_') {
           e.preventDefault();
-          zoomViewport(-0.1);
+          // Zoom towards center of viewport to prevent unwanted panning
+          const centerX = stageSize.width / 2;
+          const centerY = stageSize.height / 2;
+          zoomViewport(-0.1, centerX, centerY);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [zoomViewport]);
+  }, [zoomViewport, stageSize]);
 
   // Handle multi-selection keyboard shortcuts
   useEffect(() => {
