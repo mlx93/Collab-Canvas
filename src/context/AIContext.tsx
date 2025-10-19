@@ -73,7 +73,7 @@ interface AIContextType {
   deleteHistoryEntry: (historyId: string) => void;
 
   // Methods
-  executeCommand: (prompt: string, clarificationResponse?: string) => Promise<void>;
+  executeCommand: (prompt: string, clarificationResponse?: string | string[]) => Promise<void>;
   clearError: () => void;
   cancelClarification: () => void;
 }
@@ -365,8 +365,9 @@ export function AIProvider({ children }: AIProviderProps) {
 
   /**
    * Execute an AI command
+   * @param clarificationResponse - Single option or array of options selected by user
    */
-  const executeCommand = useCallback(async (prompt: string, clarificationResponse?: string) => {
+  const executeCommand = useCallback(async (prompt: string, clarificationResponse?: string | string[]) => {
     if (!prompt || prompt.trim().length === 0) {
       toast.error('Please enter a command');
       return;
@@ -404,7 +405,14 @@ export function AIProvider({ children }: AIProviderProps) {
       // Build enhanced prompt if this is a clarification response
       let enhancedPrompt = prompt;
       if (clarificationResponse) {
-        enhancedPrompt = `${prompt} (User clarified: ${clarificationResponse})`;
+        if (Array.isArray(clarificationResponse)) {
+          // Multi-select: Execute on multiple items
+          const items = clarificationResponse.join(', ');
+          enhancedPrompt = `${prompt} (User selected multiple: ${items})`;
+        } else {
+          // Single select: Execute on one item
+          enhancedPrompt = `${prompt} (User clarified: ${clarificationResponse})`;
+        }
       }
 
       // === PHASE 3: TRACK PLANNING TIME ===

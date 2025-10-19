@@ -25,6 +25,16 @@ function capitalize(str: string): string {
  * Common pattern templates
  */
 const PATTERN_TEMPLATES: PatternTemplate[] = [
+  // WARM-UP PATTERN (Special case for cold start prevention)
+  {
+    pattern: /^ping$/i,
+    description: "Warm-up ping (returns immediately)",
+    generator: () => {
+      console.log('  [Warmup] Ping received - function is now warm');
+      return []; // Return empty operations
+    }
+  },
+  
   {
     pattern: /^create (\d+) evenly spaced (square|rectangle|circle|triangle)s?$/i,
     description: "Create N evenly spaced shapes",
@@ -380,6 +390,321 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
         }
       }];
     }
+  },
+  
+  // GRID PATTERNS
+  {
+    pattern: /^create (?:a )?(\d+)x(\d+) grid of (square|rectangle|circle|triangle)s?$/i,
+    description: "Create NxM grid of shapes",
+    generator: (matches, viewport) => {
+      const rows = parseInt(matches[1], 10);
+      const cols = parseInt(matches[2], 10);
+      const shapeType = matches[3].toLowerCase();
+      const type = shapeType === 'square' ? 'rectangle' : shapeType;
+      
+      // Validate grid size (max 100 shapes)
+      if (rows * cols > 100) {
+        console.warn(`  [Grid Cache] Too large: ${rows}x${cols} = ${rows * cols} shapes (max 100)`);
+        return []; // Return empty to fall back to OpenAI
+      }
+      
+      console.log(`  [Grid Cache] Creating ${rows}x${cols} grid of ${type}s`);
+      
+      // Generate createGrid operation
+      return [{
+        name: 'createGrid',
+        args: {
+          rows,
+          cols,
+          cellWidth: 80,
+          cellHeight: 80,
+          spacing: 20,
+          startX: viewport.centerX - (cols * 100) / 2,
+          startY: viewport.centerY - (rows * 100) / 2,
+          color: '#3B82F6',
+          type: type,
+          namePrefix: `Grid ${capitalize(type)}`,
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^create (?:a )?grid with (\d+) rows and (\d+) columns$/i,
+    description: "Create grid with N rows and M columns",
+    generator: (matches, viewport) => {
+      const rows = parseInt(matches[1], 10);
+      const cols = parseInt(matches[2], 10);
+      
+      // Validate grid size
+      if (rows * cols > 100) {
+        console.warn(`  [Grid Cache] Too large: ${rows}x${cols} = ${rows * cols} shapes (max 100)`);
+        return [];
+      }
+      
+      console.log(`  [Grid Cache] Creating grid with ${rows} rows and ${cols} columns`);
+      
+      return [{
+        name: 'createGrid',
+        args: {
+          rows,
+          cols,
+          cellWidth: 80,
+          cellHeight: 80,
+          spacing: 20,
+          startX: viewport.centerX - (cols * 100) / 2,
+          startY: viewport.centerY - (rows * 100) / 2,
+          color: '#3B82F6',
+          type: 'rectangle',
+          namePrefix: 'Grid Cell',
+        }
+      }];
+    }
+  },
+  
+  // RESIZE PATTERNS
+  {
+    pattern: /^(?:increase|grow) (?:the )?size (?:by )?(\d+)%$/i,
+    description: "Increase size by N%",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return []; // Need selection
+      
+      const percentage = parseInt(matches[1], 10);
+      const multiplier = 1 + (percentage / 100);
+      
+      console.log(`  [Resize Cache] Increasing size by ${percentage}% for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        // Apply multiplier based on shape type
+        if (shape.width !== undefined) updates.width = Math.round(shape.width * multiplier);
+        if (shape.height !== undefined) updates.height = Math.round(shape.height * multiplier);
+        if (shape.radius !== undefined) updates.radius = Math.round(shape.radius * multiplier);
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
+    pattern: /^(?:decrease|shrink) (?:the )?size (?:by )?(\d+)%$/i,
+    description: "Decrease size by N%",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return [];
+      
+      const percentage = parseInt(matches[1], 10);
+      const multiplier = 1 - (percentage / 100);
+      
+      // Validate multiplier
+      if (multiplier <= 0) {
+        console.warn(`  [Resize Cache] Invalid decrease: ${percentage}% would result in negative size`);
+        return [];
+      }
+      
+      console.log(`  [Resize Cache] Decreasing size by ${percentage}% for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        // Apply multiplier with minimum sizes
+        if (shape.width !== undefined) updates.width = Math.max(10, Math.round(shape.width * multiplier));
+        if (shape.height !== undefined) updates.height = Math.max(10, Math.round(shape.height * multiplier));
+        if (shape.radius !== undefined) updates.radius = Math.max(5, Math.round(shape.radius * multiplier));
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
+    pattern: /^make (?:it |them )?(\d+)x larger$|^make (?:it |them )?(\d+) times larger$/i,
+    description: "Make Nx larger",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return [];
+      
+      const multiplier = parseInt(matches[1] || matches[2], 10);
+      
+      console.log(`  [Resize Cache] Making ${multiplier}x larger for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        if (shape.width !== undefined) updates.width = Math.round(shape.width * multiplier);
+        if (shape.height !== undefined) updates.height = Math.round(shape.height * multiplier);
+        if (shape.radius !== undefined) updates.radius = Math.round(shape.radius * multiplier);
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
+    pattern: /^make (?:it |them )?half (?:the )?size$|^halve (?:the )?size$/i,
+    description: "Make half the size",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return [];
+      
+      const multiplier = 0.5;
+      
+      console.log(`  [Resize Cache] Halving size for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        if (shape.width !== undefined) updates.width = Math.max(10, Math.round(shape.width * multiplier));
+        if (shape.height !== undefined) updates.height = Math.max(10, Math.round(shape.height * multiplier));
+        if (shape.radius !== undefined) updates.radius = Math.max(5, Math.round(shape.radius * multiplier));
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  // MOVE PATTERNS
+  {
+    pattern: /^move (?:the )?(.*?) (left|right|up|down) (?:by )?(\d+)(?: pixels?)?$/i,
+    description: "Move identified shape in direction by N pixels",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const identifier = matches[1].trim();
+      const direction = matches[2].toLowerCase();
+      const distance = parseInt(matches[3], 10);
+      
+      // Find shape by identifier
+      const shape = findShapeByIdentifier(identifier, canvasState);
+      if (!shape) {
+        console.log(`  [Move Cache] Could not find shape: "${identifier}"`);
+        return []; // Fall back to OpenAI
+      }
+      
+      let deltaX = 0;
+      let deltaY = 0;
+      
+      switch (direction) {
+        case 'left': deltaX = -distance; break;
+        case 'right': deltaX = distance; break;
+        case 'up': deltaY = -distance; break;
+        case 'down': deltaY = distance; break;
+      }
+      
+      console.log(`  [Move Cache] Moving "${identifier}" ${direction} by ${distance}px`);
+      
+      return [{
+        name: 'moveElement',
+        args: {
+          id: shape.id,
+          x: shape.x + deltaX,
+          y: shape.y + deltaY,
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^move selected (?:shapes? )?(left|right|up|down) (?:by )?(\d+)(?: pixels?)?$/i,
+    description: "Move selected shapes in direction by N pixels",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const direction = matches[1].toLowerCase();
+      const distance = parseInt(matches[2], 10);
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) {
+        console.log(`  [Move Cache] No shapes selected`);
+        return [];
+      }
+      
+      let deltaX = 0;
+      let deltaY = 0;
+      
+      switch (direction) {
+        case 'left': deltaX = -distance; break;
+        case 'right': deltaX = distance; break;
+        case 'up': deltaY = -distance; break;
+        case 'down': deltaY = distance; break;
+      }
+      
+      console.log(`  [Move Cache] Moving ${selectedIds.length} selected shape(s) ${direction} by ${distance}`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        operations.push({
+          name: 'moveElement',
+          args: {
+            id: shape.id,
+            x: shape.x + deltaX,
+            y: shape.y + deltaY,
+          }
+        });
+      }
+      
+      return operations;
+    }
   }
 ];
 
@@ -398,6 +723,69 @@ function isColorMatch(hexColor: string, colorName: string): boolean {
   
   const pattern = colorPatterns[colorName.toLowerCase()];
   return pattern ? pattern.test(hexColor) : false;
+}
+
+/**
+ * Helper to find shape by name or color+type
+ * Examples: "blue circle", "Header Text", "red square"
+ */
+function findShapeByIdentifier(identifier: string, canvasState: any): any | null {
+  const lowerIdentifier = identifier.toLowerCase();
+  
+  // Strategy 1: Try exact name match (case-insensitive)
+  let shape = canvasState.shapes.find((s: any) => 
+    s.name?.toLowerCase() === lowerIdentifier
+  );
+  if (shape) {
+    console.log(`  [Pattern Cache] Found shape by name: "${identifier}"`);
+    return shape;
+  }
+  
+  // Strategy 2: Try partial name match
+  shape = canvasState.shapes.find((s: any) => 
+    s.name?.toLowerCase().includes(lowerIdentifier)
+  );
+  if (shape) {
+    console.log(`  [Pattern Cache] Found shape by partial name: "${identifier}"`);
+    return shape;
+  }
+  
+  // Strategy 3: Try color + type match
+  const colorWords = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray'];
+  const typeWords = ['rectangle', 'circle', 'triangle', 'square', 'line', 'text'];
+  
+  let matchedColor: string | null = null;
+  let matchedType: string | null = null;
+  
+  for (const color of colorWords) {
+    if (lowerIdentifier.includes(color)) {
+      matchedColor = color;
+      break;
+    }
+  }
+  
+  for (const type of typeWords) {
+    if (lowerIdentifier.includes(type)) {
+      matchedType = type === 'square' ? 'rectangle' : type;
+      break;
+    }
+  }
+  
+  if (matchedColor && matchedType) {
+    const matches = canvasState.shapes.filter((s: any) => 
+      s.type === matchedType && isColorMatch(s.color, matchedColor)
+    );
+    
+    if (matches.length === 1) {
+      console.log(`  [Pattern Cache] Found unique ${matchedColor} ${matchedType}`);
+      return matches[0];
+    } else if (matches.length > 1) {
+      console.log(`  [Pattern Cache] Found ${matches.length} ${matchedColor} ${matchedType}s (ambiguous)`);
+      return null; // Ambiguous, fall back to OpenAI
+    }
+  }
+  
+  return null;
 }
 
 /**

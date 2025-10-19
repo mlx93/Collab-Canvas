@@ -23,7 +23,8 @@ import {
   CANVAS_HEIGHT,
   CANVAS_BACKGROUND,
   MIN_ZOOM,
-  MAX_ZOOM
+  MAX_ZOOM,
+  ZOOM_SENSITIVITY
 } from '../../utils/constants';
 
 export const Canvas: React.FC = () => {
@@ -156,8 +157,8 @@ export const Canvas: React.FC = () => {
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
 
-    // Calculate zoom delta
-    const delta = e.evt.deltaY > 0 ? -0.05 : 0.05;
+    // Calculate zoom delta (3% per scroll for smooth control)
+    const delta = e.evt.deltaY > 0 ? -ZOOM_SENSITIVITY : ZOOM_SENSITIVITY;
     const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, oldScale + delta));
 
     if (newScale === oldScale) return;

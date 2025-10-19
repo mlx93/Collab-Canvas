@@ -12,6 +12,7 @@ export const MAX_RECT_SIZE = 4000; // Maximum 80% of canvas (4000px)
 // Zoom limits
 export const MIN_ZOOM = 0.1; // 10%
 export const MAX_ZOOM = 8; // 800%
+export const ZOOM_SENSITIVITY = 0.03; // 3% zoom per scroll (smooth and controlled)
 
 // Predefined colors (Material Design)
 export const PREDEFINED_COLORS = {
