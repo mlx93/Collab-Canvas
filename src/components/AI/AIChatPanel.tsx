@@ -11,7 +11,6 @@ import { AICommandInput } from './AICommandInput';
 import { AIChatMessage } from './AIChatMessage';
 import { AIThinkingIndicator } from './AIThinkingIndicator';
 import { AIHistoryModal } from './AIHistoryModal';
-import { AIClarificationModal } from './AIClarificationModal';
 
 interface AIChatPanelProps {
   className?: string;
@@ -22,10 +21,7 @@ export function AIChatPanel({ className = '' }: AIChatPanelProps) {
   const [showHistory, setShowHistory] = useState(false);
   const { 
     chatMessages, 
-    isProcessing, 
-    clarification, 
-    executeCommand, 
-    cancelClarification 
+    isProcessing
   } = useAI();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
