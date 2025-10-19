@@ -306,6 +306,9 @@ export function AIProvider({ children }: AIProviderProps) {
             canvasContext.deleteSelected();
             await new Promise(resolve => setTimeout(resolve, 10));
           },
+          deleteRectangle: async (id: string) => {
+            await canvasContext.deleteRectangle(id);
+          },
           bringToFront: (id: string) => {
             canvasContext.bringToFront(id);
           },

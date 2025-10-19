@@ -18,6 +18,7 @@ export interface CanvasContextMethods {
   addLine: (x1: number, y1: number, x2: number, y2: number, color: string) => Promise<string>;
   addText: (x: number, y: number, text: string, fontSize: number, color: string) => Promise<string>;
   updateShape: (id: string, updates: any) => Promise<void>;
+  deleteRectangle: (id: string) => Promise<void>; // Despite name, deletes ALL shape types
   deleteSelected: () => Promise<void>;
   bringToFront: (id: string) => void;
   sendToBack: (id: string) => void;
@@ -172,15 +173,51 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
 
   // Strategy 4: ENHANCED Fuzzy match with smart auto-selection
   // Example: "blue rectangle", "red circle", "green triangle"
-  const colorPatterns = {
-    'red': /#(ef4444|dc2626|b91c1c|991b1b|7f1d1d|f87171|fca5a5)/i,
-    'blue': /#(3b82f6|2563eb|1d4ed8|1e40af|1e3a8a|60a5fa|93c5fd)/i,
-    'green': /#(10b981|059669|047857|065f46|064e3b|34d399|6ee7b7)/i,
-    'yellow': /#(f59e0b|d97706|b45309|92400e|78350f|fbbf24|fcd34d)/i,
-    'orange': /#(f97316|ea580c|c2410c|9a3412|7c2d12|fb923c|fdba74)/i,
-    'purple': /#(8b5cf6|7c3aed|6d28d9|5b21b6|4c1d95|a78bfa|c4b5fd)/i,
-    'pink': /#(ec4899|db2777|be185d|9d174d|831843|f472b6|f9a8d4)/i,
-    'gray': /#(6b7280|4b5563|374151|1f2937|111827|9ca3af|d1d5db)/i,
+  
+  // Helper function to convert hex to RGB
+  const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : null;
+  };
+
+  // Helper function to check if a color matches a semantic color name
+  const isColorMatch = (hexColor: string, colorName: string): boolean => {
+    const rgb = hexToRgb(hexColor);
+    if (!rgb) return false;
+
+    const { r, g, b } = rgb;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    
+    switch (colorName) {
+      case 'red':
+        return r > 150 && r > g * 1.5 && r > b * 1.5;
+      case 'blue':
+        return b > 150 && b > r * 1.2 && b > g * 1.2;
+      case 'green':
+        return g > 150 && g > r * 1.2 && g > b * 1.2;
+      case 'yellow':
+        return r > 180 && g > 180 && b < 100;
+      case 'orange':
+        return r > 200 && g > 100 && g < 180 && b < 100;
+      case 'purple':
+        return r > 100 && b > 100 && Math.abs(r - b) < 80 && g < Math.min(r, b) * 0.8;
+      case 'pink':
+        return r > 180 && b > 100 && g < 180;
+      case 'gray':
+      case 'grey':
+        return max - min < 50; // Low saturation
+      case 'black':
+        return max < 80;
+      case 'white':
+        return min > 200;
+      default:
+        return false;
+    }
   };
 
   // Extract color and type from identifier
@@ -188,7 +225,8 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
   let matchedType: string | null = null;
 
   // Find color in identifier
-  for (const [colorName, colorPattern] of Object.entries(colorPatterns)) {
+  const colorNames = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey', 'black', 'white'];
+  for (const colorName of colorNames) {
     if (lowerIdentifier.includes(colorName)) {
       matchedColor = colorName;
       break;
@@ -207,34 +245,38 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
 
   // If both color and type found, do smart matching
   if (matchedColor && matchedType) {
-    const colorPattern = colorPatterns[matchedColor as keyof typeof colorPatterns];
     const matchingShapes = allShapes.filter(shape => 
-      colorPattern.test(shape.color) && shape.type === matchedType
+      isColorMatch(shape.color, matchedColor!) && shape.type === matchedType
     );
 
     if (matchingShapes.length === 1) {
       // ✅ PERFECT: Only one match, auto-select it
-      console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name}" (ONLY ${matchedColor} ${matchedType})`);
+      console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name || matchingShapes[0].id}" (ONLY ${matchedColor} ${matchedType})`);
+      console.log(`  Shape color: ${matchingShapes[0].color}`);
       return matchingShapes[0].id;
     } else if (matchingShapes.length > 1) {
-      // ⚠️ AMBIGUOUS: Multiple matches
-      console.warn(`⚠️ AMBIGUOUS: "${identifier}" matches ${matchingShapes.length} shapes:`);
+      // ⚠️ AMBIGUOUS: Multiple matches - log ALL candidates with colors
+      console.warn(`⚠️ AMBIGUOUS: "${identifier}" matches ${matchingShapes.length} ${matchedColor} ${matchedType}s:`);
       matchingShapes.forEach((s, i) => {
-        console.warn(`  ${i + 1}. "${s.name}" at (${s.x}, ${s.y})`);
+        console.warn(`  ${i + 1}. "${s.name || s.id}" (${s.color}) at (${s.x}, ${s.y})`);
       });
       // Return first match but log warning
-      console.warn(`  ⚠️ Using first match: "${matchingShapes[0].name}"`);
+      console.warn(`  ⚠️ Using first match: "${matchingShapes[0].name || matchingShapes[0].id}"`);
       return matchingShapes[0].id;
     } else {
-      // ❌ NOT FOUND
+      // ❌ NOT FOUND - list all shapes to help debug
+      console.error(`❌ No ${matchedColor} ${matchedType} found on canvas`);
+      console.error(`Available ${matchedType}s:`, allShapes.filter(s => s.type === matchedType).map(s => ({
+        name: s.name || s.id,
+        color: s.color
+      })));
       throw new Error(`No ${matchedColor} ${matchedType} found on canvas`);
     }
   }
 
   // Try just color match if type not specified
   if (matchedColor && !matchedType) {
-    const colorPattern = colorPatterns[matchedColor as keyof typeof colorPatterns];
-    const matchingShapes = allShapes.filter(shape => colorPattern.test(shape.color));
+    const matchingShapes = allShapes.filter(shape => isColorMatch(shape.color, matchedColor!));
     
     if (matchingShapes.length === 1) {
       console.log(`✅ SMART AUTO-SELECTION: "${identifier}" → "${matchingShapes[0].name}" (ONLY ${matchedColor} shape)`);
@@ -631,32 +673,11 @@ async function executeDeleteElement(args: any, context: CanvasContextMethods): P
   
   console.log(`🗑️ Deleting shape: "${(shape as any).name || resolvedId}" (type: ${shape.type})`);
   
-  // STEP 3: Clear current selection
-  context.deselectAll();
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // STEP 3: Delete directly by ID (bypasses selection state issues)
+  // Note: deleteRectangle works for ALL shape types despite its name
+  await context.deleteRectangle(resolvedId);
   
-  // STEP 4: Select the shape to delete
-  context.selectShape(resolvedId);
-  
-  // STEP 5: Wait for selection state to update (CRITICAL!)
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  // STEP 6: Execute deletion (uses optimistic React state updates)
-  await context.deleteSelected();
-  
-  // STEP 7: Wait for React state to propagate (increased to 600ms for reliable state updates)
-  // Note: deleteSelected uses setCanvasState which triggers async re-renders
-  await new Promise(resolve => setTimeout(resolve, 600));
-  
-  // STEP 8: Verify deletion (check ALL shape types)
-  const allShapesAfter = getAllShapes(context);
-  const stillExists = allShapesAfter.find(s => s.id === resolvedId);
-  if (stillExists) {
-    // Shape still exists - log warning but don't fail (optimistic updates may not have propagated yet)
-    console.warn(`⚠️ [deleteElement] Shape still in state after delete: ${resolvedId} (may resolve after Firestore sync)`);
-  } else {
-    console.log(`✅ Successfully deleted: "${(shape as any).name || resolvedId}"`);
-  }
+  console.log(`✅ Deleted: "${(shape as any).name || resolvedId}"`);
 }
 
 /**
@@ -703,37 +724,11 @@ async function executeDeleteMultipleElements(args: any, context: CanvasContextMe
     console.warn(`⚠️ Could not find ${failedIds.length} shapes: ${failedIds.join(', ')}`);
   }
   
-  // STEP 2: Clear current selection
-  console.log('📋 Clearing selection...');
-  context.deselectAll();
-  await new Promise(resolve => setTimeout(resolve, 100));
+  // STEP 2: Delete each shape directly by ID (bypasses selection state issues)
+  console.log(`🗑️ Deleting ${resolvedIds.length} shapes...`);
+  const deletePromises = resolvedIds.map(id => context.deleteRectangle(id));
+  await Promise.all(deletePromises);
   
-  // STEP 3: Select all shapes to be deleted
-  console.log(`📋 Selecting ${resolvedIds.length} shapes...`);
-  for (const resolvedId of resolvedIds) {
-    context.selectShape(resolvedId);
-  }
-  
-  // STEP 4: Wait for selection state to update (CRITICAL - increased to 200ms)
-  await new Promise(resolve => setTimeout(resolve, 200));
-  
-  // STEP 5: Execute deletion (uses optimistic React state updates)
-  console.log('🗑️ Executing delete...');
-  await context.deleteSelected();
-  
-  // STEP 6: Wait for React state to propagate (increased to 600ms for reliable state updates)
-  // Note: deleteSelected uses setCanvasState which triggers async re-renders
-  await new Promise(resolve => setTimeout(resolve, 600));
-  
-  // STEP 7: Verify deletion (check ALL shape types)
-  const allShapesAfter = getAllShapes(context);
-  const remainingShapes = allShapesAfter.filter(s => resolvedIds.includes(s.id));
-  
-  if (remainingShapes.length === 0) {
-    console.log(`✅ Successfully deleted ${resolvedIds.length} shapes`);
-  } else {
-    // Some shapes still in state - log warning but don't fail (optimistic updates may not have propagated yet)
-    console.warn(`⚠️ Delete incomplete: ${remainingShapes.length}/${resolvedIds.length} shapes still in state (may resolve after Firestore sync)`);
-  }
+  console.log(`✅ Deleted ${resolvedIds.length} shapes`);
 }
 
