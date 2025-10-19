@@ -23,12 +23,13 @@ export class AICanvasService {
   constructor() {
     // Determine function URL based on environment
     const isDevelopment = process.env.NODE_ENV === 'development';
+    const useEmulators = process.env.REACT_APP_USE_EMULATORS === 'true';
     
-    if (isDevelopment) {
+    if (isDevelopment && useEmulators) {
       // Local emulator
       this.functionUrl = 'http://localhost:5001/collab-canvas-mlx93-staging/us-central1/aiCommand';
     } else {
-      // Production/Staging
+      // Production/Staging (or dev without emulators)
       const projectId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'collab-canvas-mlx93-staging';
       this.functionUrl = `https://us-central1-${projectId}.cloudfunctions.net/aiCommand`;
     }

@@ -41,10 +41,27 @@ import { aiCommandHandler } from './aiCommand';
  */
 export const aiCommand = functions
   .region('us-central1')
+  .runWith({
+    memory: '512MB',  // Increased for better performance
+    timeoutSeconds: 60,
+  })
   .https
   .onRequest((req, res) => {
     corsHandler(req, res, async () => {
       await aiCommandHandler(req, res);
     });
+  });
+
+/**
+ * Keep-warm function to prevent cold starts
+ * Runs every 5 minutes to keep the function instance warm
+ */
+export const keepWarm = functions
+  .region('us-central1')
+  .pubsub
+  .schedule('every 5 minutes')
+  .onRun(async (context) => {
+    console.log('Keep-warm ping - preventing cold starts');
+    return null;
   });
 
