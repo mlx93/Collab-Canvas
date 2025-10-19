@@ -255,19 +255,27 @@ export function AIProvider({ children }: AIProviderProps) {
   }, []);
 
   /**
-   * Cancel clarification and reset state
-   */
-  const cancelClarification = useCallback(() => {
-    setClarification(null);
-    setIsProcessing(false);
-  }, []);
-
-  /**
    * Add a chat message
    */
   const addChatMessage = useCallback((message: ChatMessage) => {
     setChatMessages(prev => [...prev, message]);
   }, []);
+
+  /**
+   * Cancel clarification and reset state
+   */
+  const cancelClarification = useCallback(() => {
+    // Add a system message to chat indicating cancellation
+    addChatMessage({
+      id: `cancel-${Date.now()}`,
+      type: 'system',
+      content: 'Command cancelled by user.',
+      timestamp: Date.now(),
+    });
+    
+    setClarification(null);
+    setIsProcessing(false);
+  }, [addChatMessage]);
 
   /**
    * Update operation status for a specific message
@@ -371,6 +379,18 @@ export function AIProvider({ children }: AIProviderProps) {
     if (!prompt || prompt.trim().length === 0) {
       toast.error('Please enter a command');
       return;
+    }
+
+    // Check for "yes" response when clarification is pending
+    const normalizedPrompt = prompt.toLowerCase().trim();
+    if (clarification && !clarificationResponse) {
+      // User typed "yes", "y", "yep", "sure", "ok", "confirm", etc.
+      if (/^(yes|y|yep|yeah|sure|ok|okay|confirm|go ahead|proceed)$/i.test(normalizedPrompt)) {
+        // Auto-select all options and re-execute the original command
+        console.log('User confirmed with "yes" - selecting all options');
+        await executeCommand(clarification.originalPrompt, clarification.options);
+        return;
+      }
     }
 
     // === PHASE 3: ADD TIMING AND TRACKING VARIABLES ===

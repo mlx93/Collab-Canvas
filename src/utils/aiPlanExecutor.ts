@@ -195,11 +195,12 @@ function resolveShapeId(identifier: string, context: CanvasContextMethods): stri
     
     switch (colorName) {
       case 'red':
-        return r > 150 && r > g * 1.5 && r > b * 1.5;
+        // More lenient: catches #FF6B6B, #EF4444, #DC2626, etc.
+        return r > 120 && r > g * 1.3 && r > b * 1.3;
       case 'blue':
-        return b > 150 && b > r * 1.2 && b > g * 1.2;
+        return b > 120 && b > r * 1.15 && b > g * 1.15;
       case 'green':
-        return g > 150 && g > r * 1.2 && g > b * 1.2;
+        return g > 120 && g > r * 1.15 && g > b * 1.15;
       case 'yellow':
         return r > 180 && g > 180 && b < 100;
       case 'orange':

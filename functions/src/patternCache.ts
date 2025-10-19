@@ -901,20 +901,45 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
 ];
 
 /**
- * Helper to match color patterns in hex codes
+ * Helper to match color patterns using RGB analysis (more flexible than regex)
  */
 function isColorMatch(hexColor: string, colorName: string): boolean {
-  const colorPatterns: Record<string, RegExp> = {
-    'red': /#(ef4444|dc2626|b91c1c)/i,
-    'blue': /#(3b82f6|2563eb|1d4ed8)/i,
-    'green': /#(10b981|059669|047857)/i,
-    'yellow': /#(f59e0b|d97706|b45309)/i,
-    'orange': /#(f97316|ea580c|c2410c)/i,
-    'purple': /#(8b5cf6|7c3aed|6d28d9)/i,
-  };
+  // Convert hex to RGB
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+  if (!result) return false;
   
-  const pattern = colorPatterns[colorName.toLowerCase()];
-  return pattern ? pattern.test(hexColor) : false;
+  const r = parseInt(result[1], 16);
+  const g = parseInt(result[2], 16);
+  const b = parseInt(result[3], 16);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  
+  switch (colorName.toLowerCase()) {
+    case 'red':
+      // More lenient: catches #FF6B6B, #EF4444, #DC2626, etc.
+      return r > 120 && r > g * 1.3 && r > b * 1.3;
+    case 'blue':
+      return b > 120 && b > r * 1.15 && b > g * 1.15;
+    case 'green':
+      return g > 120 && g > r * 1.15 && g > b * 1.15;
+    case 'yellow':
+      return r > 180 && g > 180 && b < 100;
+    case 'orange':
+      return r > 200 && g > 100 && g < 180 && b < 100;
+    case 'purple':
+      return r > 100 && b > 100 && Math.abs(r - b) < 80 && g < Math.min(r, b) * 0.8;
+    case 'pink':
+      return r > 180 && b > 100 && g < 180;
+    case 'gray':
+    case 'grey':
+      return max - min < 50; // Low saturation
+    case 'black':
+      return max < 80;
+    case 'white':
+      return min > 200;
+    default:
+      return false;
+  }
 }
 
 /**

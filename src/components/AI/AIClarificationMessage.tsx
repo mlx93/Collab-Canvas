@@ -92,6 +92,21 @@ export function AIClarificationMessage({
 
   const allSelected = selectedOptions.size === options.length;
   const hasSelection = selectedOptions.size > 0;
+  
+  // Parse and format the question text
+  // Remove markdown formatting: "1. **Text**" -> "Text"
+  const formatQuestion = (text: string) => {
+    // Remove numbered list markers and bold markdown
+    return text
+      .replace(/^\d+\.\s+\*\*(.*?)\*\*/gm, '$1')  // "1. **Text**" -> "Text"
+      .replace(/\*\*(.*?)\*\*/g, '$1')             // "**Text**" -> "Text"
+      .replace(/^\d+\.\s+/gm, '')                  // "1. Text" -> "Text"
+      .replace(/^-\s+/gm, '')                      // "- Text" -> "Text"
+      .trim();
+  };
+  
+  const formattedQuestion = formatQuestion(question);
+  
   return (
     <div className="flex justify-start w-full">
       <div className="max-w-[90%] bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-4 shadow-md">
@@ -99,7 +114,7 @@ export function AIClarificationMessage({
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xl">🤔</span>
           <h4 className="font-semibold text-blue-900 text-sm">
-            {question}
+            {formattedQuestion}
           </h4>
         </div>
 
