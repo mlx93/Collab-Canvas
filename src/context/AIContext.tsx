@@ -217,9 +217,10 @@ export function AIProvider({ children }: AIProviderProps) {
       setClarification(null);
 
       // Determine execution mode
-      // Simple operations (< 6): Client-side for speed (~100ms)
-      // Complex operations (>= 6 or grids): Server-side for atomicity
-      const shouldExecuteServerSide = plan.operations.length >= 6 || 
+      // Simple/medium operations (< 20): Client-side for speed (~100-500ms)
+      // Complex operations (>= 20 or grids): Server-side for atomicity
+      const CLIENT_SIDE_THRESHOLD = 20;
+      const shouldExecuteServerSide = plan.operations.length >= CLIENT_SIDE_THRESHOLD || 
         plan.operations.some(op => op.name === 'createGrid');
 
       let resultMessage = '';
@@ -320,13 +321,14 @@ export function AIProvider({ children }: AIProviderProps) {
           rectangles: canvasContext.rectangles,
         };
 
-        // Execute plan
+        // Execute plan with streaming feedback
         const createdIds = await executePlan(
           plan.operations,
           contextMethods,
           (current, total, operation) => {
             setProgress({ current, total, operation });
-          }
+          },
+          true  // Enable streaming feedback
         );
 
         // Show success message

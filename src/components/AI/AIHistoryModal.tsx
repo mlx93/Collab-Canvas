@@ -5,7 +5,6 @@
  */
 
 import React, { useEffect } from 'react';
-import { useAI } from '../../context/AIContext';
 
 interface AIHistoryModalProps {
   isOpen: boolean;

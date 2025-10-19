@@ -1,0 +1,522 @@
+CollabCanvas AI Agent PRD
+1. Executive Summary
+Build an AI-powered natural language interface for CollabCanvas that allows users to create, manipulate, and arrange canvas elements through conversational commands. The AI agent will integrate with the existing Firebase-based real-time collaboration system to ensure all users see AI-generated changes instantly.
+Core Goal: Enable users to say "Create a login form" and have the AI generate properly arranged, styled elements on the shared canvas.
+
+2. Technical Architecture
+2.1 AI Service Layer
+Stack Decision: OpenAI (gpt-4o for quality, gpt-4o-mini for speed/cost) via Firebase Cloud Functions
+
+Rationale:
+- Native tool/function calling with structured JSON results
+- Low-latency, reliable, widely adopted SDK
+- Keep API key server-side; frontend never touches OpenAI directly
+
+Execution Model (plan-then-execute):
+1) Frontend sends prompt + current canvas snapshot to a Cloud Function.
+2) The function uses OpenAI with tool schemas to generate a deterministic plan (array of operations).
+3) The frontend executes the returned plan using existing `CanvasContext` APIs (optimistic updates → Firestore), ensuring all users see changes.
+4) Complex multi-step commands stream progress to the UI.
+
+Security: All OpenAI calls run server-side (Firebase Cloud Functions). The client receives only a plan, never raw model keys.
+
+Implementation sketch (client service):
+typescript
+// services/AICanvasService.ts
+export class AICanvasService {
+  async requestPlan(prompt: string, canvasState: CanvasState): Promise<AIPlan> {
+    const res = await fetch('/ai/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, canvasState })
+    });
+    if (!res.ok) throw new Error('AI request failed');
+    return await res.json();
+  }
+}
+2.2 Tool Schema (OpenAI) and Plan Types
+Align tools to our actual canvas model (`color`, `rotation`, `opacity`, `zIndex`, `name`). Server can either return a plan or execute it directly (see 2.4).
+
+typescript
+// types/ai-tools.ts
+export type ShapeKind = 'rectangle' | 'circle' | 'triangle' | 'line' | 'text';
+
+export interface AIToolSchemas {
+  // Creation
+  createRectangle: { x: number; y: number; width: number; height: number; color: string; name?: string };
+  createCircle: { x: number; y: number; radius: number; color: string; name?: string };
+  createTriangle: { x: number; y: number; width: number; height: number; color: string; name?: string };
+  createLine: { x1: number; y1: number; x2: number; y2: number; color: string; name?: string };
+  createText: { text: string; x: number; y: number; fontSize: number; color: string; name?: string };
+
+  // Manipulation
+  moveElement: { id: string; x: number; y: number };
+  resizeElement: { id: string; width?: number; height?: number; radius?: number; x2?: number; y2?: number };
+  rotateElement: { id: string; rotation: number };
+  updateStyle: { id: string; color?: string; opacity?: number; visible?: boolean; locked?: boolean; name?: string };
+
+  // Layout
+  arrangeElements: { ids: string[]; arrangement: 'horizontal' | 'vertical'; spacing?: number };
+  createGrid: { rows: number; cols: number; cellWidth: number; cellHeight: number; spacing?: number; startX?: number; startY?: number; color?: string; type?: Exclude<ShapeKind,'text'>; namePrefix?: string };
+
+  // Layering / Delete
+  bringToFront: { id: string };
+  sendToBack: { id: string };
+  deleteElement: { id: string };
+
+  // Canvas insight
+  getCanvasState: {};
+}
+
+export type AIOperationName = keyof AIToolSchemas;
+
+export interface AIOperation<N extends AIOperationName = AIOperationName> {
+  name: N;
+  args: AIToolSchemas[N];
+}
+
+export interface AIPlan {
+  operations: AIOperation[];
+  rationale?: string;
+  needsClarification?: null | { question: string; options?: string[] };
+}
+
+Notes:
+- Use `color` (not `fill`) to match `BaseShape`.
+- New shapes follow existing defaults (opacity, rotation, visible, locked, zIndex).
+- Prefer naming new shapes when AI can infer a semantic name; otherwise default.
+
+---
+
+2.6 October 2025 Updates (Prompt, Tools, Execution)
+
+Summary: The live code now includes a production-ready system prompt with viewport-relative positioning rules, a clarification flow, and an additional bulk deletion tool. Client resolves human-friendly Names to IDs before executing operations. Hybrid execution auto-selects server-side for complex plans and grids.
+
+Key Items:
+- System Prompt Highlights (see code reference in `functions/src/aiCommand.ts`):
+  - Viewport-relative positioning (use viewport.centerX/centerY and visibleWidth/visibleHeight).
+  - Selection context: Only act on `selectedIds` when user references selected shapes.
+  - Quantity + spatial selection filtering; ask for clarification when ambiguous.
+  - Color updates via `updateStyle` using canonical hex codes.
+  - Z-index layering with `bringToFront` / `sendToBack`.
+  - Auto-spacing guidance for multi-create commands.
+- Clarification Flow:
+  - Return `needsClarification: { question, options[] }` when ambiguous (e.g., “delete 2 of 4 circles”).
+  - Client surfaces options, then re-issues refined prompt.
+- Tooling Alignment:
+  - Added `deleteMultipleElements(ids: string[])` for bulk deletes (faster than multiple single deletes).
+  - Manipulation tools accept Name or ID in plans; client resolves Names→IDs before execution.
+- Hybrid Execution Threshold:
+  - Auto-execute server-side when operation count ≥ 6 or plan includes `createGrid`.
+  - Threshold configurable via Functions runtime config (`ai.server_exec_threshold`).
+- ID vs Name Policy:
+  - Operations must ultimately use UUID IDs; Names are for disambiguation in prompts/plans.
+  - The client’s executor resolves provided identifiers to concrete IDs.
+
+Impact:
+- More deterministic positioning and behavior across varied viewports.
+- Safer multi-select operations with explicit clarification.
+- Better performance for bulk deletes and complex plans.
+
+2.3 Integration Points
+typescript// context/AIContext.tsx
+interface AIContextType {
+  isProcessing: boolean;
+  executeCommand: (prompt: string) => Promise<void>;
+  lastPlan: AIPlan | null;
+  error: Error | null;
+}
+
+// Hooks into existing CanvasContext (real APIs)
+const {
+  rectangles: shapes,
+  addRectangle,
+  addCircle,
+  addTriangle,
+  addLine,
+  addText,
+  updateShape,
+  deleteSelected,
+  bringToFront,
+  sendToBack,
+} = useCanvas();
+
+// Ambiguity resolution:
+// If AI signals needsClarification in returned plan, surface a question in the chat UI
+// (e.g., "Multiple blue rectangles found: Rect A, Rect B. Which do you mean?")
+// Use shape `name` to disambiguate; resume after user reply.
+
+2.4 Execution Modes (Server vs Client) – Selected: Hybrid
+
+Modes:
+- Plan-only (server returns AIPlan; client executes):
+  - Pros: Keeps all writes in existing client flows (optimistic updates, UndoContext).
+  - Cons: Client must stay online to execute; larger plans may be chatty.
+- Server-execute (server applies ops to Firestore):
+  - Pros: Atomic, centralized, consistent with multi-user; works if client disconnects.
+  - Cons: Harder to integrate with client UndoContext; more surface area for server writes.
+- Hybrid (chosen):
+  - Simple/single-step commands → plan-only (client executes for best Undo/Redo integration).
+  - Complex/multi-step templates (login form, grid, large arrangements) → server-execute for atomicity and concurrency control.
+  - Server returns an execution summary so client can annotate Undo/History UI.
+
+2.5 Tool Coverage (Hotkey Parity)
+
+Include tools mirroring core canvas actions:
+- Selection helpers: `selectByName`, `selectAll`, `deselectAll` (client-side only)
+- Clipboard: `copySelected`, `pasteAt` (x,y), `duplicateSelected` (client-side)
+- Undo/Redo: `undo`, `redo` (client-side via `UndoContext`)
+- Layering: `bringToFront`, `sendToBack`
+- CRUD & style: creation, move, resize, rotate, updateStyle, delete
+
+Note: For security and consistency, only CRUD/layering/layout may be executed on server. Selection/clipboard/undo/redo remain client-executed to preserve local UX semantics.
+
+3. Command Categories Implementation
+3.1 Creation Commands (Target: 3+ types)
+Basic Shapes:
+
+"Create a blue rectangle at 200, 300"
+"Add a red circle with radius 50 at the center"
+"Make a yellow triangle at the top left"
+
+Text Elements:
+
+"Add text that says 'Welcome' at 100, 100"
+"Create a heading that says 'Dashboard'"
+
+Implementation Strategy:
+typescript
+// Server emits plan operations like:
+// { name: 'createRectangle', args: { x: 200, y: 300, width: 200, height: 300, color: '#3b82f6', name: 'Blue Rect' } }
+// Client executes via existing creators + updateShape to set precise props.
+// Shape defaults (opacity, rotation, visible, locked) remain as in `CanvasContext`.
+3.2 Manipulation Commands (Target: 3+ types)
+Position:
+
+"Move the blue rectangle to the center"
+"Shift all circles 50 pixels to the right"
+
+Size:
+
+"Make the red square twice as large"
+"Resize the text box to 300 width"
+
+Rotation:
+
+"Rotate the triangle 45 degrees"
+"Flip the rectangle horizontally"
+
+Styling:
+
+"Change the circle color to green"
+"Make the text bold and increase font size to 24"
+
+Implementation Strategy:
+typescript
+// Server emits: { name: 'moveElement', args: { id, x, y } }
+// Client: updateShape(id, { x, y })
+// Use utils/elementFinder.ts to resolve IDs when the user says "the blue rectangle".
+3.3 Layout Commands (Target: 2+ types)
+Arrangement:
+
+"Arrange these shapes in a horizontal row with 20px spacing"
+"Create a 3x3 grid of circles"
+"Stack all rectangles vertically"
+
+Alignment:
+
+"Align all elements to the left edge"
+"Center these shapes on the canvas"
+"Distribute evenly across the canvas"
+
+Implementation Strategy:
+typescript
+// utils/layoutCalculations.ts
+export function arrangeHorizontal(ids: string[], spacing = 20) { /* compute positions; updateShape for each */ }
+export function arrangeVertical(ids: string[], spacing = 20) { /* compute positions; updateShape for each */ }
+export function createGrid(params: { rows: number; cols: number; cellWidth: number; cellHeight: number; spacing?: number; startX?: number; startY?: number; color?: string; type?: 'rectangle' | 'circle' | 'triangle' | 'line'; namePrefix?: string }) { /* emit plan or execute */ }
+3.4 Complex Commands (Target: 2+ types)
+Login Form:
+
+Creates username input, password input, submit button
+Properly spaced and aligned
+Includes labels
+
+Navigation Bar:
+
+Creates container rectangle
+Adds 4 menu items with text
+Horizontal arrangement
+
+Card Layout:
+
+Container with border
+Title text at top
+Image placeholder rectangle
+Description text below
+
+Implementation Strategy (server emits plan → client executes; server may also execute directly per 2.4):
+typescript
+// Example plan for login form
+// [
+//  { name: 'createRectangle', args: { x, y, width: 300, height: 250, color: '#ffffff', name: 'Login Card' }},
+//  { name: 'createText', args: { text: 'Username', x: x+20, y: y+30, fontSize: 14, color: '#374151' }},
+//  { name: 'createRectangle', args: { x: x+20, y: y+50, width: 260, height: 35, color: '#f9fafb', name: 'Username Input' }},
+//  { name: 'createText', args: { text: 'Password', x: x+20, y: y+100, fontSize: 14, color: '#374151' }},
+//  { name: 'createRectangle', args: { x: x+20, y: y+120, width: 260, height: 35, color: '#f9fafb', name: 'Password Input' }},
+//  { name: 'createRectangle', args: { x: x+20, y: y+180, width: 260, height: 40, color: '#3b82f6', name: 'Submit Button' }},
+//  { name: 'createText', args: { text: 'Sign In', x: x+125, y: y+192, fontSize: 16, color: '#ffffff' }}
+// ]
+```
+
+---
+
+## 4. Implementation Steps
+
+### Phase 1: Foundation (Days 1-2)
+
+**Step 1**: Set up AI backend (Firebase Cloud Function)
+- Create `functions/aiAgent/index.ts` (Node 18)
+- Install `openai` SDK in functions; set `OPENAI_API_KEY` via `firebase functions:config:set openai.key=...`
+- Implement POST `/ai/command` → returns `AIPlan` or executes ops (see 2.4)
+- Default model: `gpt-4o-mini`
+
+**Step 2**: Define tool schemas & plan types
+- Create `types/ai-tools.ts` (shared)
+- 10+ operations across creation/manipulation/layout/layering/delete
+- Validate arguments; include `name` and sensible defaults
+
+**Step 3**: Build AIContext and client executor
+- `context/AIContext.tsx` with `executeCommand()` and ambiguity prompts
+- `services/AICanvasService.ts` to call Cloud Function
+- `executePlan()` mapping to `CanvasContext` APIs
+
+### Phase 2: Basic Commands (Days 3-4)
+
+**Step 4**: Implement creation commands
+- `createShape()` handler
+- `createText()` handler
+- Test: "Create a blue circle at 100, 100"
+
+**Step 5**: Implement manipulation commands
+- `moveElement()` handler
+- `resizeElement()` handler
+- `rotateElement()` handler
+- Test: "Move the circle to 300, 200"
+
+**Step 6**: Add element finding logic
+- Parse natural descriptions ("the blue rectangle")
+- Match by color, type, position
+- Handle ambiguous references
+
+### Phase 3: Layout & Complex (Days 5-6)
+
+**Step 7**: Implement layout commands
+- `arrangeElements()` handler with horizontal/vertical/grid
+- Spacing and alignment calculations
+- Test: "Arrange in a 3x3 grid"
+
+**Step 8**: Build complex command templates
+- Login form template
+- Navigation bar template
+- Card layout template
+- Test: "Create a login form"
+
+**Step 9**: Add multi-step planning
+- Parse complex commands into steps
+- Execute sequentially
+- Validate each step
+
+### Phase 4: Real-time Sync (Day 7)
+
+**Step 10**: Integrate with Firebase
+- If client executes: use `CanvasContext` existing flows → optimistic → Firestore listeners
+- If server executes: Cloud Function writes to Firestore using same data model
+- Ensure all AI-created shapes set `createdBy: currentUserEmail` and metadata
+
+**Step 11**: Handle concurrent AI usage
+- RTDB lock at `/ai/locks/{canvasId}` to serialize complex plans
+- Optional queue at `/ai/queue/{canvasId}`
+- Broadcast "AI is thinking..." via RTDB presence
+
+**Step 12**: Optimize performance
+- Batch Firestore writes for complex plans
+- Maintain optimistic UI updates
+- Target <2s for single-step, <3s for complex
+
+### Phase 5: UX & Polish (Day 8)
+
+**Step 13**: Build AI chat interface
+- Input box at bottom of canvas
+- Command history display
+- Loading indicators
+
+**Step 14**: Add visual feedback
+- Highlight AI-created elements briefly
+- Show step-by-step progress for complex commands
+- Toast notifications for completion
+
+**Step 15**: Error handling
+- Graceful failures with helpful messages
+- Retry logic for API timeouts
+- Clear error states in UI
+
+### Phase 6: Testing & Validation (Day 9)
+
+**Step 16**: Test command breadth
+- Verify 8+ distinct command types work
+- Test all categories (create, manipulate, layout, complex)
+- Document each working command
+
+**Step 17**: Performance testing
+- Measure response times (<2s target)
+- Test with 3+ concurrent users
+- Verify shared state consistency
+
+**Step 18**: Accuracy testing
+- "Create login form" produces 3+ elements
+- Complex layouts have proper positioning
+- 90%+ command success rate
+
+---
+
+## 5. Code Structure
+```
+src/
+├── services/
+│   └── AICanvasService.ts          # Calls Cloud Function, returns AIPlan / executes
+├── context/
+│   └── AIContext.tsx                # AI state management
+├── components/
+│   ├── AICommandInput.tsx           # Chat input UI
+│   ├── AILoadingIndicator.tsx       # Processing feedback
+│   └── AICommandHistory.tsx         # Past commands
+├── types/
+│   ├── ai-tools.ts                  # Tool schemas + plan types (shared)
+│   └── ai-response.ts               # Response types
+├── utils/
+│   ├── elementFinder.ts             # Parse "the blue circle"
+│   ├── layoutCalculations.ts        # Grid, alignment math
+│   └── complexCommands.ts           # Templates for forms, etc.
+└── hooks/
+    └── useAICommand.ts              # Command execution hook
+functions/
+└── aiAgent/
+    └── index.ts                      # Firebase Cloud Function (OpenAI plan generator/executor)
+
+6. Performance Targets
+MetricTargetHow to AchieveLatency<2s for single-stepUse streaming responses, optimistic updatesAccuracy90%+ success rateRobust error handling, clear function schemasBreadth8+ command typesCover all 4 categories with varietyConcurrency3+ simultaneous usersUse RTDB locks, command queuingComplexityMulti-step executionBreak complex commands into sequential operations
+
+Model Defaults
+- Default model: gpt-4o-mini
+- Temperature: 0.2 (deterministic)
+- Max tool use depth: 1-2 rounds before clarification
+
+Ambiguity Handling
+- If multiple candidates (e.g., several blue rectangles), return `needsClarification` with a question listing shape `name`s
+- Chat UI asks the user; resume execution once clarified
+
+7. Example API Integration (OpenAI + Firebase Cloud Function)
+typescript
+// functions/aiAgent/index.ts
+import * as functions from 'firebase-functions';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export const command = functions.https.onRequest(async (req, res) => {
+  try {
+    const { prompt, canvasState, mode } = req.body || {};
+    if (!prompt) return res.status(400).json({ error: 'Missing prompt' });
+
+    const tools = [
+      { type: 'function', function: { name: 'createRectangle', parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, color: { type: 'string' }, name: { type: 'string' } }, required: ['x','y','width','height','color'] } } },
+      { type: 'function', function: { name: 'createCircle', parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, radius: { type: 'number' }, color: { type: 'string' }, name: { type: 'string' } }, required: ['x','y','radius','color'] } } },
+      { type: 'function', function: { name: 'createTriangle', parameters: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, color: { type: 'string' }, name: { type: 'string' } }, required: ['x','y','width','height','color'] } } },
+      { type: 'function', function: { name: 'createLine', parameters: { type: 'object', properties: { x1: { type: 'number' }, y1: { type: 'number' }, x2: { type: 'number' }, y2: { type: 'number' }, color: { type: 'string' }, name: { type: 'string' } }, required: ['x1','y1','x2','y2','color'] } } },
+      { type: 'function', function: { name: 'createText', parameters: { type: 'object', properties: { text: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, fontSize: { type: 'number' }, color: { type: 'string' }, name: { type: 'string' } }, required: ['text','x','y','fontSize','color'] } } },
+      { type: 'function', function: { name: 'moveElement', parameters: { type: 'object', properties: { id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' } }, required: ['id','x','y'] } } },
+      { type: 'function', function: { name: 'resizeElement', parameters: { type: 'object', properties: { id: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, radius: { type: 'number' }, x2: { type: 'number' }, y2: { type: 'number' } } } } },
+      { type: 'function', function: { name: 'rotateElement', parameters: { type: 'object', properties: { id: { type: 'string' }, rotation: { type: 'number' } }, required: ['id','rotation'] } } },
+      { type: 'function', function: { name: 'updateStyle', parameters: { type: 'object', properties: { id: { type: 'string' }, color: { type: 'string' }, opacity: { type: 'number' }, visible: { type: 'boolean' }, locked: { type: 'boolean' }, name: { type: 'string' } }, required: ['id'] } } },
+      { type: 'function', function: { name: 'arrangeElements', parameters: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } }, arrangement: { type: 'string', enum: ['horizontal','vertical'] }, spacing: { type: 'number' } }, required: ['ids','arrangement'] } } },
+      { type: 'function', function: { name: 'createGrid', parameters: { type: 'object', properties: { rows: { type: 'number' }, cols: { type: 'number' }, cellWidth: { type: 'number' }, cellHeight: { type: 'number' }, spacing: { type: 'number' }, startX: { type: 'number' }, startY: { type: 'number' }, color: { type: 'string' }, type: { type: 'string', enum: ['rectangle','circle','triangle','line'] }, namePrefix: { type: 'string' } }, required: ['rows','cols','cellWidth','cellHeight'] } } },
+      { type: 'function', function: { name: 'deleteElement', parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } } },
+      { type: 'function', function: { name: 'bringToFront', parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } } },
+      { type: 'function', function: { name: 'sendToBack', parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } } },
+      { type: 'function', function: { name: 'getCanvasState', parameters: { type: 'object', properties: {} } } },
+    ];
+
+    const messages = [
+      { role: 'system', content: 'You are an AI for a collaborative canvas. Use tools to create an actionable plan or execute operations. Ask clarifying questions when ambiguous; prefer referencing shapes by name.' },
+      { role: 'user', content: `Canvas state: ${JSON.stringify(canvasState)}\n\nCommand: ${prompt}` }
+    ] as const;
+
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: messages as any,
+      tools,
+      tool_choice: 'auto',
+      temperature: 0.2,
+    });
+
+    const first = completion.choices[0];
+    const toolCalls = first?.message?.tool_calls || [];
+    const plan = { operations: [] as any[], rationale: first?.message?.content || undefined };
+    for (const call of toolCalls) {
+      plan.operations.push({ name: call.function?.name, args: JSON.parse(call.function?.arguments || '{}') });
+    }
+
+    // Mode: 'plan' (default) returns operations; 'execute' applies them server-side
+    if (mode === 'execute') {
+      // TODO: apply operations to Firestore using our existing data model
+      // (create/update/delete shapes; set metadata createdBy/lastModifiedBy)
+      // Return summary of applied ops
+      return res.json({ applied: plan.operations.length });
+    }
+    return res.json(plan);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+8. Success Criteria Checklist
+Command Breadth (10 points):
+
+ 8+ distinct command types implemented
+ 2+ creation commands (shapes, text)
+ 2+ manipulation commands (move, resize, rotate, style)
+ 1+ layout command (arrange, grid, align)
+ 1+ complex command (login form, nav bar, card)
+
+Complex Execution (8 points):
+
+ "Create login form" produces 3+ elements
+ Elements are properly positioned and aligned
+ Smart styling applied (borders, colors, spacing)
+ Multi-step execution works correctly
+
+Performance & Reliability (7 points):
+
+ Sub-2 second responses for simple commands
+ 90%+ accuracy rate across all commands
+ Natural UX with loading indicators
+ Shared state works with all users seeing changes
+ Multiple users can use AI simultaneously
+
+
+9. Risk Mitigation
+RiskMitigation StrategyAPI costs too highUse gpt-4o-mini; batch ops; cap tool depthLatency >2sUse streaming UI, optimistic client executionAmbiguous commands failReturn `needsClarification` with shape namesConcurrent conflictsRTDB locks for complex plans; last-write-wins remainsComplex commands breakPlan-first; validate each step; partial rollback via UndoContext (client)
+
+10. Future Enhancements (Out of Scope)
+
+Voice command input
+AI-suggested improvements to layouts
+Natural language queries ("What's on the canvas?")
+Undo/redo for AI operations
+AI-powered auto-layout optimization
+
+
+Total Lines: 498

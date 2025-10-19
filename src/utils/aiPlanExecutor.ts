@@ -6,6 +6,7 @@
  */
 
 import { AIOperation } from '../types/ai-tools';
+import toast from 'react-hot-toast';
 
 /**
  * Canvas context methods interface
@@ -31,14 +32,17 @@ export interface CanvasContextMethods {
 export async function executePlan(
   operations: AIOperation[],
   canvasContext: CanvasContextMethods,
-  onProgress?: (current: number, total: number, operation: AIOperation) => void
+  onProgress?: (current: number, total: number, operation: AIOperation) => void,
+  enableStreaming: boolean = true  // New parameter for streaming feedback
 ): Promise<string[]> {
   const createdIds: string[] = [];
+  const milestones = [25, 50, 75, 100]; // Major milestones for toast notifications
+  let lastMilestone = 0;
 
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
 
-    // Notify progress
+    // Notify progress to update state
     if (onProgress) {
       onProgress(i + 1, operations.length, operation);
     }
@@ -46,13 +50,84 @@ export async function executePlan(
     try {
       const resultIds = await executeOperation(operation, canvasContext);
       createdIds.push(...resultIds);
+      
+      // Log all operations in background for future chatbot platform
+      if (enableStreaming) {
+        const operationName = getOperationDisplayName(operation);
+        const progressPercent = Math.round(((i + 1) / operations.length) * 100);
+        console.log(`[AI Execution] ${operationName} (${i + 1}/${operations.length}) - ${progressPercent}% complete`);
+        
+        // Show toast only for major milestones (25%, 50%, 75%, 100%)
+        if (operations.length > 3) {
+          // Check if we've hit a new milestone (avoid function in loop warning)
+          let currentMilestone = null;
+          for (const milestone of milestones) {
+            if (progressPercent >= milestone && milestone > lastMilestone) {
+              currentMilestone = milestone;
+              break;
+            }
+          }
+          
+          if (currentMilestone) {
+            lastMilestone = currentMilestone;
+            toast.success(`AI Progress: ${currentMilestone}% complete (${i + 1}/${operations.length})`, {
+              duration: 1500,
+              position: 'bottom-right',
+            });
+          }
+        }
+      }
     } catch (error) {
       console.error(`Error executing operation ${operation.name}:`, error);
+      
+      // Show error toast for failed operation
+      if (enableStreaming) {
+        const operationName = getOperationDisplayName(operation);
+        toast.error(`Failed: ${operationName}`, {
+          duration: 3000,
+        });
+      }
+      
       throw error;
     }
   }
 
   return createdIds;
+}
+
+/**
+ * Helper function to get human-readable operation names
+ * Used for logging and future chatbot response platform
+ */
+function getOperationDisplayName(operation: AIOperation): string {
+  switch (operation.name) {
+    case 'createRectangle':
+      return `Created rectangle${(operation.args as any).name ? ` "${(operation.args as any).name}"` : ''}`;
+    case 'createCircle':
+      return `Created circle${(operation.args as any).name ? ` "${(operation.args as any).name}"` : ''}`;
+    case 'createTriangle':
+      return `Created triangle${(operation.args as any).name ? ` "${(operation.args as any).name}"` : ''}`;
+    case 'createLine':
+      return `Created line`;
+    case 'createText':
+      return `Created text${(operation.args as any).text ? ` "${(operation.args as any).text}"` : ''}`;
+    case 'moveElement':
+      return `Moved shape`;
+    case 'resizeElement':
+      return `Resized shape`;
+    case 'rotateElement':
+      return `Rotated shape`;
+    case 'updateStyle':
+      return `Updated style`;
+    case 'arrangeElements':
+      return `Arranged ${(operation.args as any).ids?.length || 0} shapes`;
+    case 'createGrid':
+      return `Created grid`;
+    case 'deleteElement':
+      return `Deleted shape`;
+    default:
+      return `Completed ${operation.name}`;
+  }
 }
 
 /**

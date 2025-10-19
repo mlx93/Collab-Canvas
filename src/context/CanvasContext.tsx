@@ -1140,12 +1140,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], shapesWithMetadata.map(s => s.id), cursorColorData.cursorColor);
     }
     
-    // Persist to Firestore using pre-generated IDs
+    // Persist to Firestore using pre-generated IDs (parallel batch writes)
     try {
-      for (const shape of shapesWithMetadata) {
-        const { id, ...shapeData } = shape as any;
-        await canvasService.createRectangleWithId(id, shapeData);
-      }
+      // Execute all writes in parallel for better performance
+      await Promise.all(
+        shapesWithMetadata.map(async (shape) => {
+          const { id, ...shapeData } = shape as any;
+          return canvasService.createRectangleWithId(id, shapeData);
+        })
+      );
       toast.success(`Pasted ${shapesWithMetadata.length} shape(s)`);
     } catch (error) {
       toast.error('Failed to paste shapes');
@@ -1202,12 +1205,15 @@ export const CanvasProvider: React.FC<CanvasProviderProps> = ({ children }) => {
       setLiveSelection(user.userId, user.email, user.firstName || user.email.split('@')[0], duplicates.map(s => s.id), cursorColorData.cursorColor);
     }
     
-    // Persist to Firestore using pre-generated IDs
+    // Persist to Firestore using pre-generated IDs (parallel batch writes)
     try {
-      for (const shape of duplicates) {
-        const { id, ...shapeData } = shape as any;
-        await canvasService.createRectangleWithId(id, shapeData);
-      }
+      // Execute all writes in parallel for better performance
+      await Promise.all(
+        duplicates.map(async (shape) => {
+          const { id, ...shapeData } = shape as any;
+          return canvasService.createRectangleWithId(id, shapeData);
+        })
+      );
       toast.success(`Duplicated ${duplicates.length} shape(s)`);
     } catch (error) {
       toast.error('Failed to duplicate shapes');
