@@ -6,7 +6,7 @@
  */
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { AIPlan, AIOperation, CanvasSnapshot } from '../types/ai-tools';
+import { AIPlan, AIOperation, CanvasSnapshot, AICommandHistoryEntry } from '../types/ai-tools';
 import { aiCanvasService, AIServiceError } from '../services/AICanvasService';
 import { executePlan, CanvasContextMethods } from '../utils/aiPlanExecutor';
 import { useCanvas } from './CanvasContext';
@@ -28,12 +28,17 @@ export interface OperationResult {
  */
 export interface ChatMessage {
   id: string;
-  type: 'user' | 'ai' | 'system';
+  type: 'user' | 'ai' | 'system' | 'clarification';
   content: string;
   timestamp: number;
   operations?: AIOperation[];
   operationResults?: OperationResult[];
   rationale?: string;
+  clarification?: {
+    question: string;
+    options: string[];
+    originalPrompt: string;
+  };
 }
 
 /**
@@ -61,6 +66,12 @@ interface AIContextType {
   updateOperationStatus: (messageId: string, operationIndex: number, statusUpdate: Partial<OperationResult>) => void;
   clearChat: () => void;
 
+  // History state (Phase 3)
+  commandHistory: AICommandHistoryEntry[];
+  rerunCommand: (historyId: string) => Promise<void>;
+  clearHistory: () => void;
+  deleteHistoryEntry: (historyId: string) => void;
+
   // Methods
   executeCommand: (prompt: string, clarificationResponse?: string) => Promise<void>;
   clearError: () => void;
@@ -80,35 +91,80 @@ interface AIProviderProps {
 }
 
 /**
- * Helper function to save command history to localStorage
- */
-function saveCommandToHistory(prompt: string, success: boolean, result?: string) {
-  try {
-    const history = JSON.parse(localStorage.getItem('ai_command_history') || '[]');
-    history.push({
-      prompt,
-      timestamp: Date.now(),
-      success,
-      result,
-    });
-    // Keep only last 50 commands
-    if (history.length > 50) {
-      history.shift();
-    }
-    localStorage.setItem('ai_command_history', JSON.stringify(history));
-  } catch (e) {
-    console.error('Failed to save command history:', e);
-  }
-}
-
-/**
- * AI Provider
- */
-/**
  * Helper function to generate unique IDs
  */
 function generateId(): string {
   return Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+/**
+ * Helper function to track shape changes by operation type
+ */
+function trackOperationShapeChanges(
+  operation: AIOperation,
+  modifiedShapeIds: string[],
+  deletedShapeIds: string[]
+): void {
+  const opName = operation.name;
+  const opArgs = operation.args as any;
+  
+  // Define operation type mapping
+  const OPERATION_TRACKING: Record<string, 'created' | 'modified' | 'deleted' | 'none'> = {
+    // Creation operations (tracked via executePlan return value)
+    createRectangle: 'none',
+    createCircle: 'none',
+    createTriangle: 'none',
+    createLine: 'none',
+    createText: 'none',
+    createGrid: 'none',
+    
+    // Modification operations
+    moveElement: 'modified',
+    resizeElement: 'modified',
+    rotateElement: 'modified',
+    updateStyle: 'modified',
+    arrangeElements: 'modified', // modifies all shapes in args.ids
+    
+    // Deletion operations
+    deleteElement: 'deleted',
+    deleteMultipleElements: 'deleted',
+    
+    // Layer operations (modify z-index)
+    bringToFront: 'modified',
+    sendToBack: 'modified',
+  };
+  
+  const trackingType = OPERATION_TRACKING[opName] || 'none';
+  
+  if (trackingType === 'modified') {
+    // Single shape operations
+    if (opArgs.id && !modifiedShapeIds.includes(opArgs.id)) {
+      modifiedShapeIds.push(opArgs.id);
+    }
+    
+    // Multi-shape operations (arrangeElements)
+    if (opArgs.ids && Array.isArray(opArgs.ids)) {
+      opArgs.ids.forEach((id: string) => {
+        if (!modifiedShapeIds.includes(id)) {
+          modifiedShapeIds.push(id);
+        }
+      });
+    }
+  } else if (trackingType === 'deleted') {
+    // Single delete
+    if (opArgs.id && !deletedShapeIds.includes(opArgs.id)) {
+      deletedShapeIds.push(opArgs.id);
+    }
+    
+    // Multiple delete
+    if (opArgs.ids && Array.isArray(opArgs.ids)) {
+      opArgs.ids.forEach((id: string) => {
+        if (!deletedShapeIds.includes(id)) {
+          deletedShapeIds.push(id);
+        }
+      });
+    }
+  }
 }
 
 export function AIProvider({ children }: AIProviderProps) {
@@ -127,6 +183,12 @@ export function AIProvider({ children }: AIProviderProps) {
   } | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
+  // Phase 3: Enhanced command history
+  const [commandHistory, setCommandHistory] = useState<AICommandHistoryEntry[]>(() => {
+    const saved = localStorage.getItem('ai_command_history_v2');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   const canvasContext = useCanvas();
   const { user } = useAuth();
 
@@ -135,6 +197,61 @@ export function AIProvider({ children }: AIProviderProps) {
    */
   const clearError = useCallback(() => {
     setError(null);
+  }, []);
+
+  /**
+   * Save command to history with enhanced tracking (Phase 3)
+   */
+  const saveCommandToHistory = useCallback((entry: AICommandHistoryEntry) => {
+    setCommandHistory(prev => {
+      const updated = [...prev, entry];
+      
+      // Keep last 100 commands
+      if (updated.length > 100) {
+        updated.shift();
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('ai_command_history_v2', JSON.stringify(updated));
+      
+      return updated;
+    });
+  }, []);
+
+  /**
+   * Rerun a command from history
+   */
+  const rerunCommand = useCallback(async (historyId: string) => {
+    const entry = commandHistory.find(e => e.id === historyId);
+    if (!entry) {
+      console.error('Command not found in history:', historyId);
+      return;
+    }
+    
+    console.log('Rerunning command:', entry.prompt);
+    
+    // Re-execute the command
+    await executeCommand(entry.prompt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commandHistory]);
+
+  /**
+   * Clear all command history
+   */
+  const clearHistory = useCallback(() => {
+    setCommandHistory([]);
+    localStorage.removeItem('ai_command_history_v2');
+  }, []);
+
+  /**
+   * Delete a single history entry
+   */
+  const deleteHistoryEntry = useCallback((historyId: string) => {
+    setCommandHistory(prev => {
+      const updated = prev.filter(e => e.id !== historyId);
+      localStorage.setItem('ai_command_history_v2', JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   /**
@@ -255,7 +372,19 @@ export function AIProvider({ children }: AIProviderProps) {
       return;
     }
 
-    // 1. Add user message to chat
+    // === PHASE 3: ADD TIMING AND TRACKING VARIABLES ===
+    const startTime = Date.now();
+    const historyId = generateId();
+    const createdShapeIds: string[] = [];
+    const modifiedShapeIds: string[] = [];
+    const deletedShapeIds: string[] = [];
+    
+    let planningTime = 0;
+    let executionTime = 0;
+    let executionMode: 'client' | 'server' | 'cached' = 'client';
+    let cacheHit = false;
+
+    // 1. Add user message to chat (Phase 2)
     const userMessageId = generateId();
     addChatMessage({
       id: userMessageId,
@@ -278,36 +407,37 @@ export function AIProvider({ children }: AIProviderProps) {
         enhancedPrompt = `${prompt} (User clarified: ${clarificationResponse})`;
       }
 
+      // === PHASE 3: TRACK PLANNING TIME ===
+      const planningStartTime = Date.now();
+
       // Request plan from AI
       const plan = await aiCanvasService.requestPlan(enhancedPrompt, canvasSnapshot);
       setLastPlan(plan);
 
+      planningTime = Date.now() - planningStartTime;
+      
+      // === PHASE 3: DETECT CACHE HIT ===
+      if (plan.rationale?.includes('cached pattern')) {
+        cacheHit = true;
+        executionMode = 'cached';
+      }
+
       // Check if AI needs clarification
       if (plan.needsClarification) {
-        // Add a nice clarification message to chat
+        // Add inline clarification message to chat (NEW: embedded in chat UI)
         addChatMessage({
           id: generateId(),
-          type: 'ai',
+          type: 'clarification',
           content: plan.needsClarification.question || 'I need clarification to proceed.',
           timestamp: Date.now(),
-          rationale: plan.needsClarification.question,
+          clarification: {
+            question: plan.needsClarification.question,
+            options: plan.needsClarification.options || [],
+            originalPrompt: prompt,
+          },
         });
         
-        // Add system message with options list
-        if (plan.needsClarification.options && plan.needsClarification.options.length > 0) {
-          const optionsList = plan.needsClarification.options
-            .map((opt, i) => `${i + 1}. ${opt}`)
-            .join('\n');
-          
-          addChatMessage({
-            id: generateId(),
-            type: 'system',
-            content: `Please select an option:\n${optionsList}`,
-            timestamp: Date.now(),
-          });
-        }
-        
-        // Show clarification modal with clickable options
+        // Also set clarification state for backward compatibility
         setClarification({
           question: plan.needsClarification.question,
           options: plan.needsClarification.options || [],
@@ -344,11 +474,23 @@ export function AIProvider({ children }: AIProviderProps) {
 
       let resultMessage = '';
       if (shouldExecuteServerSide) {
-        // Server-side execution for complex operations
+        // === SERVER-SIDE EXECUTION ===
+        executionMode = 'server';
+        
+        // === PHASE 3: TRACK EXECUTION TIME ===
+        const executionStartTime = Date.now();
+        
         const result = await aiCanvasService.requestExecute(prompt, canvasSnapshot);
+        
+        // Phase 3: Track created shapes (server-side only tracks creation)
+        createdShapeIds.push(...(result.executionSummary?.shapeIds || []));
+        // Note: Server-side does NOT track modified/deleted - only client-side does
+        
+        executionTime = Date.now() - executionStartTime;
+        
         resultMessage = `Created ${result.executionSummary.shapeIds.length} shapes`;
         
-        // Mark all operations as success
+        // Phase 2: Mark all operations as success
         plan.operations.forEach((op, index) => {
           updateOperationStatus(aiMessageId, index, {
             status: 'success',
@@ -356,7 +498,7 @@ export function AIProvider({ children }: AIProviderProps) {
           });
         });
 
-        // Success message
+        // Phase 2: Success message
         addChatMessage({
           id: generateId(),
           type: 'system',
@@ -366,7 +508,12 @@ export function AIProvider({ children }: AIProviderProps) {
 
         toast.success(resultMessage);
       } else {
-        // Client-side execution for simple operations
+        // === CLIENT-SIDE EXECUTION ===
+        executionMode = cacheHit ? 'cached' : 'client';
+        
+        // === PHASE 3: TRACK EXECUTION TIME ===
+        const executionStartTime = Date.now();
+        
         // Get authenticated user info for Firestore security rules
         if (!user || !user.email) {
           throw new Error('User not authenticated');
@@ -460,21 +607,29 @@ export function AIProvider({ children }: AIProviderProps) {
           rectangles: canvasContext.rectangles,
         };
 
-        // Execute plan with streaming feedback
+        // Execute plan with streaming feedback + Phase 3 tracking
         const createdIds = await executePlan(
           plan.operations,
           contextMethods,
           (current, total, operationIndex, operation) => {
-            // Update operation status to "executing"
+            // Phase 2: Update operation status to "executing"
             updateOperationStatus(aiMessageId, operationIndex, {
               status: 'executing',
             });
             
-            // Update progress indicator
+            // Phase 3: Track shape changes
+            trackOperationShapeChanges(operation, modifiedShapeIds, deletedShapeIds);
+            
+            // Phase 2: Update progress indicator
             setProgress({ current, total, operation });
           },
           true  // Enable streaming feedback
         );
+
+        // Phase 3: Track created shapes
+        createdShapeIds.push(...createdIds);
+        
+        executionTime = Date.now() - executionStartTime;
 
         // Mark all operations as success
         plan.operations.forEach((op, index) => {
@@ -506,8 +661,31 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       }
 
-      // Save to history
-      saveCommandToHistory(prompt, true, resultMessage);
+      // === PHASE 3: CALCULATE TOTAL DURATION ===
+      const duration = Date.now() - startTime;
+
+      // === PHASE 3: SAVE TO ENHANCED HISTORY ===
+      saveCommandToHistory({
+        id: historyId,
+        timestamp: Date.now(),
+        prompt,
+        success: true,
+        plan,
+        executionSummary: {
+          operationsExecuted: plan.operations.length,
+          operationsFailed: 0,
+          shapesCreated: createdShapeIds,
+          shapesModified: modifiedShapeIds,
+          shapesDeleted: deletedShapeIds,
+          duration,
+          planningTime,
+          executionTime,
+          executionMode,
+          cacheHit,
+        },
+        userId: user?.userId,
+        canvasId: 'default',
+      });
 
       // Clear progress
       setProgress(null);
@@ -517,15 +695,24 @@ export function AIProvider({ children }: AIProviderProps) {
       const error = err as Error;
       setError(error);
 
+      // === PHASE 3: CALCULATE DURATION ===
+      const duration = Date.now() - startTime;
+      
+      // === PHASE 3: CAPTURE OPERATION INDEX IF AVAILABLE ===
+      const operationIndex = (err as any).operationIndex !== undefined ? (err as any).operationIndex : undefined;
+
       // Extract clean error message (strip JSON if present)
       let errorMessage = error.message || 'Failed to execute command';
       
       // If error message contains JSON, extract just the question if present
       if (errorMessage.includes('{') && errorMessage.includes('}')) {
         try {
-          const jsonMatch = errorMessage.match(/\{.*\}/s);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
+          // Find the first { and last } to extract JSON
+          const firstBrace = errorMessage.indexOf('{');
+          const lastBrace = errorMessage.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            const jsonStr = errorMessage.substring(firstBrace, lastBrace + 1);
+            const parsed = JSON.parse(jsonStr);
             if (parsed.needsClarification?.question) {
               errorMessage = parsed.needsClarification.question;
             } else {
@@ -538,16 +725,42 @@ export function AIProvider({ children }: AIProviderProps) {
         }
       }
 
-      // Error message in chat
+      // === PHASE 3: SAVE FAILED HISTORY ENTRY ===
+      saveCommandToHistory({
+        id: historyId,
+        timestamp: Date.now(),
+        prompt,
+        success: false,
+        plan: lastPlan || undefined,
+        error: {
+          message: error.message || 'Unknown error',
+          code: (error as any).code,
+          details: error.stack,
+          operationIndex,
+        },
+        executionSummary: {
+          operationsExecuted: 0,
+          operationsFailed: lastPlan?.operations.length || 0,
+          shapesCreated: [],
+          shapesModified: [],
+          shapesDeleted: [],
+          duration,
+          planningTime: 0,
+          executionTime: 0,
+          executionMode: executionMode,
+          cacheHit,
+        },
+        userId: user?.userId,
+        canvasId: 'default',
+      });
+
+      // Phase 2: Error message in chat
       addChatMessage({
         id: generateId(),
         type: 'system',
         content: `❌ Error: ${errorMessage}`,
         timestamp: Date.now(),
       });
-
-      // Save failed command to history
-      saveCommandToHistory(prompt, false, error.message);
 
       // Show user-friendly error message
       if (err instanceof AIServiceError) {
@@ -564,6 +777,7 @@ export function AIProvider({ children }: AIProviderProps) {
     } finally {
       setIsProcessing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasContext, getCanvasSnapshot, user, addChatMessage, updateOperationStatus]);
 
   const value: AIContextType = {
@@ -576,6 +790,10 @@ export function AIProvider({ children }: AIProviderProps) {
     addChatMessage,
     updateOperationStatus,
     clearChat,
+    commandHistory,
+    rerunCommand,
+    clearHistory,
+    deleteHistoryEntry,
     executeCommand,
     clearError,
     cancelClarification,

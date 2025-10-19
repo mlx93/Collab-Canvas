@@ -135,17 +135,8 @@ export function AIChatPanel({ className = '' }: AIChatPanelProps) {
         onClose={() => setShowHistory(false)} 
       />
 
-      {/* Clarification Modal */}
-      {clarification && (
-        <AIClarificationModal
-          question={clarification.question}
-          options={clarification.options}
-          onSelect={(selectedOption) => {
-            executeCommand(clarification.originalPrompt, selectedOption);
-          }}
-          onCancel={cancelClarification}
-        />
-      )}
+      {/* Clarification is now handled inline in chat messages */}
+      {/* AIClarificationModal is deprecated - using AIClarificationMessage instead */}
     </>
   );
 }

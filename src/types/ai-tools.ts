@@ -224,3 +224,53 @@ export enum AIErrorCode {
   INSUFFICIENT_PERMISSIONS = 'INSUFFICIENT_PERMISSIONS',
 }
 
+/**
+ * Enhanced History Entry for Phase 3
+ * Tracks comprehensive execution details for command history
+ */
+export interface AICommandHistoryEntry {
+  // Identification
+  id: string; // Unique ID for this command execution
+  timestamp: number;
+  
+  // Command details
+  prompt: string;
+  success: boolean;
+  
+  // Execution plan
+  plan?: AIPlan;
+  
+  // Execution summary
+  executionSummary?: {
+    // Operation counts
+    operationsExecuted: number;
+    operationsFailed: number;
+    
+    // Shape tracking
+    shapesCreated: string[]; // Array of shape IDs
+    shapesModified: string[]; // Array of shape IDs
+    shapesDeleted: string[]; // Array of shape IDs
+    
+    // Performance metrics
+    duration: number; // Total execution time in milliseconds
+    planningTime?: number; // Time to get plan from OpenAI (ms)
+    executionTime?: number; // Time to execute operations (ms)
+    
+    // Execution mode
+    executionMode: 'client' | 'server' | 'cached';
+    cacheHit?: boolean; // Was pattern cache used?
+  };
+  
+  // Error details (if failed)
+  error?: {
+    message: string;
+    code?: string;
+    details?: string; // Stack trace or detailed error info
+    operationIndex?: number; // Which operation failed (if applicable)
+  };
+  
+  // User context
+  userId?: string;
+  canvasId?: string;
+}
+

@@ -6,13 +6,31 @@
 
 import React from 'react';
 import { AIOperationCard } from './AIOperationCard';
+import { AIClarificationMessage } from './AIClarificationMessage';
 import { ChatMessage } from '../../context/AIContext';
+import { useAI } from '../../context/AIContext';
 
 interface AIChatMessageProps {
   message: ChatMessage;
 }
 
 export function AIChatMessage({ message }: AIChatMessageProps) {
+  const { executeCommand, cancelClarification } = useAI();
+  
+  // Clarification message - inline with clickable options
+  if (message.type === 'clarification' && message.clarification) {
+    return (
+      <AIClarificationMessage
+        question={message.clarification.question}
+        options={message.clarification.options}
+        onSelect={(selectedOption) => {
+          executeCommand(message.clarification!.originalPrompt, selectedOption);
+        }}
+        onCancel={cancelClarification}
+      />
+    );
+  }
+  
   // User message - right aligned, blue bubble
   if (message.type === 'user') {
     return (
