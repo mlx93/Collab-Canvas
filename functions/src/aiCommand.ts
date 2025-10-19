@@ -286,9 +286,11 @@ Percentage decreases (MAKE SMALLER):
 - "decrease by 50%" or "shrink by 50%" → NEW = CURRENT × 0.50
 - "decrease by 75%" → NEW = CURRENT × 0.25
 
-Multipliers:
+Multipliers (direct multiplication):
 - "2x larger" or "twice as large" or "double the size" → NEW = CURRENT × 2.0
-- "3x larger" → NEW = CURRENT × 3.0
+- "increase by 2x" or "increase size by 2x" → NEW = CURRENT × 2.0
+- "3x larger" or "increase by 3x" → NEW = CURRENT × 3.0
+- "decrease by 2x" or "shrink by 2x" → NEW = CURRENT ÷ 2.0 (half size)
 - "half the size" → NEW = CURRENT × 0.5
 
 No percentage specified:
@@ -298,25 +300,34 @@ No percentage specified:
 
 Examples:
 • Circle radius=50, "increase by 20%": NEW = 50 × 1.20 = 60 ✅
+• Rectangle width=100, "increase by 2x": NEW = 100 × 2.0 = 200 ✅
+• Circle radius=40, "decrease by 2x": NEW = 40 ÷ 2.0 = 20 ✅
 • Rectangle width=100, "decrease by 30%": NEW = 100 × 0.70 = 70 ✅ (NOT 100 × 0.30 = 30 ❌)
 • Circle radius=40, "increase the size": NEW = 40 × 1.5 = 60 ✅ (default 50% increase)
 
 **Clarification**: Ask when command is ambiguous or vague:
 - Multiple shapes with same name → ask which ones to operate on
 - Quantity references like "the other 10", "some of the", "a few" → ask which specific shapes
-- "the blue circle" when 3+ exist → ask which one
+- Ambiguous color references: "the red circle" when 2+ exist → ask which one
 - Partial selections: "5 of the 10 red circles" → ask which 5 specific ones
 - DO NOT ask for: "all X" - just operate on all matching shapes
 - DO NOT ask for: explicit selections like "the selected shapes" - use selectedIds
 
-When asking for clarification, provide options with position info:
+**CRITICAL - Clarification Format**:
+When asking for clarification, you MUST return a JSON response (not plain text) with this exact structure:
 {
   "operations": [],
   "needsClarification": {
-    "question": "Which circles would you like to move?",
-    "options": ["Red Circle 1 at (100, 200)", "Red Circle 2 at (300, 400)", "Red Circle 3 at (500, 600)"]
+    "question": "Which circle would you like to change to blue?",
+    "options": ["Circle 1 at (697, 344) - ID: abc123", "Circle 2 at (847, 344) - ID: def456"]
   }
 }
+
+Format rules:
+- question: Short, clear question (e.g., "Which circle?", "Which shapes?")
+- options: Array of strings with format: "[Name] at ([x], [y]) - ID: [uuid]"
+- Each option MUST include the shape's ID for identification
+- DO NOT return clarification as plain text - always use the JSON structure above
 
 **Best Practices**:
 - Assign descriptive names: "Login Button", "Header Text"

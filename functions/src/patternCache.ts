@@ -623,6 +623,80 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
   },
   
   {
+    pattern: /^(?:increase|grow) (?:size )?(?:by )?(\d+)x$/i,
+    description: "Increase by Nx (e.g., 'increase by 2x', 'increase size by 3x')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return [];
+      
+      const multiplier = parseInt(matches[1], 10);
+      
+      console.log(`  [Resize Cache] Increasing by ${multiplier}x for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        if (shape.width !== undefined) updates.width = Math.round(shape.width * multiplier);
+        if (shape.height !== undefined) updates.height = Math.round(shape.height * multiplier);
+        if (shape.radius !== undefined) updates.radius = Math.round(shape.radius * multiplier);
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
+    pattern: /^(?:decrease|shrink|reduce) (?:size )?(?:by )?(\d+)x$/i,
+    description: "Decrease by Nx (e.g., 'decrease by 2x', 'shrink by 3x')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) return [];
+      
+      const divisor = parseInt(matches[1], 10);
+      const multiplier = 1 / divisor;
+      
+      console.log(`  [Resize Cache] Decreasing by ${divisor}x for ${selectedIds.length} shape(s)`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        const updates: any = { id };
+        
+        // Apply multiplier with minimum sizes
+        if (shape.width !== undefined) updates.width = Math.max(10, Math.round(shape.width * multiplier));
+        if (shape.height !== undefined) updates.height = Math.max(10, Math.round(shape.height * multiplier));
+        if (shape.radius !== undefined) updates.radius = Math.max(5, Math.round(shape.radius * multiplier));
+        
+        operations.push({
+          name: 'resizeElement',
+          args: updates
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
     pattern: /^make (?:it |them )?(\d+)x larger$|^make (?:it |them )?(\d+) times larger$/i,
     description: "Make Nx larger",
     requiresCanvasState: true,
@@ -745,6 +819,59 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
           color: newColor,
         }
       }];
+    }
+  },
+  
+  {
+    pattern: /^(?:change|make|turn|set) (?:the )?color of (?:the )?selected (?:.*?) (?:to|into) (red|blue|green|yellow|orange|purple|pink|white|black|gray|grey)$/i,
+    description: "Change color of the selected [shape/identifier] (e.g., 'change the color of the selected red circle to blue')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const newColorName = matches[1].toLowerCase();
+      
+      // Color mapping
+      const colors: Record<string, string> = {
+        red: '#EF4444',
+        blue: '#3B82F6',
+        green: '#10B981',
+        yellow: '#F59E0B',
+        orange: '#F97316',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        white: '#FFFFFF',
+        black: '#000000',
+        gray: '#6B7280',
+        grey: '#6B7280',
+      };
+      
+      const newColor = colors[newColorName] || '#3B82F6';
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) {
+        console.log(`  [Color Change Cache] No shapes selected`);
+        return [];
+      }
+      
+      console.log(`  [Color Change Cache] Changing ${selectedIds.length} selected shape(s) to ${newColorName}`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        operations.push({
+          name: 'updateStyle',
+          args: {
+            id: shape.id,
+            color: newColor,
+          }
+        });
+      }
+      
+      return operations;
     }
   },
   
