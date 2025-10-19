@@ -517,11 +517,32 @@ export function AIProvider({ children }: AIProviderProps) {
       const error = err as Error;
       setError(error);
 
+      // Extract clean error message (strip JSON if present)
+      let errorMessage = error.message || 'Failed to execute command';
+      
+      // If error message contains JSON, extract just the question if present
+      if (errorMessage.includes('{') && errorMessage.includes('}')) {
+        try {
+          const jsonMatch = errorMessage.match(/\{.*\}/s);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.needsClarification?.question) {
+              errorMessage = parsed.needsClarification.question;
+            } else {
+              errorMessage = 'An error occurred. Please try a different command.';
+            }
+          }
+        } catch {
+          // If JSON parsing fails, use generic message
+          errorMessage = 'An error occurred. Please try rephrasing your command.';
+        }
+      }
+
       // Error message in chat
       addChatMessage({
         id: generateId(),
         type: 'system',
-        content: `❌ Error: ${error.message || 'Failed to execute command'}`,
+        content: `❌ Error: ${errorMessage}`,
         timestamp: Date.now(),
       });
 

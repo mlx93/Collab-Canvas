@@ -157,6 +157,25 @@ export async function aiCommandHandler(
         })),
         rationale: firstChoice?.message?.content || undefined,
       };
+      
+      // Check if AI returned needsClarification as text (when it can't use tools properly)
+      const messageContent = firstChoice?.message?.content;
+      if (messageContent && messageContent.includes('needsClarification')) {
+        try {
+          // Try to extract JSON from the message
+          const jsonMatch = messageContent.match(/\{[\s\S]*"needsClarification"[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (parsed.needsClarification) {
+              plan.needsClarification = parsed.needsClarification;
+              plan.operations = []; // Ensure no operations when asking for clarification
+              plan.rationale = undefined; // Clear rationale to avoid showing JSON
+            }
+          }
+        } catch (e) {
+          console.error('Failed to parse needsClarification from message:', e);
+        }
+      }
     }
 
     // Determine execution mode
