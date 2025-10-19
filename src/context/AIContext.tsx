@@ -425,7 +425,7 @@ export function AIProvider({ children }: AIProviderProps) {
       planningTime = Date.now() - planningStartTime;
       
       // === PHASE 3: DETECT CACHE HIT ===
-      if (plan.rationale?.includes('cached pattern')) {
+      if (plan.cached === true) {
         cacheHit = true;
         executionMode = 'cached';
       }

@@ -694,6 +694,113 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
     }
   },
   
+  // COLOR CHANGE PATTERNS
+  {
+    pattern: /^(?:change|make|turn|set) (?:the )?(.*?)(?: color)? (?:to|into) (red|blue|green|yellow|orange|purple|pink|white|black|gray|grey)$/i,
+    description: "Change color of identified shape (e.g., 'change the red circle to blue')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const identifier = matches[1].trim();
+      const newColorName = matches[2].toLowerCase();
+      
+      // Color mapping
+      const colors: Record<string, string> = {
+        red: '#EF4444',
+        blue: '#3B82F6',
+        green: '#10B981',
+        yellow: '#F59E0B',
+        orange: '#F97316',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        white: '#FFFFFF',
+        black: '#000000',
+        gray: '#6B7280',
+        grey: '#6B7280',
+      };
+      
+      const newColor = colors[newColorName] || '#3B82F6';
+      
+      // Check if identifier contains quantity words that indicate multiple shapes
+      const quantityWords = /\b(other|another|some|few|several|\d+)\b/i;
+      if (quantityWords.test(identifier)) {
+        console.log(`  [Color Change Cache] Identifier contains quantity/selection words: "${identifier}" - falling back to OpenAI`);
+        return []; // Return empty to signal no match
+      }
+      
+      // Find shape by identifier
+      const shape = findShapeByIdentifier(identifier, canvasState);
+      if (!shape) {
+        console.log(`  [Color Change Cache] Could not find shape: "${identifier}" - falling back to OpenAI`);
+        return [];
+      }
+      
+      console.log(`  [Color Change Cache] Changing "${identifier}" to ${newColorName}`);
+      
+      return [{
+        name: 'updateStyle',
+        args: {
+          id: shape.id,
+          color: newColor,
+        }
+      }];
+    }
+  },
+  
+  {
+    pattern: /^(?:change|make|turn|set) selected (?:shape|shapes?|rectangle|circle|triangle)?(?: color)? (?:to|into) (red|blue|green|yellow|orange|purple|pink|white|black|gray|grey)$/i,
+    description: "Change color of selected shapes",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const newColorName = matches[1].toLowerCase();
+      
+      // Color mapping
+      const colors: Record<string, string> = {
+        red: '#EF4444',
+        blue: '#3B82F6',
+        green: '#10B981',
+        yellow: '#F59E0B',
+        orange: '#F97316',
+        purple: '#8B5CF6',
+        pink: '#EC4899',
+        white: '#FFFFFF',
+        black: '#000000',
+        gray: '#6B7280',
+        grey: '#6B7280',
+      };
+      
+      const newColor = colors[newColorName] || '#3B82F6';
+      
+      const selectedIds = canvasState.selectedIds || [];
+      if (selectedIds.length === 0) {
+        console.log(`  [Color Change Cache] No shapes selected`);
+        return [];
+      }
+      
+      console.log(`  [Color Change Cache] Changing ${selectedIds.length} selected shape(s) to ${newColorName}`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const id of selectedIds) {
+        const shape = canvasState.shapes.find((s: any) => s.id === id);
+        if (!shape) continue;
+        
+        operations.push({
+          name: 'updateStyle',
+          args: {
+            id: shape.id,
+            color: newColor,
+          }
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
   // MOVE PATTERNS
   {
     pattern: /^move (?:the )?(.*?) (left|right|up|down) (?:by )?(\d+)(?: pixels?)?$/i,
@@ -706,10 +813,18 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
       const direction = matches[2].toLowerCase();
       const distance = parseInt(matches[3], 10);
       
+      // Check if identifier contains quantity words that indicate multiple shapes
+      // These should fall back to OpenAI for proper handling
+      const quantityWords = /\b(other|another|some|few|several|\d+)\b/i;
+      if (quantityWords.test(identifier)) {
+        console.log(`  [Move Cache] Identifier contains quantity/selection words: "${identifier}" - falling back to OpenAI`);
+        return []; // Return empty to signal no match (will fall back to OpenAI)
+      }
+      
       // Find shape by identifier
       const shape = findShapeByIdentifier(identifier, canvasState);
       if (!shape) {
-        console.log(`  [Move Cache] Could not find shape: "${identifier}"`);
+        console.log(`  [Move Cache] Could not find shape: "${identifier}" - falling back to OpenAI`);
         return []; // Fall back to OpenAI
       }
       

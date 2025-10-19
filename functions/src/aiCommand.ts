@@ -109,13 +109,15 @@ export async function aiCommandHandler(
     const cachedOperations = tryMatchPattern(prompt, canvasState.viewport, canvasState);
     let plan: AIPlan;
     
-    if (cachedOperations) {
+    // Only use cached operations if we got a non-empty array
+    if (cachedOperations && cachedOperations.length > 0) {
       // Cache hit! Skip OpenAI entirely
       console.log(`[AI] Pattern cache HIT - bypassing OpenAI for instant response`);
       console.log(`[AI] Generated ${cachedOperations.length} cached operation(s)`);
       plan = {
         operations: cachedOperations,
-        rationale: 'Used cached pattern template for instant response'
+        rationale: undefined, // Don't mention caching to users
+        cached: true // Internal flag for tracking
       };
     } else {
       // Cache miss - use OpenAI
@@ -272,38 +274,47 @@ function buildSystemMessage(): string {
 - Style: updateStyle(id, { color, opacity, visible, locked, name })
 
 **Size Changes - CRITICAL FORMULAS**:
-Percentage increases (BIGGER):
-- "increase by 20%" → NEW = CURRENT × 1.20 (NOT 0.20!)
-- "increase by 50%" → NEW = CURRENT × 1.50
+IMPORTANT: "increase" means MULTIPLY to make BIGGER, "decrease" means MULTIPLY to make SMALLER
+
+Percentage increases (MAKE BIGGER):
+- "increase by 20%" or "increase size by 20%" → NEW = CURRENT × 1.20 (NOT 0.20!)
+- "increase by 50%" or "grow by 50%" → NEW = CURRENT × 1.50
 - "increase by 100%" → NEW = CURRENT × 2.00
 
-Percentage decreases (SMALLER):
-- "decrease by 20%" → NEW = CURRENT × 0.80 (NOT 1.20!)
-- "decrease by 50%" → NEW = CURRENT × 0.50
+Percentage decreases (MAKE SMALLER):
+- "decrease by 20%" or "reduce by 20%" → NEW = CURRENT × 0.80 (NOT 1.20!)
+- "decrease by 50%" or "shrink by 50%" → NEW = CURRENT × 0.50
 - "decrease by 75%" → NEW = CURRENT × 0.25
 
 Multipliers:
-- "2x larger" or "twice as large" → NEW = CURRENT × 2.0
+- "2x larger" or "twice as large" or "double the size" → NEW = CURRENT × 2.0
 - "3x larger" → NEW = CURRENT × 3.0
 - "half the size" → NEW = CURRENT × 0.5
+
+No percentage specified:
+- "increase the size" (no amount) → DEFAULT: NEW = CURRENT × 1.5 (50% bigger)
+- "make bigger" → DEFAULT: NEW = CURRENT × 1.5
+- "make smaller" → DEFAULT: NEW = CURRENT × 0.75 (25% smaller)
 
 Examples:
 • Circle radius=50, "increase by 20%": NEW = 50 × 1.20 = 60 ✅
 • Rectangle width=100, "decrease by 30%": NEW = 100 × 0.70 = 70 ✅ (NOT 100 × 0.30 = 30 ❌)
+• Circle radius=40, "increase the size": NEW = 40 × 1.5 = 60 ✅ (default 50% increase)
 
-**Clarification**: Only ask if TRULY ambiguous:
-- Multiple shapes with same name → ask which one
-- "delete some" or "delete a few" → ask how many
+**Clarification**: Ask when command is ambiguous or vague:
+- Multiple shapes with same name → ask which ones to operate on
+- Quantity references like "the other 10", "some of the", "a few" → ask which specific shapes
 - "the blue circle" when 3+ exist → ask which one
-- DO NOT ask for: "delete the red circles" when all should be deleted
-- DO NOT ask for: "delete all X" - just delete all matching shapes
+- Partial selections: "5 of the 10 red circles" → ask which 5 specific ones
+- DO NOT ask for: "all X" - just operate on all matching shapes
+- DO NOT ask for: explicit selections like "the selected shapes" - use selectedIds
 
-Return:
+When asking for clarification, provide options with position info:
 {
   "operations": [],
   "needsClarification": {
-    "question": "Which one?",
-    "options": ["Shape 1 at (x,y)", "Shape 2 at (x,y)"]
+    "question": "Which circles would you like to move?",
+    "options": ["Red Circle 1 at (100, 200)", "Red Circle 2 at (300, 400)", "Red Circle 3 at (500, 600)"]
   }
 }
 

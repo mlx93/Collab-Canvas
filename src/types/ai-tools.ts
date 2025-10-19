@@ -138,6 +138,7 @@ export interface AIPlan {
     question: string;
     options?: string[];
   } | null;
+  cached?: boolean; // Internal flag to track if this plan came from cache
 }
 
 /**

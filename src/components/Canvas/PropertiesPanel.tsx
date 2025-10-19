@@ -34,7 +34,6 @@ export const PropertiesPanel: React.FC = () => {
   const [isBackgroundColorDropdownOpen, setIsBackgroundColorDropdownOpen] = useState(false);
   const [isBorderColorDropdownOpen, setIsBorderColorDropdownOpen] = useState(false);
   const [showFloatingColorPicker, setShowFloatingColorPicker] = useState(false);
-  const [colorPickerPosition, setColorPickerPosition] = useState({ x: 0, y: 0 });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const colorPickerRef = useRef<HTMLButtonElement>(null);
   // const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Not currently used
@@ -106,15 +105,8 @@ export const PropertiesPanel: React.FC = () => {
     }, 500);
   };
 
-  // Handle color picker positioning
+  // Handle color picker toggle
   const handleColorPickerToggle = () => {
-    if (colorPickerRef.current) {
-      const rect = colorPickerRef.current.getBoundingClientRect();
-      setColorPickerPosition({
-        x: rect.left + rect.width + 10, // Position to the right of the button
-        y: rect.top - 200 // Position higher up near the icon
-      });
-    }
     setShowFloatingColorPicker(!showFloatingColorPicker);
   };
 
