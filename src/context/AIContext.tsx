@@ -535,8 +535,8 @@ export function AIProvider({ children }: AIProviderProps) {
               createdBy: userEmail,
               lastModifiedBy: userEmail
             });
-            // Shape is auto-selected, get the selected ID
-            await new Promise(resolve => setTimeout(resolve, 50));
+            // Brief delay to allow state to settle (reduced from 50ms for performance)
+            await new Promise(resolve => setTimeout(resolve, 10));
             return canvasContext.selectedIds[0] || '';
           },
           addCircle: async (x, y, radius, color) => {
@@ -545,7 +545,7 @@ export function AIProvider({ children }: AIProviderProps) {
               createdBy: userEmail,
               lastModifiedBy: userEmail
             });
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 10));
             return canvasContext.selectedIds[0] || '';
           },
           addTriangle: async (x, y, width, height, color) => {
@@ -554,7 +554,7 @@ export function AIProvider({ children }: AIProviderProps) {
               createdBy: userEmail,
               lastModifiedBy: userEmail
             });
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 10));
             return canvasContext.selectedIds[0] || '';
           },
           addLine: async (x1, y1, x2, y2, color) => {
@@ -564,7 +564,7 @@ export function AIProvider({ children }: AIProviderProps) {
               createdBy: userEmail,
               lastModifiedBy: userEmail
             });
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 10));
             return canvasContext.selectedIds[0] || '';
           },
           addText: async (x, y, text, fontSize, color) => {
@@ -581,7 +581,7 @@ export function AIProvider({ children }: AIProviderProps) {
               createdBy: userEmail,
               lastModifiedBy: userEmail
             });
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise(resolve => setTimeout(resolve, 10));
             return canvasContext.selectedIds[0] || '';
           },
           updateShape: async (id, updates) => {

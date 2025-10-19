@@ -45,34 +45,14 @@ const CanvasLayout: React.FC = () => {
 
 // Protected route component that shows canvas when authenticated
 const ProtectedCanvas: React.FC = () => {
-  // Warm up AI function on app load to avoid cold start delays
-  const { isWarm, isWarming } = useAIWarmup();
-  const [showWarmIndicator, setShowWarmIndicator] = useState(true);
-  
-  // Auto-hide the "AI ready" indicator after 3 seconds
-  React.useEffect(() => {
-    if (isWarm) {
-      const timer = setTimeout(() => setShowWarmIndicator(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [isWarm]);
+  // Warm up AI function on app load to avoid cold start delays (silent)
+  useAIWarmup();
   
   return (
     <UndoProvider>
       <CanvasProvider>
         <AIProvider>
           <CanvasLayout />
-          {/* Optional: Show warmup indicator - can be removed if too subtle */}
-          {isWarming && (
-            <div className="fixed bottom-4 right-4 bg-blue-500 text-white text-xs px-3 py-1 rounded-full shadow-lg z-50 transition-opacity duration-300">
-              🔥 AI warming up...
-            </div>
-          )}
-          {isWarm && showWarmIndicator && (
-            <div className="fixed bottom-4 right-4 bg-green-500 text-white text-xs px-3 py-1 rounded-full shadow-lg z-50 animate-fade-in">
-              ✓ AI ready
-            </div>
-          )}
         </AIProvider>
       </CanvasProvider>
     </UndoProvider>
