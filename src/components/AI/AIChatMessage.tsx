@@ -24,8 +24,35 @@ export function AIChatMessage({ message }: AIChatMessageProps) {
     );
   }
 
-  // System message - centered, gray pill
+  // System message - centered, formatted text
   if (message.type === 'system') {
+    // Check if message contains a list (for clarification options)
+    const hasNewlines = message.content.includes('\n');
+    
+    if (hasNewlines) {
+      // Format as a list
+      const lines = message.content.split('\n');
+      const header = lines[0];
+      const items = lines.slice(1).filter(line => line.trim());
+      
+      return (
+        <div className="flex justify-center w-full">
+          <div className="max-w-[85%] bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
+            <p className="font-medium text-blue-900 mb-2">{header}</p>
+            <ul className="space-y-1 text-blue-700">
+              {items.map((item, index) => (
+                <li key={index} className="pl-0">{item}</li>
+              ))}
+            </ul>
+            <p className="text-blue-600 text-xs mt-2 italic">
+              👆 Click an option in the modal above
+            </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // Regular system message (success/error)
     return (
       <div className="flex justify-center">
         <div className="text-xs text-gray-500 bg-gray-100 rounded-full px-3 py-1">

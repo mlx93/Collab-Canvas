@@ -284,7 +284,30 @@ export function AIProvider({ children }: AIProviderProps) {
 
       // Check if AI needs clarification
       if (plan.needsClarification) {
-        // Show clarification modal instead of toast
+        // Add a nice clarification message to chat
+        addChatMessage({
+          id: generateId(),
+          type: 'ai',
+          content: plan.needsClarification.question || 'I need clarification to proceed.',
+          timestamp: Date.now(),
+          rationale: plan.needsClarification.question,
+        });
+        
+        // Add system message with options list
+        if (plan.needsClarification.options && plan.needsClarification.options.length > 0) {
+          const optionsList = plan.needsClarification.options
+            .map((opt, i) => `${i + 1}. ${opt}`)
+            .join('\n');
+          
+          addChatMessage({
+            id: generateId(),
+            type: 'system',
+            content: `Please select an option:\n${optionsList}`,
+            timestamp: Date.now(),
+          });
+        }
+        
+        // Show clarification modal with clickable options
         setClarification({
           question: plan.needsClarification.question,
           options: plan.needsClarification.options || [],
