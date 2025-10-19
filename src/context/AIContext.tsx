@@ -217,10 +217,10 @@ export function AIProvider({ children }: AIProviderProps) {
       setClarification(null);
 
       // Determine execution mode
-      // Simple/medium operations (< 20): Client-side for speed (~100-500ms)
-      // Complex operations (>= 20 or grids): Server-side for atomicity
-      const CLIENT_SIDE_THRESHOLD = 20;
-      const shouldExecuteServerSide = plan.operations.length >= CLIENT_SIDE_THRESHOLD || 
+      // Simple/medium operations (<= 50): Client-side for speed (~100-2000ms)
+      // Complex operations (> 50 or grids): Server-side for atomicity
+      const CLIENT_SIDE_THRESHOLD = 50;
+      const shouldExecuteServerSide = plan.operations.length > CLIENT_SIDE_THRESHOLD || 
         plan.operations.some(op => op.name === 'createGrid');
 
       let resultMessage = '';
