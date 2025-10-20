@@ -273,9 +273,12 @@ export function AIProvider({ children }: AIProviderProps) {
       timestamp: Date.now(),
     });
     
+    // Clear any shapes that were selected during clarification preview
+    canvasContext.deselectAll();
+    
     setClarification(null);
     setIsProcessing(false);
-  }, [addChatMessage]);
+  }, [addChatMessage, canvasContext]);
 
   /**
    * Update operation status for a specific message
@@ -715,6 +718,10 @@ export function AIProvider({ children }: AIProviderProps) {
         canvasId: 'default',
       });
 
+      // Clear selection state after AI operations complete
+      // This prevents shapes from remaining selected and "frozen"
+      canvasContext.deselectAll();
+
       // Clear progress
       setProgress(null);
     } catch (err) {
@@ -802,6 +809,9 @@ export function AIProvider({ children }: AIProviderProps) {
       } else {
         toast.error('Failed to execute command. Please try again.');
       }
+      
+      // Clear selection state after error to prevent frozen shapes
+      canvasContext.deselectAll();
     } finally {
       setIsProcessing(false);
     }

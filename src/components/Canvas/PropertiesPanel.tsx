@@ -197,6 +197,16 @@ export const PropertiesPanel: React.FC = () => {
     if (selectedIds.length === 0) return; // Early exit inside hook is OK
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input fields (for text editing, AI assistant, etc.)
+      const target = e.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.isContentEditable;
+      
+      if (isInputField) {
+        return; // Let input fields handle their own keyboard events
+      }
+
       if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
         e.preventDefault();
         // Use deleteSelected to handle all selected shapes

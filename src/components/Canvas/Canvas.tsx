@@ -184,6 +184,16 @@ export const Canvas: React.FC = () => {
   // Handle keyboard zoom (Shift + Plus/Minus)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input fields (for text editing, AI assistant, etc.)
+      const target = e.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.isContentEditable;
+      
+      if (isInputField) {
+        return; // Let input fields handle their own keyboard events
+      }
+
       if (e.shiftKey) {
         if (e.key === '+' || e.key === '=') {
           e.preventDefault();
@@ -303,10 +313,14 @@ export const Canvas: React.FC = () => {
   // Arrow key handler (separate useEffect to avoid dependency issues)
   useEffect(() => {
     const handleArrowKeys = (e: KeyboardEvent) => {
-      // Ignore if typing in input
-      if (e.target instanceof HTMLInputElement || 
-          e.target instanceof HTMLTextAreaElement) {
-        return;
+      // Ignore if typing in input fields (for text editing, AI assistant, etc.)
+      const target = e.target as HTMLElement;
+      const isInputField = target.tagName === 'INPUT' || 
+                          target.tagName === 'TEXTAREA' || 
+                          target.isContentEditable;
+      
+      if (isInputField) {
+        return; // Let input fields handle their own keyboard events
       }
 
       // Handle Arrow keys for moving selected shapes or panning canvas
