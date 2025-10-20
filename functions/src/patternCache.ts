@@ -930,6 +930,65 @@ const PATTERN_TEMPLATES: PatternTemplate[] = [
   
   // MOVE PATTERNS
   {
+    pattern: /^move (?:the |all )?(?:the )?(triangles|circles|rectangles|squares|lines) (left|right|up|down) (?:by )?(\d+)(?: pixels?)?$/i,
+    description: "Move all shapes of a type (e.g., 'move the triangles down 300 pixels')",
+    requiresCanvasState: true,
+    generator: (matches, viewport, canvasState) => {
+      if (!canvasState || !canvasState.shapes) return [];
+      
+      const shapeTypePlural = matches[1].toLowerCase();
+      const direction = matches[2].toLowerCase();
+      const distance = parseInt(matches[3], 10);
+      
+      // Map plural to singular type
+      const typeMap: Record<string, string> = {
+        'triangles': 'triangle',
+        'circles': 'circle',
+        'rectangles': 'rectangle',
+        'squares': 'rectangle',
+        'lines': 'line'
+      };
+      
+      const shapeType = typeMap[shapeTypePlural];
+      if (!shapeType) return [];
+      
+      // Find all shapes of this type
+      const shapesOfType = canvasState.shapes.filter((s: any) => s.type === shapeType);
+      if (shapesOfType.length === 0) {
+        console.log(`  [Move Cache] No ${shapeTypePlural} found`);
+        return [];
+      }
+      
+      let deltaX = 0;
+      let deltaY = 0;
+      
+      switch (direction) {
+        case 'left': deltaX = -distance; break;
+        case 'right': deltaX = distance; break;
+        case 'up': deltaY = -distance; break;
+        case 'down': deltaY = distance; break;
+      }
+      
+      console.log(`  [Move Cache] Moving ${shapesOfType.length} ${shapeTypePlural} ${direction} by ${distance}px`);
+      
+      const operations: AIOperation[] = [];
+      
+      for (const shape of shapesOfType) {
+        operations.push({
+          name: 'moveElement',
+          args: {
+            id: shape.id,
+            x: shape.x + deltaX,
+            y: shape.y + deltaY,
+          }
+        });
+      }
+      
+      return operations;
+    }
+  },
+  
+  {
     pattern: /^move (?:the )?(.*?) (left|right|up|down) (?:by )?(\d+)(?: pixels?)?$/i,
     description: "Move identified shape in direction by N pixels",
     requiresCanvasState: true,
