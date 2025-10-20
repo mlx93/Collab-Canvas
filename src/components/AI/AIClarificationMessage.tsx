@@ -24,8 +24,8 @@ interface AIClarificationMessageProps {
  * - "Circle 1"
  */
 function extractElementId(option: string): string | null {
-  // Try format: "- ID: abc123" or "(ID: abc123)"
-  const match1 = option.match(/[-\(]ID:\s*([^)\s]+)/);
+  // Try format: "- ID: abc123"
+  const match1 = option.match(/-\s*ID:\s*([^\s]+)/);
   if (match1) return match1[1];
   
   // Try format: "(ID: abc123)"
