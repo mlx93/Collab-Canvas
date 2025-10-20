@@ -408,6 +408,15 @@ export function AIProvider({ children }: AIProviderProps) {
     let executionMode: 'client' | 'server' | 'cached' = 'client';
     let cacheHit = false;
 
+    // If this is a clarification response, clear the clarification UI immediately
+    // This unmounts the AIClarificationMessage component and stops its useEffect
+    // from continuously re-selecting shapes
+    if (clarificationResponse) {
+      setClarification(null);
+      // Also deselect shapes that were selected as preview
+      canvasContext.deselectAll();
+    }
+
     // 1. Add user message to chat (Phase 2)
     const userMessageId = generateId();
     addChatMessage({

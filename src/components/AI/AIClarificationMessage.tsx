@@ -95,9 +95,8 @@ export function AIClarificationMessage({
   };
 
   const handleExecute = () => {
-    // Clear the preview selection before executing
-    // This prevents shapes from remaining selected during AI operations
-    canvas.deselectAll();
+    // Note: Selection clearing and clarification state cleanup now happens
+    // in AIContext.executeCommand() before execution starts
     
     if (selectedOptions.size === 1) {
       // Single selection - pass as string (backward compatible)
