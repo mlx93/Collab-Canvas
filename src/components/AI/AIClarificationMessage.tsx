@@ -18,11 +18,30 @@ interface AIClarificationMessageProps {
 
 /**
  * Extract element ID from option text
- * Format: "Circle 1 (ID: NOkuccaf1dPOkm7tlCcL)" or "Circle 1"
+ * Supports multiple formats:
+ * - "Circle 1 at (697, 344) - ID: abc123"
+ * - "Circle 1 (ID: NOkuccaf1dPOkm7tlCcL)"
+ * - "Circle 1"
  */
 function extractElementId(option: string): string | null {
-  const match = option.match(/\(ID:\s*([^)]+)\)/);
-  return match ? match[1] : null;
+  // Try format: "- ID: abc123" or "(ID: abc123)"
+  const match1 = option.match(/[-\(]ID:\s*([^)\s]+)/);
+  if (match1) return match1[1];
+  
+  // Try format: "(ID: abc123)"
+  const match2 = option.match(/\(ID:\s*([^)]+)\)/);
+  return match2 ? match2[1] : null;
+}
+
+/**
+ * Remove ID from display text
+ * Strips out "- ID: abc123" or "(ID: abc123)" portions
+ */
+function stripIdFromDisplay(option: string): string {
+  return option
+    .replace(/\s*-\s*ID:\s*[^\s]+\s*$/i, '')  // Remove "- ID: abc123" at end
+    .replace(/\s*\(ID:\s*[^)]+\)\s*/gi, '')   // Remove "(ID: abc123)"
+    .trim();
 }
 
 export function AIClarificationMessage({
@@ -174,7 +193,7 @@ export function AIClarificationMessage({
                     isSelected ? 'text-blue-900' : 'text-gray-800 group-hover:text-blue-700'
                   }`}>
                     <span className="text-blue-600 font-semibold mr-2">{index + 1}.</span>
-                    {option}
+                    {stripIdFromDisplay(option)}
                   </span>
                 </div>
               </button>
