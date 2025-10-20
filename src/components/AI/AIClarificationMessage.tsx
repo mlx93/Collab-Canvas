@@ -53,9 +53,17 @@ export function AIClarificationMessage({
   const canvas = useCanvas();
   const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
   const [hoveredOption, setHoveredOption] = useState<string | null>(null);
+  const [isExecuting, setIsExecuting] = useState(false);
 
   // Preview selected + hovered elements on canvas
+  // DISABLED during execution to prevent flickering and re-selection
   useEffect(() => {
+    if (isExecuting) {
+      // Don't sync selection during execution
+      // This prevents flickering and fighting with post-execution cleanup
+      return;
+    }
+
     canvas.deselectAll();
     
     // Select all checked options
@@ -72,7 +80,7 @@ export function AIClarificationMessage({
         canvas.selectShape(hoveredId);
       }
     }
-  }, [selectedOptions, hoveredOption, canvas]);
+  }, [selectedOptions, hoveredOption, canvas, isExecuting]);
 
   const toggleOption = (option: string) => {
     setSelectedOptions(prev => {
@@ -95,8 +103,15 @@ export function AIClarificationMessage({
   };
 
   const handleExecute = () => {
-    // Note: Selection clearing and clarification state cleanup now happens
-    // in AIContext.executeCommand() before execution starts
+    // Set executing flag to disable the selection sync useEffect
+    // This prevents flickering and re-selection during execution
+    setIsExecuting(true);
+    
+    // Clear hover state to prevent any further interaction
+    setHoveredOption(null);
+    
+    // Keep selection during execution - don't clear it here
+    // The post-execution cleanup in AIContext will handle deselection
     
     if (selectedOptions.size === 1) {
       // Single selection - pass as string (backward compatible)
@@ -105,6 +120,9 @@ export function AIClarificationMessage({
       // Multi-selection - pass as array
       onSelect(Array.from(selectedOptions));
     }
+    
+    // Note: Component will unmount when clarification state is cleared
+    // after execution starts, so isExecuting doesn't need to be reset
   };
 
   const handleCancel = () => {
@@ -143,7 +161,12 @@ export function AIClarificationMessage({
         {/* Select All Toggle */}
         <button
           onClick={toggleSelectAll}
-          className="w-full mb-2 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors flex items-center gap-2"
+          disabled={isExecuting}
+          className={`w-full mb-2 px-3 py-2 text-xs font-medium rounded-md transition-colors flex items-center gap-2 ${
+            isExecuting
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'text-blue-700 bg-blue-100 hover:bg-blue-200'
+          }`}
         >
           <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
             allSelected 
@@ -168,10 +191,15 @@ export function AIClarificationMessage({
             return (
               <button
                 key={index}
-                onClick={() => toggleOption(option)}
-                onMouseEnter={() => setHoveredOption(option)}
-                onMouseLeave={() => setHoveredOption(null)}
-                className={`w-full text-left px-3 py-2.5 rounded-md border-2 transition-all duration-150 group shadow-sm hover:shadow ${
+                onClick={() => !isExecuting && toggleOption(option)}
+                onMouseEnter={() => !isExecuting && setHoveredOption(option)}
+                onMouseLeave={() => !isExecuting && setHoveredOption(null)}
+                disabled={isExecuting}
+                className={`w-full text-left px-3 py-2.5 rounded-md border-2 transition-all duration-150 group shadow-sm ${
+                  isExecuting
+                    ? 'cursor-not-allowed opacity-60'
+                    : 'hover:shadow'
+                } ${
                   isSelected
                     ? 'bg-blue-50 border-blue-500'
                     : 'bg-white border-blue-200 hover:border-blue-400 hover:bg-blue-50'
@@ -208,14 +236,20 @@ export function AIClarificationMessage({
         <div className="flex gap-2">
           <button
             onClick={handleExecute}
-            disabled={!hasSelection}
+            disabled={!hasSelection || isExecuting}
             className={`flex-1 px-4 py-2.5 text-sm font-semibold rounded-md transition-all ${
-              hasSelection
+              isExecuting
+                ? 'bg-blue-400 text-white cursor-wait'
+                : hasSelection
                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
-            {hasSelection ? (
+            {isExecuting ? (
+              <>
+                <span className="inline-block animate-pulse">Executing...</span>
+              </>
+            ) : hasSelection ? (
               <>
                 Execute {selectedOptions.size > 1 ? `(${selectedOptions.size})` : ''}
               </>
@@ -226,7 +260,12 @@ export function AIClarificationMessage({
           
           <button
             onClick={handleCancel}
-            className="px-4 py-2.5 text-sm text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-md font-medium transition-colors"
+            disabled={isExecuting}
+            className={`px-4 py-2.5 text-sm rounded-md font-medium transition-colors ${
+              isExecuting
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200'
+            }`}
           >
             Cancel
           </button>
