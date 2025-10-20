@@ -95,6 +95,10 @@ export function AIClarificationMessage({
   };
 
   const handleExecute = () => {
+    // Clear the preview selection before executing
+    // This prevents shapes from remaining selected during AI operations
+    canvas.deselectAll();
+    
     if (selectedOptions.size === 1) {
       // Single selection - pass as string (backward compatible)
       onSelect(Array.from(selectedOptions)[0]);
